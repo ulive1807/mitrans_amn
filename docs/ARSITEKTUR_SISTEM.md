@@ -294,3 +294,11 @@ Antarmuka memanggil API dengan `getToken()` Clerk di header (`src/app/api.ts`). 
 - Belum ada pembatasan laju (rate limit), basis data, dan log audit permanen. Data server masih di memori dan hilang saat server dimulai ulang.
 - Belum ada HTTPS sendiri; server ini harus berada di belakang hosting/proxy HTTPS.
 - Pemindahan seluruh fitur Admin dan Kantor Maya ke API belum dilakukan. Halaman masih membaca data sintetis di peramban; baru penanda sesi yang memanggil server.
+
+## 11. Pemeriksaan keamanan dependensi (27 Okt 2026)
+
+- `react-router-dom` dinaikkan 6.28.0 → 6.30.6. Ini menutup 3 temuan tingkat tinggi `npm audit` (open redirect GHSA-2w69-qvjg-hvjx dan GHSA-2j2x-hqr9-3h42).
+- **Tersisa pada paket produksi (sedang), hanya tuntas di React Router 7.18+:**
+  - GHSA-wrjc-x8rr-h8h6: open redirect lewat garis miring terbalik pada `<Link>`/`useNavigate`. Diredam karena satu-satunya tujuan dari luar (`?next=`) disaring `safeNext`, yang menolak `//` dan `/\`.
+  - GHSA-337j-9hxr-rhxg: hanya berlaku pada SSR hydration, yang tidak dipakai aplikasi ini.
+- **Tersisa pada alat pengembangan** (tidak ikut terkirim ke pengguna): Vite 6.0.5, Vitest 2.1.8, esbuild, dan tinypool. Risikonya ada saat server pengembangan atau UI Vitest berjalan di jaringan yang tidak tepercaya; perbaikannya memerlukan kenaikan versi mayor.
