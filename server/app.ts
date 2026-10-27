@@ -6,7 +6,10 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import {
   AccessControl,
   AccessError,
+  EngineError,
+  PLAN,
   PayoutApprovals,
+  reminderFor,
   atWib,
   demoScenario,
   runScenario,
@@ -27,6 +30,8 @@ interface Ctx {
   session: Session;
   params: Record<string, string>;
   query: URLSearchParams;
+  /** Isi JSON permintaan POST (paling besar 8 KB). */
+  body: unknown;
 }
 interface Route {
   method: "GET" | "POST";
@@ -75,6 +80,12 @@ export function createApp(opts: AppOptions) {
   const now = () => atWib(engine.today, 9);
   const lastMonth = () => engine.reports[engine.reports.length - 1]?.month;
 
+  let bonusPayments = 0;
+  const ownMitra = (session: Session) => {
+    const acc = findMitra(session.claims.mitraId!);
+    if (!acc) throw new HttpError(404, "Akun Mitra PLS yang ditautkan tidak ditemukan");
+    return acc;
+  };
   const findMitra = (key: string) => {
     const acc =
       engine.accounts.get(key) ??
@@ -127,10 +138,12 @@ export function createApp(opts: AppOptions) {
           .payoutRuns()
           .slice(-8)
           .map((r) => {
-            const b = payouts.get(r.date, r.total, r.count);
+            const b = payouts.get(r.date, r.transfer, r.count);
             return {
               tanggal: r.date,
-              total: r.total,
+              bonus: r.total,
+              potongan: r.deducted,
+              transfer: r.transfer,
               entri: r.count,
               status: b.status,
               disiapkanOleh: b.preparedBy ?? null,
@@ -148,7 +161,7 @@ export function createApp(opts: AppOptions) {
         const r = runFor(params.date);
         const b = payouts.prepare(
           r.date,
-          r.total,
+          r.transfer,
           r.count,
           session.userId,
           now(),
@@ -213,6 +226,32 @@ export function createApp(opts: AppOptions) {
         };
       },
     ),
+    route("GET", "/api/mitra/langganan", "mitra", "Lihat Langganan", ({ session }) => {
+      const acc = ownMitra(session);
+      const until = engine.accessUntil(acc.id);
+      const r = reminderFor(engine, acc.id, now());
+      return {
+        aksesSampai: until ?? null,
+        hargaLangganan: PLAN.subscription.price,
+        saldoBonusBelumDitransfer: engine.bonusBalance(acc.id),
+        jadwalTransfer: engine.pendingPayouts(acc.id),
+        pengingat: r ? { tahap: r.stage, jatuhTempo: r.dueDate, pesan: r.message } : null,
+      };
+    }),
+    // Bayar Langganan dari bonus: akun selalu dari sesi, bukan dari permintaan; wajib persetujuan eksplisit.
+    route("POST", "/api/mitra/langganan/bayar-dari-bonus", "mitra", "Bayar Langganan dari bonus", ({ session, body }) => {
+      const acc = ownMitra(session);
+      if (!body || typeof body !== "object" || (body as { setuju?: unknown }).setuju !== true)
+        throw new HttpError(400, "Persetujuan potong bonus diperlukan: kirim {\"setuju\": true}");
+      try {
+        const sale = engine.paySubscriptionFromBonus({ saleId: `SB-${acc.id}-${++bonusPayments}`, accountId: acc.id, at: now() });
+        access.record(session.userId, "Bayar Langganan dari bonus", now(), `${acc.id}: ${sale.id}`);
+        return { penjualan: sale.id, aksesSampai: sale.periodEnd, potongan: engine.payoutDeductions.filter((d) => d.saleId === sale.id) };
+      } catch (err) {
+        if (err instanceof EngineError) throw new HttpError(409, err.message);
+        throw err;
+      }
+    }),
   ];
 
   const send = (
@@ -308,7 +347,7 @@ export function createApp(opts: AppOptions) {
         req,
         res,
         200,
-        await r.run({ session, params, query: url.searchParams }),
+        await r.run({ session, params, query: url.searchParams, body: method === "POST" ? await readJson(req) : undefined }),
       );
     } catch (err) {
       if (err instanceof HttpError)
@@ -319,4 +358,22 @@ export function createApp(opts: AppOptions) {
       return send(req, res, 500, { galat: "Galat server" });
     }
   };
+}
+
+/** Membaca isi JSON permintaan, paling besar 8 KB. Isi kosong dibaca sebagai undefined. */
+async function readJson(req: IncomingMessage): Promise<unknown> {
+  const chunks: Buffer[] = [];
+  let size = 0;
+  for await (const c of req) {
+    size += (c as Buffer).length;
+    if (size > 8192) throw new HttpError(413, "Isi permintaan terlalu besar");
+    chunks.push(c as Buffer);
+  }
+  const text = Buffer.concat(chunks).toString("utf8").trim();
+  if (!text) return undefined;
+  try {
+    return JSON.parse(text);
+  } catch {
+    throw new HttpError(400, "Isi permintaan bukan JSON yang sah");
+  }
 }

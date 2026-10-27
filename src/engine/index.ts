@@ -8,3 +8,4 @@ export * from './fraud';
 export * from './sanctions';
 export * from './access';
 export * from './claims';
+export * from './reminders';

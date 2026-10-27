@@ -36,6 +36,7 @@ import {
   type BonusType,
   type LedgerEntry,
   type MonthReport,
+  type PayoutDeduction,
   type PoolSources,
   type RankClaim,
   type Sale,
@@ -122,6 +123,8 @@ export class MitransEngine {
   private touchedToday = new Set<string>();
   /** Periode akses dari Langganan per akun (Lisensi memberi 30 hari pertama sejak aktivasi). */
   private subscriptionPeriods = new Map<string, Sale[]>();
+  /** Potongan transfer Jumat untuk Langganan yang dibayar dari bonus. */
+  readonly payoutDeductions: PayoutDeduction[] = [];
   private customersWithPaidSubscription = new Set<string>();
   private licenseSalesByBuyer = new Map<string, string[]>();
   private entriesBySale = new Map<string, LedgerEntry[]>();
@@ -447,6 +450,11 @@ export class MitransEngine {
     sale.cancelledAt = at;
     // Penjualan akun terkendali sudah ditarik saat konfirmasi; jangan ditarik dua kali.
     const clawedBack = sale.controlled ? 0 : this.voidSaleBonuses(sale, at, "pembatalan");
+    if (sale.kind === "subscription" && sale.paidFrom === "bonus") {
+      // Potongan yang belum ditransfer dibatalkan; yang sudah dipotong dikembalikan lewat pengembalian dana biasa.
+      for (const d of this.payoutDeductions)
+        if (d.saleId === sale.id && d.date > this.currentDay) d.cancelled = true;
+    }
     if (sale.kind === "license") {
       const buyer = this.accounts.get(sale.buyerId)!;
       const stillHolds = (this.licenseSalesByBuyer.get(buyer.id) ?? []).some(
@@ -746,11 +754,80 @@ export class MitransEngine {
   }
 
   /** Daftar transfer per Jumat (Bab 11.1). */
+  /**
+   * Bonus yang belum ditransfer per Jumat (tanggal setelah hari ini), sudah dikurangi potongan Langganan.
+   * Hanya entri berstatus payable; bonus tim yang belum ditetapkan pada tutup bulan tidak dihitung.
+   */
+  pendingPayouts(accountId: string): { date: string; gross: number; deducted: number; net: number }[] {
+    const today = this.currentDay;
+    const by = new Map<string, { date: string; gross: number; deducted: number; net: number }>();
+    const add = (date: string, gross: number, deducted: number) => {
+      if (date <= today) return;
+      const r = by.get(date) ?? { date, gross: 0, deducted: 0, net: 0 };
+      r.gross += gross;
+      r.deducted += deducted;
+      r.net = r.gross - r.deducted;
+      by.set(date, r);
+    };
+    for (const e of this.entriesFor(accountId)) {
+      if (e.status !== "payable" || !e.payoutDate || e.amount === 0) continue;
+      if (e.advance && e.advanceDate) add(e.advanceDate, e.advance, 0);
+      add(e.payoutDate, e.amount - (e.advance ?? 0), 0);
+    }
+    for (const d of this.payoutDeductions)
+      if (d.accountId === accountId && !d.cancelled) add(d.date, 0, d.amount);
+    return [...by.values()].sort((a, b) => a.date.localeCompare(b.date));
+  }
+
+  /**
+   * Saldo bonus yang dapat dipakai membayar Langganan.
+   * Konservatif: penarikan bonus (clawback) sejak awal bulan lalu ikut dikurangkan, karena prototipe belum
+   * mencatat kapan penarikan itu dipotong dari transfer.
+   */
+  bonusBalance(accountId: string): number {
+    const pending = this.pendingPayouts(accountId).reduce((a, r) => a + r.net, 0);
+    const since = addMonths(this.currentDay.slice(0, 7), -1);
+    const recentClawback = this.entriesFor(accountId)
+      .filter((e) => e.status === "clawback" && e.month >= since)
+      .reduce((a, e) => a + e.amount, 0);
+    return Math.max(0, pending + recentClawback);
+  }
+
+  /**
+   * Bayar Langganan dari bonus yang belum ditransfer (atas permintaan Mitra PLS sendiri).
+   * Nominal dipotong dari transfer Jumat terdekat yang cukup, berurutan. Plan B atas Langganan ini tetap dihitung
+   * seperti pembayaran biasa karena Langganan tetap dibeli dengan uang Mitra PLS.
+   */
+  paySubscriptionFromBonus(input: { saleId: string; accountId: string; at: number }): Sale {
+    this.advance(input.at);
+    const acc = this.mustAccount(input.accountId);
+    if (acc.role !== "mitra") throw new EngineError("Bayar dari bonus hanya untuk Mitra PLS");
+    const price = PLAN.subscription.price;
+    if (this.bonusBalance(acc.id) < price)
+      throw new EngineError("Saldo bonus yang belum ditransfer tidak cukup untuk membayar Langganan");
+    const sale = this.paySubscription(input);
+    sale.paidFrom = "bonus";
+    let left = price;
+    for (const r of this.pendingPayouts(acc.id)) {
+      if (left <= 0) break;
+      const take = Math.min(left, Math.max(0, r.net));
+      if (take <= 0) continue;
+      this.payoutDeductions.push({ saleId: sale.id, accountId: acc.id, date: r.date, amount: take });
+      left -= take;
+    }
+    if (left > 0) throw new EngineError("Alokasi potongan bonus gagal");
+    return sale;
+  }
+
   payoutRuns(): {
     date: string;
     total: number;
     count: number;
     byType: Record<BonusType, number>;
+    /** Potongan Langganan dari bonus pada Jumat itu. */
+    deducted: number;
+    /** Nilai yang ditransfer: total bonus dikurangi potongan. */
+    transfer: number;
   }[] {
     const runs = new Map<
       string,
@@ -759,12 +836,14 @@ export class MitransEngine {
         total: number;
         count: number;
         byType: Record<BonusType, number>;
+        deducted: number;
+        transfer: number;
       }
     >();
     for (const e of this.ledger) {
       if (e.status !== "payable" || !e.payoutDate || e.amount === 0) continue;
       if (e.advance && e.advanceDate) {
-        const a = runs.get(e.advanceDate) ?? { date: e.advanceDate, total: 0, count: 0, byType: emptyByType() };
+        const a = runs.get(e.advanceDate) ?? { date: e.advanceDate, total: 0, count: 0, byType: emptyByType(), deducted: 0, transfer: 0 };
         a.total += e.advance;
         a.count++;
         a.byType[e.type] += e.advance;
@@ -776,12 +855,20 @@ export class MitransEngine {
         total: 0,
         count: 0,
         byType: emptyByType(),
+        deducted: 0,
+        transfer: 0,
       };
       r.total += rest;
       r.count++;
       r.byType[e.type] += rest;
       runs.set(e.payoutDate, r);
     }
+    for (const d of this.payoutDeductions) {
+      if (d.cancelled) continue;
+      const r = runs.get(d.date);
+      if (r) r.deducted += d.amount;
+    }
+    for (const r of runs.values()) r.transfer = r.total - r.deducted;
     return [...runs.values()].sort((a, b) => a.date.localeCompare(b.date));
   }
 

@@ -72,10 +72,11 @@ export interface Sale {
   orientationConfirmedAt?: number;
   /** Langganan berbayar pertama Pelanggan ini (dihitung sebagai penjualan baru pribadi). */
   firstPaidSubscription?: boolean;
-  /** Langganan: bulan akses yang dibayar. */
   /** Periode akses yang dibayar Langganan ini: [mulai, akhir). */
   periodStart?: number;
   periodEnd?: number;
+  /** Cara bayar Langganan: kanal resmi Perusahaan atau potongan dari bonus yang belum ditransfer. */
+  paidFrom?: "kanal_resmi" | "bonus";
   cancelled?: boolean;
   cancelledAt?: number;
   /** Pemeriksaan akun yang dikendalikan sendiri (Kode Etik Pasal 9 dan 21). */
@@ -154,6 +155,19 @@ export type EntryStatus =
   | "ineligible"
   /** Ditarik kembali karena pembelian dibatalkan/dikembalikan. */
   | "clawback";
+
+/**
+ * Potongan transfer Jumat untuk membayar Langganan dari bonus.
+ * Dicatat terpisah dari ledger: bonus bruto (dasar pajak) tidak berubah, yang berkurang hanya nilai transfer.
+ */
+export interface PayoutDeduction {
+  saleId: string;
+  accountId: string;
+  /** Jumat transfer yang dipotong (YYYY-MM-DD). */
+  date: string;
+  amount: number;
+  cancelled?: boolean;
+}
 
 export interface LedgerEntry {
   id: number;

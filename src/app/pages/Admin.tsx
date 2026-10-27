@@ -13,6 +13,9 @@ import {
   PERMISSION_LABEL,
   CONFLICTING_ROLES,
   maskNik,
+  REMINDER_LABEL,
+  remindersDue,
+  type ReminderStage,
   type Permission,
   type Role,
 } from "../../engine";
@@ -34,6 +37,7 @@ type Tab =
   | "kepatuhan"
   | "simulasi"
   | "pengguna"
+  | "pengingat"
   | "audit";
 /** Setiap tab hanya tampil bagi peran yang memiliki izinnya. */
 const TABS: { id: Tab; label: string; perm: Permission }[] = [
@@ -45,6 +49,7 @@ const TABS: { id: Tab; label: string; perm: Permission }[] = [
   { id: "kepatuhan", label: "Kepatuhan", perm: "kepatuhan.lihat" },
   { id: "terkendali", label: "Akun terkendali", perm: "deteksi.lihat" },
   { id: "kasus", label: "Kasus & sanksi", perm: "kasus.lihat" },
+  { id: "pengingat", label: "Pengingat Langganan", perm: "mitra.lihat" },
   { id: "simulasi", label: "Simulasi engine", perm: "simulasi.jalankan" },
   { id: "pengguna", label: "Pengguna & peran", perm: "pengguna.kelola" },
   { id: "audit", label: "Log audit", perm: "audit.lihat" },
@@ -130,6 +135,7 @@ export function Admin() {
           {tab === "kasus" && <KasusSanksi />}
           {tab === "simulasi" && <Simulasi />}
           {tab === "pengguna" && <PenggunaPeran />}
+          {tab === "pengingat" && <PengingatLangganan />}
           {tab === "audit" && <LogAudit />}
           {!tab && <div className="callout warn">Akun ini tidak memiliki peran aktif. Hubungi Admin Sistem.</div>}
         </main>
@@ -342,6 +348,8 @@ function Jumat() {
               <th className="r">Bonus tim</th>
               <th className="r">Bulanan (Prestasi, Royalti, Pool, Plan B)</th>
               <th className="r">Total bruto</th>
+              <th className="r">Potongan Langganan</th>
+              <th className="r">Ditransfer</th>
               <th>Persetujuan</th>
             </tr>
           </thead>
@@ -360,12 +368,16 @@ function Jumat() {
                     <td className="r num">{rp(direct)}</td>
                     <td className="r num">{rp(team)}</td>
                     <td className="r num">{rp(r.total - team - direct)}</td>
+                    <td className="r num">{rp(r.total)}</td>
+                    <td className="r num">{r.deducted ? `−${rp(r.deducted)}` : "–"}</td>
                     <td className="r num">
-                      <b>{rp(r.total)}</b>
+                      <b>{rp(r.transfer)}</b>
                     </td>
                     <td style={{ whiteSpace: "nowrap" }}>
                       {(() => {
-                        const b = payouts.get(r.date, r.total, r.count);
+                        const b = payouts.get(r.date, r.transfer, r.count);
+                        if (b.status !== "draf" && b.total !== r.transfer)
+                          return <Badge tone="bad">Nilai berubah setelah disiapkan ({rp(b.total)} → {rp(r.transfer)}); siapkan ulang</Badge>;
                         if (b.status === "disetujui")
                           return <Badge tone="good">✓ {name(b.preparedBy)} → {name(b.approvedBy)}</Badge>;
                         if (b.status === "disiapkan")
@@ -380,7 +392,7 @@ function Jumat() {
                             </>
                           );
                         return access.can(staffId, "pembayaran.siapkan") ? (
-                          <button className="btn-secondary" onClick={() => act(() => (payouts.prepare(r.date, r.total, r.count, staffId, now), `Berkas ${dateLabel(r.date)} disiapkan; menunggu persetujuan Keuangan lain.`))}>
+                          <button className="btn-secondary" onClick={() => act(() => (payouts.prepare(r.date, r.transfer, r.count, staffId, now), `Berkas ${dateLabel(r.date)} disiapkan; menunggu persetujuan Keuangan lain.`))}>
                             Siapkan
                           </button>
                         ) : (
@@ -1236,5 +1248,73 @@ function LogAudit() {
         Pada produksi, log audit disimpan append-only di server dan tidak dapat dihapus melalui aplikasi.
       </p>
     </Panel>
+  );
+}
+
+/** Pengingat tagihan Langganan yang berlaku hari ini (H-7 sampai sehari sesudah akses berakhir). */
+function PengingatLangganan() {
+  const { engine, now, version } = useDemo();
+  const [stage, setStage] = useState<ReminderStage | "kirim" | "semua">("kirim");
+  const all = useMemo(() => remindersDue(engine, now), [engine, now, version]);
+  const rows = all.filter((r) => (stage === "semua" ? true : stage === "kirim" ? r.sendToday : r.stage === stage));
+  const count = (s: ReminderStage) => all.filter((r) => r.stage === s).length;
+  return (
+    <>
+      <div className="kpis">
+        <Kpi label="Dikirim hari ini" value={num(all.filter((r) => r.sendToday).length)} sub={dateLabel(now)} />
+        <Kpi label="Jatuh tempo ≤ 7 hari" value={num(count("H-7") + count("H-3") + count("H-1") + count("H"))} sub="Mitra PLS dan Pelanggan" />
+        <Kpi label="Akses berakhir kemarin" value={num(count("berakhir"))} sub="Pemberitahuan terakhir" />
+        <Kpi label="Bisa bayar dari bonus" value={num(all.filter((r) => r.canPayFromBonus).length)} sub="Saldo bonus ≥ Rp399.000" />
+      </div>
+      <div className="callout info" style={{ marginBottom: 12 }}>
+        Pengingat tampil di Kantor Maya pemegang Lisensi. Surel dan WhatsApp hanya untuk penerima yang menyetujuinya, dengan pilihan
+        berhenti; prototipe ini belum mengirim pesan karena penyedia pesan belum disambungkan.
+      </div>
+      <Panel
+        title="Daftar pengingat"
+        hint={
+          <select value={stage} onChange={(e) => setStage(e.target.value as typeof stage)} aria-label="Saring pengingat">
+            <option value="kirim">Dikirim hari ini</option>
+            <option value="semua">Semua dalam jendela</option>
+            {(Object.keys(REMINDER_LABEL) as ReminderStage[]).map((s) => (
+              <option key={s} value={s}>
+                {REMINDER_LABEL[s]}
+              </option>
+            ))}
+          </select>
+        }
+      >
+        <div className="table-wrap">
+          <table className="t">
+            <thead>
+              <tr>
+                <th>Nama</th>
+                <th>Peran</th>
+                <th>Jatuh tempo</th>
+                <th>Tahap</th>
+                <th className="r">Saldo bonus</th>
+                <th>Isi pesan</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.slice(0, 200).map((r) => (
+                <tr key={r.accountId}>
+                  <td>{r.name}</td>
+                  <td>{r.role === "mitra" ? "Mitra PLS" : "Pelanggan"}</td>
+                  <td>{dateLabel(r.dueDate)}</td>
+                  <td>
+                    <Badge tone={r.stage === "berakhir" || r.stage === "H" ? "warn" : "info"}>{REMINDER_LABEL[r.stage]}</Badge>
+                  </td>
+                  <td className="r num">{r.role === "mitra" ? rp(r.bonusBalance) : "–"}</td>
+                  <td style={{ minWidth: 320, fontSize: 12.5 }}>{r.message}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        {!rows.length && <p className="muted">Tidak ada pengingat pada saringan ini.</p>}
+        {rows.length > 200 && <p className="muted">Menampilkan 200 dari {num(rows.length)}.</p>}
+      </Panel>
+    </>
   );
 }

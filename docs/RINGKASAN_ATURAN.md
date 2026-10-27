@@ -63,6 +63,7 @@ Syarat Plan B: Langganan sendiri aktif, pernah aktif, dan ≥1 kegiatan pembinaa
 - Tidak dihitung: pembelian sendiri, akun yang dikendalikan sendiri, pembelian yang dibatalkan.
 - Level, Pasangan, dan Pembinaan pada bulan tidak aktif **ditahan**; dibayar bila aktif dalam 2 bulan berikutnya; bila tidak, hangus ke Pool Aktif.
 - Sesudah 30 hari pertama sejak aktivasi Lisensi, pemegang Lisensi wajib memiliki akses aktif (Langganan) **pada akhir bulan** untuk **bonus tim** (Level, Pasangan, Pembinaan). Bonus Sponsor dan Berkah selalu dibayar (keputusan A4).
+- Pengingat tagihan Langganan: H-7, H-3, H-1, hari jatuh tempo, dan sehari sesudah akses berakhir. Mitra PLS dapat membayar Langganan dari bonus yang belum ditransfer, atas persetujuannya sendiri (`reminders.ts`, `paySubscriptionFromBonus`).
 - Bonus tim dibayar 80% setiap Jumat; 20% setelah tutup bulan sesuai faktor plafon (keputusan A10).
 - Pembatalan menarik otomatis semua bonus yang timbul dari Lisensi itu (keputusan A12).
 

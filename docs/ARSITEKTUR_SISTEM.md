@@ -16,6 +16,7 @@ Status: **prototipe**. Yang ada di repositori ini adalah engine komisi yang teru
 | Hak akses per peran, pemisahan tugas, maker-checker, log audit | `src/engine/access.ts`, `/admin` (Masuk sebagai, Pengguna & peran, Log audit) | Teruji (prototipe) |
 | Pemberitahuan tertulis dan tata cara sanksi | `src/engine/sanctions.ts`, `/admin` tab Kasus & sanksi, Kantor Maya tab Pemberitahuan | Teruji (prototipe) |
 | Deteksi akun yang dikendalikan sendiri + alur pemeriksaan | `src/engine/fraud.ts`, `/admin` tab Akun terkendali | Teruji (prototipe) |
+| Pengingat tagihan Langganan + bayar Langganan dari bonus | `src/engine/reminders.ts`, `paySubscriptionFromBonus`, Kantor Maya tab Langganan & tagihan, Admin tab Pengingat Langganan, `/api/mitra/langganan` | Teruji (prototipe); belum mengirim surel/WhatsApp |
 | Pemeriksaan sesi Clerk di server + API berizin | `server/` (`npm run server`), `src/app/api.ts` | Teruji 13 uji dengan token bertanda tangan kunci uji; **belum diuji dengan aplikasi Clerk sungguhan** |
 | Masuk dengan kode OTP (Clerk), pengaman `/admin` dan `/mitra` | `src/app/auth.tsx`, `src/app/clerk.tsx`, `src/app/guard.tsx`, `/masuk`, `src/engine/claims.ts` | Mode demo teruji; mode Clerk teruji sampai pemuatan dan penanganan gagal, **belum diuji dengan akun Clerk sungguhan** |
 
@@ -313,3 +314,23 @@ Antarmuka memanggil API dengan `getToken()` Clerk di header (`src/app/api.ts`). 
   - GHSA-337j-9hxr-rhxg: hanya berlaku pada SSR hydration, yang tidak dipakai aplikasi ini.
 - **Alat pengembangan diperbarui:** Vite 6.0.5 → 6.4.4, Vitest 2.1.8 → 5.0.3, tsx 4.19.2 → 4.23.13 (membawa esbuild baru), dan @vitejs/plugin-react 4.3.4 → 4.7.0. Semua temuan kritis, tinggi, sedang, dan rendah pada alat pengembangan tertutup; `npm audit` kini hanya menyisakan dua temuan React Router di atas.
 - **Catatan pemasangan:** npm 10.9.4 gagal menyusun dependensi Vitest ≥4 (galat `edgesOut`, bug pada peer dependency npm), sehingga `package-lock.json` disusun ulang dengan npm 11.21.0. `npm ci` dengan npm 10 tetap berjalan dari lockfile ini. Versi paket produksi tidak berubah, kecuali `csstype` yang hanya berisi definisi tipe. Bila menambah dependensi baru, pakai npm 11 (`npx npm@11 install …`).
+
+## 12. Pengingat tagihan dan bayar Langganan dari bonus
+
+**Pengingat** (`src/engine/reminders.ts`). Dihitung dari tanggal akhir akses (WIB) setiap pemegang Lisensi: **H-7, H-3, H-1, hari jatuh tempo, dan satu kali sehari sesudah akses berakhir**. Tidak ada pengingat berulang sesudahnya.
+- Isi pesan memuat tanggal, nominal Rp399.000 untuk 30 hari, cara bayar, saldo bonus bila cukup, catatan bahwa bonus tim dinilai pada akhir bulan sedangkan Bonus Sponsor tetap dibayar, dan bahwa Langganan bersifat pilihan.
+- Pesan tidak memakai bahasa menekan atau tenggat palsu; uji memeriksa kata seperti "segera" dan "kesempatan" tidak muncul.
+- Saluran: pemberitahuan di Kantor Maya selalu tampil. Surel dan WhatsApp hanya untuk penerima yang menyetujuinya, dengan pilihan berhenti. **Prototipe belum mengirim pesan apa pun**; pengiriman perlu penyedia pesan dan persetujuan Coach.
+- Staf melihat daftar pengingat hari ini di Admin, tab Pengingat Langganan (izin `mitra.lihat`).
+
+**Bayar dari bonus** (`paySubscriptionFromBonus`). Hanya atas tindakan Mitra PLS sendiri, dengan centang persetujuan di Kantor Maya atau `{"setuju": true}` di API.
+- Saldo yang dapat dipakai = bonus berstatus dibayar yang jadwal transfer Jumatnya belum lewat, dikurangi potongan yang sudah dijadwalkan. Penarikan bonus sejak awal bulan lalu ikut dikurangkan sebagai pengaman. Bonus yang belum ditetapkan pada tutup bulan tidak dihitung.
+- Rp399.000 dipotong dari transfer Jumat terdekat (bila perlu dari beberapa Jumat berurutan). Potongan dicatat terpisah (`payoutDeductions`), sehingga **bonus bruto tidak berubah**; daftar transfer Jumat menampilkan bonus, potongan, dan nilai yang ditransfer, dan berkas maker-checker memakai nilai yang ditransfer.
+- Bila berkas Jumat sudah disiapkan lalu nilainya berubah, Admin menampilkan peringatan untuk menyiapkan ulang.
+- Langganan yang dibayar dari bonus tetap menghasilkan Plan B bagi upline seperti pembayaran biasa. Pembatalan membatalkan potongan yang belum ditransfer.
+- Pembayaran di muka paling banyak satu periode; Pelanggan tidak dapat memakai fitur ini.
+
+**Hal yang perlu diputuskan sebelum produksi:**
+1. Potongan harus diambil dari bonus **setelah** pemotongan PPh. Engine prototipe belum menghitung pajak, sehingga saldo yang tampil adalah bruto.
+2. Syarat dan Ketentuan perlu klausul cara bayar "potong bonus" atas persetujuan Mitra PLS. Konsultan hukum juga perlu menilai apakah fitur ini dapat dibaca sebagai dorongan membeli (Permendag 70/2019 Pasal 21 huruf f dan g). Fitur dibuat pilihan dan tidak otomatis karena alasan itu.
+3. Penyedia surel/WhatsApp, teks persetujuan, dan cara berhenti berlangganan pesan.

@@ -10,7 +10,7 @@ import {
   createAuthenticator,
   extractToken,
 } from "../server/session";
-import { demoScenario, runScenario, type MitransEngine } from "../src/engine";
+import { PLAN, atWib, demoScenario, runScenario, type MitransEngine } from "../src/engine";
 
 // Kunci uji dibuat saat uji berjalan; bukan kunci Clerk sungguhan.
 const keys = () => generateKeyPairSync("rsa", { modulusLength: 2048 });
@@ -45,14 +45,16 @@ let server: Server;
 let base = "";
 const call = async (
   path: string,
-  init: { tok?: string; method?: string; cookie?: string } = {},
+  init: { tok?: string; method?: string; cookie?: string; body?: string } = {},
 ) => {
   const headers: Record<string, string> = {};
   if (init.tok) headers.authorization = `Bearer ${init.tok}`;
   if (init.cookie) headers.cookie = init.cookie;
+  if (init.body !== undefined) headers["content-type"] = "application/json";
   const res = await fetch(base + path, {
     method: init.method ?? "GET",
     headers,
+    body: init.body,
   });
   return {
     status: res.status,
@@ -374,5 +376,51 @@ describe("Sumber peran dan konfigurasi", () => {
         CLERK_AUTHORIZED_PARTIES: "https://mitrans.id, http://localhost:5173",
       }).errors,
     ).toEqual([]);
+  });
+});
+
+describe("Langganan dan bayar dari bonus lewat server", () => {
+  const DAY = 86_400_000;
+  const nowAt = () => atWib(engine.today, 9);
+  // Mitra PLS dengan saldo bonus cukup dan belum membayar periode berikutnya di muka.
+  const pick = () =>
+    [...engine.accounts.values()].find(
+      (a) =>
+        a.role === "mitra" &&
+        a.licenseActivatedAt !== undefined &&
+        engine.bonusBalance(a.id) >= PLAN.subscription.price &&
+        (engine.accessUntil(a.id) ?? 0) - nowAt() <= 30 * DAY,
+    )!;
+
+  it("status Langganan dan saldo bonus hanya untuk akun sendiri", async () => {
+    const acc = pick();
+    const tok = await token({ sub: "user_lg", metadata: { mitraId: acc.id } });
+    const r = await call("/api/mitra/langganan", { tok });
+    expect(r.status).toBe(200);
+    expect(r.body.saldoBonusBelumDitransfer).toBe(engine.bonusBalance(acc.id));
+    expect(r.body.hargaLangganan).toBe(PLAN.subscription.price);
+  });
+
+  it("tanpa persetujuan eksplisit ditolak; dengan persetujuan memotong transfer Jumat", async () => {
+    const acc = pick();
+    const tok = await token({ sub: "user_lg2", metadata: { mitraId: acc.id } });
+    const path = "/api/mitra/langganan/bayar-dari-bonus";
+    expect((await call(path, { tok, method: "POST" })).status).toBe(400);
+    expect((await call(path, { tok, method: "POST", body: '{"setuju": "ya"}' })).status).toBe(400);
+    expect((await call(path, { tok, method: "POST", body: "{bukan json" })).status).toBe(400);
+    expect((await call(path, { cookie: `__session=${tok}`, method: "POST", body: '{"setuju": true}' })).status).toBe(403);
+    const before = engine.bonusBalance(acc.id);
+    const r = await call(path, { tok, method: "POST", body: '{"setuju": true}' });
+    expect(r.status).toBe(200);
+    expect(engine.bonusBalance(acc.id)).toBe(before - PLAN.subscription.price);
+    expect(r.body.potongan.reduce((a: number, d: { amount: number }) => a + d.amount, 0)).toBe(PLAN.subscription.price);
+    // Periode berikutnya sudah dibayar: pembayaran kedua ditolak dengan alasan yang jelas.
+    const again = await call(path, { tok, method: "POST", body: '{"setuju": true}' });
+    expect(again.status).toBe(409);
+  });
+
+  it("staf tanpa tautan Mitra PLS tidak dapat membayar dari bonus", async () => {
+    const tok = await token({ sub: "user_staf", metadata: { roles: ["keuangan"] } });
+    expect((await call("/api/mitra/langganan/bayar-dari-bonus", { tok, method: "POST", body: '{"setuju": true}' })).status).toBe(403);
   });
 });
