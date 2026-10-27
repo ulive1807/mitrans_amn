@@ -62,16 +62,16 @@ lines.push(
   "> **Hasil ini bukan proyeksi penjualan dan bukan perkiraan penghasilan.** Jaringan, nama, dan NIK seluruhnya sintetis.",
 );
 lines.push(
-  '> Tujuannya menguji apakah aturan dan plafon bekerja. Angka "dokumen" adalah hasil uji internal di Rencana Pemasaran Bab 12.3,',
+  '> Tujuannya menguji apakah aturan dan plafon bekerja. Angka "uji lama v1.2" adalah hasil uji internal Rencana Pemasaran v1.2 Bab 12.3;',
 );
 lines.push(
-  "> yang asumsi lengkapnya tidak tercantum, sehingga selisih wajar terjadi dan perlu dibahas (lihat bagian Catatan).",
+  "> Rencana Pemasaran v1.3 Bab 12.3 sudah memakai hasil engine di bawah ini beserta asumsinya.",
 );
 lines.push("");
 lines.push("## Ringkasan per skenario");
 lines.push("");
 lines.push(
-  "| Skenario | Lisensi | Mitra PLS | Plan A dibayar (engine) | Plan A (dokumen) | Plan B dibayar (engine) | Plan B (dokumen) | Bulan Plan A tertinggi | Faktor plafon dipakai |",
+  "| Skenario | Lisensi | Mitra PLS | Plan A dibayar (engine) | Plan A (uji lama v1.2) | Plan B dibayar (engine) | Plan B (uji lama v1.2) | Bulan Plan A tertinggi | Faktor plafon dipakai |",
 );
 lines.push("|---|---:|---:|---:|---:|---:|---:|---:|---|");
 for (const { res, docA, docB } of runs) {
@@ -166,5 +166,19 @@ lines.push(
 );
 lines.push("");
 
+// Kepekaan: plafon Plan A 40% (Catatan Hukum butir 1, Permendag 70/2019 Pasal 17).
+// Hanya ringkasan yang disimpan agar memori engine dapat dibebaskan.
+const cap40 = [runIdealScenario(12, { options: { planACapBp: 4000 } }).summary];
+for (const p of standardScenarios(scale)) cap40.push(runScenario({ ...p, options: { planACapBp: 4000 } }).summary);
+lines.push("## Kepekaan: plafon Plan A 40%");
+lines.push("");
+lines.push("Skenario yang sama, hanya plafon Plan A diubah dari 50% menjadi 40% omzet bersih Lisensi.");
+lines.push("");
+lines.push("| Skenario | Plan A dibayar | Bulan Plan A tertinggi | Bulan faktor plafon dipakai | Bulan Pool Aktif dibatasi plafon |");
+lines.push("|---|---:|---:|---:|---:|");
+for (const s of cap40) {
+  lines.push(`| ${s.scenario} | ${pct(s.planAPct)} | ${pct(s.maxMonthPlanAPct)} | ${s.capTriggeredMonths.length} | ${s.poolClampedMonths.length} |`);
+}
+lines.push("");
 writeFileSync("docs/HASIL_SIMULASI.md", lines.join("\n"));
 console.log(lines.join("\n"));

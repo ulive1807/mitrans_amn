@@ -1,14 +1,14 @@
 # Hasil Simulasi Engine Komisi Mitrans-Astra
 
-Dibuat oleh `npm run simulate` pada 2026-10-27 · Rencana Pemasaran v1.2 · skala 1
+Dibuat oleh `npm run simulate` pada 2026-10-27 · Rencana Pemasaran v1.3 · skala 1
 
 > **Hasil ini bukan proyeksi penjualan dan bukan perkiraan penghasilan.** Jaringan, nama, dan NIK seluruhnya sintetis.
-> Tujuannya menguji apakah aturan dan plafon bekerja. Angka "dokumen" adalah hasil uji internal di Rencana Pemasaran Bab 12.3,
-> yang asumsi lengkapnya tidak tercantum, sehingga selisih wajar terjadi dan perlu dibahas (lihat bagian Catatan).
+> Tujuannya menguji apakah aturan dan plafon bekerja. Angka "uji lama v1.2" adalah hasil uji internal Rencana Pemasaran v1.2 Bab 12.3;
+> Rencana Pemasaran v1.3 Bab 12.3 sudah memakai hasil engine di bawah ini beserta asumsinya.
 
 ## Ringkasan per skenario
 
-| Skenario | Lisensi | Mitra PLS | Plan A dibayar (engine) | Plan A (dokumen) | Plan B dibayar (engine) | Plan B (dokumen) | Bulan Plan A tertinggi | Faktor plafon dipakai |
+| Skenario | Lisensi | Mitra PLS | Plan A dibayar (engine) | Plan A (uji lama v1.2) | Plan B dibayar (engine) | Plan B (uji lama v1.2) | Bulan Plan A tertinggi | Faktor plafon dipakai |
 |---|---:|---:|---:|---:|---:|---:|---:|---|
 | Jaringan ideal 12 level (semua Mitra PLS menjual 2 Lisensi) | 4.095 | 4.095 | 26,6% | 46,9% | 35,2% | 36,7% | 27,2% (2027-12) | Tidak · Pool dibatasi 3 bulan |
 | Jaringan 5 tahun, penjualan rata (70% pembeli menjadi Mitra PLS) | 22.686 | 16.974 | 29,0% | 31,1% | 8,9% | 26,6% | 31,0% (2031-09) | Tidak |
@@ -46,10 +46,10 @@ Persentase Plan A terhadap omzet bersih Lisensi; Plan B terhadap omzet bersih La
 
 | Skenario | Prestasi dari dana cadangan | Sisa Pool Aktif akhir | Bonus masih ditahan akhir | Waktu jalan |
 |---|---:|---:|---:|---:|
-| ideal-12 | Rp0 | Rp5.112.631.234 | Rp0 | 0.8 detik |
-| flat-5y | Rp0 | Rp5 | Rp776.130.000 | 23.0 detik |
-| risefall-5y | Rp0 | Rp78.799.311 | Rp136.942.500 | 28.4 detik |
-| flat-5y-30 | Rp0 | Rp45 | Rp489.997.500 | 22.2 detik |
+| ideal-12 | Rp0 | Rp5.112.631.234 | Rp0 | 0.7 detik |
+| flat-5y | Rp0 | Rp5 | Rp776.130.000 | 18.3 detik |
+| risefall-5y | Rp0 | Rp78.799.311 | Rp136.942.500 | 27.6 detik |
+| flat-5y-30 | Rp0 | Rp45 | Rp489.997.500 | 21.2 detik |
 
 ## Batas atas biaya per Lisensi (dihitung ulang dari parameter, Bab 12.2)
 
@@ -65,3 +65,14 @@ Persentase Plan A terhadap omzet bersih Lisensi; Plan B terhadap omzet bersih La
 - Skenario organik memakai asumsi: 15% Pelanggan mengonversi, retensi Langganan 80% per bulan, 60% Mitra PLS menjalankan pembinaan, 90% Pelanggan mengonfirmasi orientasi, 1% pembatalan. Penjual dipilih acak berbobot (15% Mitra PLS menjual jauh lebih banyak).
 - Skenario ideal: setiap Mitra PLS mensponsori tepat 2 Mitra PLS (kiri dan kanan), satu level per bulan, semua berlangganan dan menjalankan pembinaan.
 - Selisih dengan angka dokumen berasal dari asumsi perilaku dan aturan penempatan yang tidak diatur dokumen. Lihat docs/ARSITEKTUR_SISTEM.md bagian Asumsi.
+
+## Kepekaan: plafon Plan A 40%
+
+Skenario yang sama, hanya plafon Plan A diubah dari 50% menjadi 40% omzet bersih Lisensi.
+
+| Skenario | Plan A dibayar | Bulan Plan A tertinggi | Bulan faktor plafon dipakai | Bulan Pool Aktif dibatasi plafon |
+|---|---:|---:|---:|---:|
+| ideal-12 | 26,6% | 27,2% | 0 | 3 |
+| flat-5y | 29,0% | 31,0% | 0 | 0 |
+| risefall-5y | 28,9% | 40,0% | 0 | 2 |
+| flat-5y-30 | 24,9% | 26,6% | 0 | 0 |

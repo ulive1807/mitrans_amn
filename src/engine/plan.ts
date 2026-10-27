@@ -9,7 +9,7 @@
  * - persentase disimpan dalam basis poin (1% = 100 bp).
  */
 export const PLAN = {
-  version: "1.2",
+  version: "1.3",
 
   // Bab 3.1 Produk dan harga
   license: {
