@@ -332,5 +332,5 @@ Antarmuka memanggil API dengan `getToken()` Clerk di header (`src/app/api.ts`). 
 
 **Hal yang perlu diputuskan sebelum produksi:**
 1. Potongan harus diambil dari bonus **setelah** pemotongan PPh. Engine prototipe belum menghitung pajak, sehingga saldo yang tampil adalah bruto.
-2. Syarat dan Ketentuan perlu klausul cara bayar "potong bonus" atas persetujuan Mitra PLS. Konsultan hukum juga perlu menilai apakah fitur ini dapat dibaca sebagai dorongan membeli (Permendag 70/2019 Pasal 21 huruf f dan g). Fitur dibuat pilihan dan tidak otomatis karena alasan itu.
+2. Klausul "potong bonus" sudah dicantumkan di S&K v1.4 Pasal 21 angka 7 (dirujuk dari Pasal 5), dan jadwal pengingat di Pasal 6. Konsultan hukum perlu menilai butir 19 Catatan Hukum v1.3: apakah fitur ini dapat dibaca sebagai dorongan membeli (Permendag 70/2019 Pasal 21 huruf f dan g), dasar perjumpaan utang, serta perlakuan PPN/PPh. Fitur dibuat pilihan dan tidak otomatis karena alasan itu.
 3. Penyedia surel/WhatsApp, teks persetujuan, dan cara berhenti berlangganan pesan.

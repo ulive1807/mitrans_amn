@@ -198,7 +198,8 @@ export function Langganan({ accId }: { accId: string }) {
           <p className="muted" style={{ marginTop: 10, fontSize: 12.5 }}>
             Pilihan, bukan kewajiban. Bonus bruto dan perhitungan pajaknya tidak
             berubah; yang berkurang hanya nilai transfer. Plan B atas Langganan
-            ini tetap dihitung untuk upline seperti pembayaran biasa.
+            ini tetap dihitung untuk upline seperti pembayaran biasa (S&amp;K Pasal 21
+            angka 7).
           </p>
         </Panel>
         <Panel

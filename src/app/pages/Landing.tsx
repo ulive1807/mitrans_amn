@@ -270,7 +270,7 @@ export function Landing() {
               </div>
               <ul>
                 <li>Hanya bila Anda menyetujuinya secara tegas</li>
-                <li>Pengingat paling lambat 3 hari sebelum tagihan</li>
+                <li>Pengingat 7, 3, dan 1 hari sebelum jatuh tempo</li>
                 <li>Berhenti kapan saja melalui akun</li>
                 <li>Akses berjalan sampai akhir periode yang dibayar</li>
               </ul>
