@@ -8,6 +8,13 @@ import {
   type BonusType,
   type MonthReport,
   type SimulationSummary,
+  ROLE_LABEL,
+  ROLE_PERMISSIONS,
+  PERMISSION_LABEL,
+  CONFLICTING_ROLES,
+  maskNik,
+  type Permission,
+  type Role,
 } from "../../engine";
 import { BarChart, LineChart } from "../components/Chart";
 import { Badge, Kpi, Panel, ProtoRibbon, TopBar } from "../components/ui";
@@ -24,22 +31,30 @@ type Tab =
   | "mitra"
   | "dana"
   | "kepatuhan"
-  | "simulasi";
-const TABS: { id: Tab; label: string }[] = [
-  { id: "ikhtisar", label: "Ikhtisar" },
-  { id: "tutup", label: "Tutup bulan & plafon" },
-  { id: "jumat", label: "Pembayaran Jumat" },
-  { id: "mitra", label: "Mitra PLS" },
-  { id: "dana", label: "Pool & Prestasi" },
-  { id: "kepatuhan", label: "Kepatuhan" },
-  { id: "terkendali", label: "Akun terkendali" },
-  { id: "kasus", label: "Kasus & sanksi" },
-  { id: "simulasi", label: "Simulasi engine" },
+  | "simulasi"
+  | "pengguna"
+  | "audit";
+/** Setiap tab hanya tampil bagi peran yang memiliki izinnya. */
+const TABS: { id: Tab; label: string; perm: Permission }[] = [
+  { id: "ikhtisar", label: "Ikhtisar", perm: "ikhtisar.lihat" },
+  { id: "tutup", label: "Tutup bulan & plafon", perm: "tutup_bulan.lihat" },
+  { id: "jumat", label: "Pembayaran Jumat", perm: "pembayaran.lihat" },
+  { id: "mitra", label: "Mitra PLS", perm: "mitra.lihat" },
+  { id: "dana", label: "Pool & Prestasi", perm: "dana.lihat" },
+  { id: "kepatuhan", label: "Kepatuhan", perm: "kepatuhan.lihat" },
+  { id: "terkendali", label: "Akun terkendali", perm: "deteksi.lihat" },
+  { id: "kasus", label: "Kasus & sanksi", perm: "kasus.lihat" },
+  { id: "simulasi", label: "Simulasi engine", perm: "simulasi.jalankan" },
+  { id: "pengguna", label: "Pengguna & peran", perm: "pengguna.kelola" },
+  { id: "audit", label: "Log audit", perm: "audit.lihat" },
 ];
 
 export function Admin() {
-  const { reports, lastMonth } = useDemo();
-  const [tab, setTab] = useState<Tab>("ikhtisar");
+  const { reports, lastMonth, access, staffId, setStaffId } = useDemo();
+  const [want, setTab] = useState<Tab>("ikhtisar");
+  const visible = TABS.filter((t) => access.can(staffId, t.perm));
+  const tab = visible.some((t) => t.id === want) ? want : visible[0]?.id;
+  const me = access.user(staffId);
   return (
     <>
       <ProtoRibbon />
@@ -47,11 +62,26 @@ export function Admin() {
       <div className="dash">
         <aside className="side">
           <div className="who">
-            <b>Admin PT MITRANS</b>
-            <span>Peran demo · tanpa otorisasi nyata</span>
+            <b>{me.name}</b>
+            <span>{me.roles.map((r) => ROLE_LABEL[r]).join(" · ")}</span>
           </div>
-          <div className="sec">Operasional</div>
-          {TABS.map((t) => (
+          <label className="sec" htmlFor="staff">
+            Demo: masuk sebagai
+          </label>
+          <select
+            id="staff"
+            value={staffId}
+            onChange={(e) => setStaffId(e.target.value)}
+            style={{ margin: "0 8px 8px", padding: 8, borderRadius: 8, background: "#0b2a22", color: "#e7ece9", border: "1px solid rgba(212,175,106,.3)" }}
+          >
+            {[...access.users.values()].map((u) => (
+              <option key={u.id} value={u.id}>
+                {u.name} · {u.roles.map((r) => ROLE_LABEL[r]).join(", ") || "tanpa peran"}
+              </option>
+            ))}
+          </select>
+          <div className="sec">Menu sesuai peran</div>
+          {visible.map((t) => (
             <button
               key={t.id}
               className={tab === t.id ? "on" : ""}
@@ -64,7 +94,7 @@ export function Admin() {
         <main className="main">
           <div className="main-head">
             <div>
-              <h1>{TABS.find((t) => t.id === tab)!.label}</h1>
+              <h1>{TABS.find((t) => t.id === tab)?.label ?? "Tidak ada akses"}</h1>
               <p>
                 Data sintetis {monthLabel(reports[0].month)} –{" "}
                 {monthLabel(lastMonth)} · plafon Plan A{" "}
@@ -82,6 +112,9 @@ export function Admin() {
           {tab === "terkendali" && <AkunTerkendali />}
           {tab === "kasus" && <KasusSanksi />}
           {tab === "simulasi" && <Simulasi />}
+          {tab === "pengguna" && <PenggunaPeran />}
+          {tab === "audit" && <LogAudit />}
+          {!tab && <div className="callout warn">Akun ini tidak memiliki peran aktif. Hubungi Admin Sistem.</div>}
         </main>
       </div>
     </>
@@ -265,8 +298,18 @@ function TutupBulan({ reports }: { reports: MonthReport[] }) {
 }
 
 function Jumat() {
-  const { engine } = useDemo();
-  const runs = useMemo(() => engine.payoutRuns(), [engine]);
+  const { engine, payouts, access, staffId, now, version, bump } = useDemo();
+  const runs = useMemo(() => engine.payoutRuns(), [engine, version]);
+  const [msg, setMsg] = useState("");
+  const act = (fn: () => string) => {
+    try {
+      setMsg(fn());
+      bump();
+    } catch (err) {
+      setMsg(err instanceof Error ? err.message : "Gagal");
+    }
+  };
+  const name = (id?: string) => (id ? access.user(id).name : "");
   return (
     <Panel
       title="Daftar transfer Jumat"
@@ -282,6 +325,7 @@ function Jumat() {
               <th className="r">Bonus tim</th>
               <th className="r">Bulanan (Prestasi, Royalti, Pool, Plan B)</th>
               <th className="r">Total bruto</th>
+              <th>Persetujuan</th>
             </tr>
           </thead>
           <tbody>
@@ -302,23 +346,51 @@ function Jumat() {
                     <td className="r num">
                       <b>{rp(r.total)}</b>
                     </td>
+                    <td style={{ whiteSpace: "nowrap" }}>
+                      {(() => {
+                        const b = payouts.get(r.date, r.total, r.count);
+                        if (b.status === "disetujui")
+                          return <Badge tone="good">✓ {name(b.preparedBy)} → {name(b.approvedBy)}</Badge>;
+                        if (b.status === "disiapkan")
+                          return (
+                            <>
+                              <Badge tone="warn">Disiapkan {name(b.preparedBy)}</Badge>{" "}
+                              {access.can(staffId, "pembayaran.setujui") && (
+                                <button className="btn-secondary" onClick={() => act(() => (payouts.approve(r.date, staffId, now), `Berkas ${dateLabel(r.date)} disetujui.`))}>
+                                  Setujui
+                                </button>
+                              )}
+                            </>
+                          );
+                        return access.can(staffId, "pembayaran.siapkan") ? (
+                          <button className="btn-secondary" onClick={() => act(() => (payouts.prepare(r.date, r.total, r.count, staffId, now), `Berkas ${dateLabel(r.date)} disiapkan; menunggu persetujuan Keuangan lain.`))}>
+                            Siapkan
+                          </button>
+                        ) : (
+                          <span className="muted">Draf</span>
+                        );
+                      })()}
+                    </td>
                   </tr>
                 );
               })}
           </tbody>
         </table>
       </div>
+      {msg && <div className="callout info" style={{ marginTop: 10 }}>{msg}</div>}
       <p className="muted" style={{ fontSize: 13 }}>
-        Bruto sebelum PPh. Pada produksi, daftar ini menjadi berkas transfer
-        bank yang disetujui dua orang (maker-checker) sebelum dikirim.
+        Bruto sebelum PPh. Berkas transfer disiapkan satu orang Keuangan dan disetujui orang Keuangan lain (maker-checker); nilai berkas dikunci saat
+        disiapkan.
       </p>
     </Panel>
   );
 }
 
 function DaftarMitra() {
-  const { engine, lastMonth, version } = useDemo();
+  const { engine, lastMonth, version, access, staffId, now } = useDemo();
   const [q, setQ] = useState("");
+  const [showNik, setShowNik] = useState(false);
+  const canNik = access.can(staffId, "mitra.lihat_identitas");
   const totals = useMemo(() => paidTotals(engine), [engine, version]);
   const rows = useMemo(
     () =>
@@ -340,6 +412,17 @@ function DaftarMitra() {
           onChange={(e) => setQ(e.target.value)}
           aria-label="Cari Mitra PLS"
         />
+        {canNik && (
+          <button
+            className="btn-secondary"
+            onClick={() => {
+              if (!showNik) access.require(staffId, "mitra.lihat_identitas", "Tampilkan NIK tersamar", now, "Daftar Mitra PLS");
+              setShowNik(!showNik);
+            }}
+          >
+            {showNik ? "Sembunyikan NIK" : "Tampilkan NIK tersamar (dicatat)"}
+          </button>
+        )}
       </div>
       <div className="table-wrap">
         <table className="t">
@@ -347,6 +430,7 @@ function DaftarMitra() {
             <tr>
               <th>Kode</th>
               <th>Nama</th>
+              {showNik && canNik && <th>NIK</th>}
               <th>Sponsor</th>
               <th>Lisensi</th>
               <th>Kuis</th>
@@ -363,6 +447,7 @@ function DaftarMitra() {
                   <Link to={`/mitra?id=${a.id}`}>{a.code}</Link>
                 </td>
                 <td>{a.name}</td>
+                {showNik && canNik && <td className="num muted">{maskNik(a.nik)}</td>}
                 <td className="muted">
                   {engine.accounts.get(a.sponsorId!)?.code}
                 </td>
@@ -384,8 +469,8 @@ function DaftarMitra() {
         </table>
       </div>
       <p className="muted" style={{ fontSize: 13 }}>
-        Data identitas (NIK) dan rekening tidak ditampilkan di daftar ini. Akses
-        ke data tersebut dibatasi per peran dan tercatat di log audit.
+        NIK hanya untuk peran Kepatuhan dan Keuangan, selalu tersamar, dan setiap kali ditampilkan tercatat di log audit. Nomor rekening tidak
+        ditampilkan di layar mana pun.
       </p>
     </Panel>
   );
@@ -778,7 +863,7 @@ const DAY = 86_400_000;
 
 /** Deteksi akun yang dikendalikan sendiri (Rencana Pemasaran 9.1; Kode Etik Pasal 9, 18, 21). */
 function AkunTerkendali() {
-  const { engine, detector, cases, version, bump } = useDemo();
+  const { engine, detector, cases, version, bump, access, staffId } = useDemo();
   const [level, setLevel] = useState<"kuat" | "sedang" | "semua">("kuat");
   const [msg, setMsg] = useState("");
   const flags = useMemo(() => detector.scan(engine), [engine, detector, version]);
@@ -880,18 +965,20 @@ function AkunTerkendali() {
                         const kasus = cases.cases.find((c) => c.saleIds.includes(f.saleId));
                         if (kasus) return <Badge tone="info">Kasus {kasus.id}</Badge>;
                         if (s.controlled || s.cancelled) return null;
+                        if (!access.can(staffId, "kasus.buka")) return <span className="muted">Kepatuhan</span>;
                         return (
                           <button
                             className="btn-secondary"
                             onClick={() =>
                               act(() => {
+                                access.require(staffId, "kasus.buka", "Buka kasus", now, f.saleId);
                                 const c = cases.openCase({
                                   accountId: f.sellerId,
                                   violations: [12],
                                   allegation: `Penjualan ${f.saleId} diduga dibeli oleh akun yang dikendalikan penjual untuk memenuhi status aktif.`,
                                   evidence: [...f.reasons.map((x) => `${x} antara akun penjual dan pembeli`), `Skor keterkaitan ${Math.round(f.score * 100)}% (deteksi otomatis)`],
                                   saleIds: [f.saleId],
-                                  actor: "Kepatuhan (demo)",
+                                  actor: access.actorName(staffId),
                                   at: now,
                                 });
                                 return `Kasus ${c.id} dibuka; surat pemberitahuan dan penundaan dikirim. Lanjutkan di tab Kasus & sanksi.`;
@@ -942,5 +1029,183 @@ function AkunTerkendali() {
         </p>
       </Panel>
     </>
+  );
+}
+
+/** Pengguna & peran: hanya Admin Sistem; tidak dapat mengubah diri sendiri; pasangan peran terlarang ditolak. */
+function PenggunaPeran() {
+  const { access, staffId, now, bump } = useDemo();
+  const [msg, setMsg] = useState("");
+  const roles = Object.keys(ROLE_LABEL) as Role[];
+  const toggle = (uid: string, r: Role) => {
+    const u = access.user(uid);
+    const next = u.roles.includes(r) ? u.roles.filter((x) => x !== r) : [...u.roles, r];
+    try {
+      access.setRoles(staffId, uid, next, now);
+      setMsg(`Peran ${u.name} diubah.`);
+    } catch (err) {
+      setMsg(err instanceof Error ? err.message : "Gagal");
+    }
+    bump();
+  };
+  return (
+    <>
+      {msg && <div className="callout info" style={{ marginBottom: 12 }}>{msg}</div>}
+      <Panel title="Pengguna staf" hint="Centang untuk memberi atau mencabut peran">
+        <div className="table-wrap">
+          <table className="t">
+            <thead>
+              <tr>
+                <th>Nama</th>
+                <th>Jabatan</th>
+                {roles.map((r) => (
+                  <th key={r} style={{ textAlign: "center" }}>
+                    {ROLE_LABEL[r]}
+                  </th>
+                ))}
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {[...access.users.values()].map((u) => (
+                <tr key={u.id}>
+                  <td>
+                    {u.name}
+                    {u.id === staffId ? <span className="muted"> (Anda)</span> : null}
+                  </td>
+                  <td className="muted">{u.title}</td>
+                  {roles.map((r) => (
+                    <td key={r} style={{ textAlign: "center" }}>
+                      <input type="checkbox" aria-label={`${u.name} ${ROLE_LABEL[r]}`} checked={u.roles.includes(r)} disabled={u.id === staffId} onChange={() => toggle(u.id, r)} />
+                    </td>
+                  ))}
+                  <td>
+                    <button
+                      className="btn-secondary"
+                      disabled={u.id === staffId}
+                      onClick={() => {
+                        try {
+                          access.setActive(staffId, u.id, !u.active, now);
+                        } catch (err) {
+                          setMsg(err instanceof Error ? err.message : "Gagal");
+                        }
+                        bump();
+                      }}
+                    >
+                      {u.active ? "Aktif" : "Nonaktif"}
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </Panel>
+      <Panel title="Matriks izin">
+        <div className="table-wrap">
+          <table className="t">
+            <thead>
+              <tr>
+                <th>Izin</th>
+                {roles.map((r) => (
+                  <th key={r} style={{ textAlign: "center" }}>
+                    {ROLE_LABEL[r]}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {(Object.keys(PERMISSION_LABEL) as Permission[]).map((p) => (
+                <tr key={p}>
+                  <td>{PERMISSION_LABEL[p]}</td>
+                  {roles.map((r) => (
+                    <td key={r} style={{ textAlign: "center" }}>
+                      {ROLE_PERMISSIONS[r].includes(p) ? "✓" : <span className="muted">–</span>}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </Panel>
+      <Panel title="Pemisahan tugas">
+        <ul style={{ margin: 0 }}>
+          {CONFLICTING_ROLES.map(([a, b, why]) => (
+            <li key={a + b}>
+              <b>
+                {ROLE_LABEL[a]} ✕ {ROLE_LABEL[b]}
+              </b>
+              : {why}
+            </li>
+          ))}
+          <li>
+            <b>Maker-checker pembayaran</b>: penyiap berkas transfer tidak boleh menyetujuinya sendiri.
+          </li>
+          <li>
+            <b>Perubahan peran</b>: tidak seorang pun dapat mengubah peran atau status dirinya sendiri.
+          </li>
+        </ul>
+      </Panel>
+    </>
+  );
+}
+
+/** Log audit: semua tindakan berizin dan percobaan yang ditolak. */
+function LogAudit() {
+  const { access, version } = useDemo();
+  const [onlyDenied, setOnlyDenied] = useState(false);
+  const rows = useMemo(() => [...access.audit].reverse().filter((a) => !onlyDenied || !a.allowed), [access, version, onlyDenied]);
+  return (
+    <Panel
+      title="Log audit"
+      hint={`${num(access.audit.length)} catatan`}
+      actions={
+        <label className="check" style={{ padding: 0 }}>
+          <input type="checkbox" checked={onlyDenied} onChange={(e) => setOnlyDenied(e.target.checked)} />
+          <span>Hanya yang ditolak</span>
+        </label>
+      }
+    >
+      <div className="table-wrap">
+        <table className="t">
+          <thead>
+            <tr>
+              <th>Waktu</th>
+              <th>Pengguna</th>
+              <th>Tindakan</th>
+              <th>Hasil</th>
+              <th>Keterangan</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.slice(0, 300).map((a, i) => (
+              <tr key={i}>
+                <td className="num">{dateLabel(a.at)}</td>
+                <td>{a.userName}</td>
+                <td>
+                  {a.action}
+                  {a.permission ? <span className="muted"> · {PERMISSION_LABEL[a.permission]}</span> : null}
+                </td>
+                <td>{a.allowed ? <Badge tone="good">✓ Diizinkan</Badge> : <Badge tone="bad">✕ Ditolak</Badge>}</td>
+                <td className="muted" style={{ fontSize: 12.5 }}>
+                  {a.detail ?? ""}
+                </td>
+              </tr>
+            ))}
+            {rows.length === 0 && (
+              <tr>
+                <td colSpan={5} className="muted">
+                  Belum ada catatan.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+      <p className="muted" style={{ fontSize: 13 }}>
+        Pada produksi, log audit disimpan append-only di server dan tidak dapat dihapus melalui aplikasi.
+      </p>
+    </Panel>
   );
 }

@@ -2,6 +2,8 @@ import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   CASE_STATUS_LABEL,
+  ROLE_LABEL,
+  type Permission,
   MAX_FREEZE_MONTHS,
   SANCTION_LABEL,
   SEVERE_VIOLATIONS,
@@ -48,7 +50,7 @@ function nextDeadline(c: SanctionCase): string {
 
 /** Kasus dan sanksi (Kode Etik Pasal 20–22). */
 export function KasusSanksi() {
-  const { engine, cases, now, version, bump } = useDemo();
+  const { engine, cases, now, version, bump, access, staffId } = useDemo();
   const [sel, setSel] = useState<string | null>(cases.cases[0]?.id ?? null);
   const [msg, setMsg] = useState("");
   const [showNew, setShowNew] = useState(false);
@@ -89,9 +91,9 @@ export function KasusSanksi() {
         <button className="btn-secondary" onClick={() => advance(15)}>
           +15 hari
         </button>
-        <button className="btn-primary" onClick={() => setShowNew(!showNew)}>
+        {access.can(staffId, "kasus.buka") && <button className="btn-primary" onClick={() => setShowNew(!showNew)}>
           {showNew ? "Tutup formulir" : "Buka kasus baru"}
-        </button>
+        </button>}
       </div>
       <div className="kpis">
         <Kpi
@@ -199,7 +201,7 @@ function NewCase({
   onDone: (id: string) => void;
   run: (fn: () => string | void) => void;
 }) {
-  const { engine, cases, now } = useDemo();
+  const { engine, cases, now, access, staffId } = useDemo();
   const mitra = useMemo(
     () =>
       [...engine.accounts.values()]
@@ -291,6 +293,7 @@ function NewCase({
         style={{ marginTop: 12 }}
         onClick={() =>
           run(() => {
+            access.require(staffId, "kasus.buka", "Buka kasus", now, accountId);
             const c = cases.openCase({
               accountId,
               violations: viol,
@@ -299,7 +302,7 @@ function NewCase({
                 .split("\n")
                 .map((x) => x.trim())
                 .filter(Boolean),
-              actor: "Kepatuhan (demo)",
+              actor: access.actorName(staffId),
               at: now,
             });
             onDone(c.id);
@@ -320,10 +323,16 @@ function CaseDetail({
   c: SanctionCase;
   run: (fn: () => string | void) => void;
 }) {
-  const { engine, cases, now } = useDemo();
+  const { engine, cases, now, access, staffId } = useDemo();
+  const me = access.actorName(staffId);
+  const can = (p: Permission) => access.can(staffId, p);
+  const need = (p: Permission) => (
+    <p className="muted">
+      Tindakan ini memerlukan peran {access.rolesWith(p).map((r) => ROLE_LABEL[r]).join(" atau ")}. Anda masuk sebagai {me}.
+    </p>
+  );
   const acc = engine.accounts.get(c.accountId)!;
   const [text, setText] = useState("");
-  const [by, setBy] = useState("");
   const [reasons, setReasons] = useState("");
   const [sanctions, setSanctions] = useState<SanctionType[]>([]);
   const [freeze, setFreeze] = useState(1);
@@ -414,7 +423,8 @@ function CaseDetail({
           )}
         </Panel>
         <Panel title="Tindakan">
-          {c.status === "menunggu_penjelasan" && (
+          {c.status === "menunggu_penjelasan" && !can("kasus.catat_penjelasan") && need("kasus.catat_penjelasan")}
+          {c.status === "menunggu_penjelasan" && can("kasus.catat_penjelasan") && (
             <>
               <p className="muted" style={{ marginTop: 0 }}>
                 Mitra PLS mengirim penjelasan melalui Kantor Maya. Bila
@@ -439,7 +449,7 @@ function CaseDetail({
                   onClick={() =>
                     run(
                       () => (
-                        cases.submitExplanation(c.id, text, now, false),
+                        (access.require(staffId, "kasus.catat_penjelasan", "Catat penjelasan", now, c.id), cases.submitExplanation(c.id, text, now, false)),
                         "Penjelasan dicatat."
                       ),
                     )
@@ -453,7 +463,7 @@ function CaseDetail({
                   onClick={() =>
                     run(
                       () => (
-                        cases.markNoExplanation(c.id, now, "Kepatuhan (demo)"),
+                        (access.require(staffId, "kasus.catat_penjelasan", "Tandai tanpa penjelasan", now, c.id), cases.markNoExplanation(c.id, now, me)),
                         "Dicatat: tanpa penjelasan sampai batas waktu."
                       ),
                     )
@@ -464,17 +474,10 @@ function CaseDetail({
               </div>
             </>
           )}
-          {c.status === "menunggu_keputusan" && (
+          {c.status === "menunggu_keputusan" && !can("kasus.putus") && need("kasus.putus")}
+          {c.status === "menunggu_keputusan" && can("kasus.putus") && (
             <>
-              <div className="field">
-                <label htmlFor="cd-by">Pejabat pemutus</label>
-                <input
-                  id="cd-by"
-                  value={by}
-                  onChange={(e) => setBy(e.target.value)}
-                  placeholder="Nama dan jabatan"
-                />
-              </div>
+              <p className="muted" style={{ marginTop: 0 }}>Pejabat pemutus: <b>{me}</b></p>
               {sanctionPicker}
               <textarea
                 className="ta"
@@ -496,8 +499,9 @@ function CaseDetail({
                   onClick={() =>
                     run(
                       () => (
+                        access.require(staffId, "kasus.putus", "Putuskan sanksi", now, c.id),
                         cases.decide(c.id, {
-                          by,
+                          by: me,
                           sanctions,
                           reasons,
                           freezeMonths: freeze,
@@ -515,8 +519,9 @@ function CaseDetail({
                   onClick={() =>
                     run(
                       () => (
+                        access.require(staffId, "kasus.putus", "Putuskan tidak terbukti", now, c.id),
                         cases.decide(c.id, {
-                          by,
+                          by: me,
                           sanctions: [],
                           reasons,
                           at: now,
@@ -537,19 +542,10 @@ function CaseDetail({
               Setelah itu keputusan menjadi final.
             </p>
           )}
-          {c.status === "keberatan_diperiksa" && (
+          {c.status === "keberatan_diperiksa" && !can("kasus.putus_keberatan") && need("kasus.putus_keberatan")}
+          {c.status === "keberatan_diperiksa" && can("kasus.putus_keberatan") && (
             <>
-              <div className="field">
-                <label htmlFor="ob-by">
-                  Pejabat pemeriksa keberatan (bukan {c.decision!.by})
-                </label>
-                <input
-                  id="ob-by"
-                  value={by}
-                  onChange={(e) => setBy(e.target.value)}
-                  placeholder="Nama dan jabatan"
-                />
-              </div>
+              <p className="muted" style={{ marginTop: 0 }}>Pejabat pemeriksa keberatan: <b>{me}</b> (keputusan pertama oleh {c.decision!.by})</p>
               <div className="seg" style={{ margin: "8px 0" }}>
                 {(["ditolak", "dikabulkan", "diubah"] as const).map((o) => (
                   <button
@@ -574,8 +570,9 @@ function CaseDetail({
                 onClick={() =>
                   run(
                     () => (
+                      access.require(staffId, "kasus.putus_keberatan", "Putuskan keberatan", now, c.id),
                       cases.decideObjection(c.id, {
-                        by,
+                        by: me,
                         outcome,
                         sanctions,
                         reasons,

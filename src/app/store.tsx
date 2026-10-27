@@ -3,11 +3,15 @@ import {
   useContext,
   useMemo,
   useReducer,
+  useState,
   type ReactNode,
 } from "react";
 import {
   type ControlDetector,
   CaseManager,
+  AccessControl,
+  PayoutApprovals,
+  demoStaff,
   atWib,
   demoScenario,
   runScenario,
@@ -24,6 +28,11 @@ interface DemoState {
   engine: MitransEngine;
   detector: ControlDetector;
   cases: CaseManager;
+  access: AccessControl;
+  payouts: PayoutApprovals;
+  /** Staf yang sedang masuk (demo). */
+  staffId: string;
+  setStaffId: (id: string) => void;
   /** Waktu demo (09.00 WIB pada hari berjalan engine). */
   now: number;
   reports: MonthReport[];
@@ -37,20 +46,34 @@ const Ctx = createContext<DemoState | null>(null);
 
 export function DemoProvider({ children }: { children: ReactNode }) {
   const result = useMemo(() => runScenario(demoScenario()), []);
-  const cases = useMemo(() => seedCases(result.engine, result.detector!), [result]);
+  const access = useMemo(() => {
+    const ac = new AccessControl();
+    for (const u of demoStaff()) ac.addUser(u);
+    return ac;
+  }, []);
+  const payouts = useMemo(() => new PayoutApprovals(access), [access]);
+  const cases = useMemo(() => seedCases(result.engine, result.detector!, access), [result, access]);
+  const [staffId, setStaffIdRaw] = useState("u-budi");
   const [version, bump] = useReducer((x: number) => x + 1, 0);
   const value = useMemo<DemoState>(
     () => ({
       engine: result.engine,
       detector: result.detector!,
       cases,
+      access,
+      payouts,
+      staffId,
+      setStaffId: (id: string) => {
+        access.record(id, "Masuk (demo)", atWib(result.engine.today, 9));
+        setStaffIdRaw(id);
+      },
       now: atWib(result.engine.today, 9),
       reports: result.engine.reports,
       lastMonth: result.engine.reports[result.engine.reports.length - 1].month,
       version,
       bump,
     }),
-    [result, cases, version],
+    [result, cases, access, payouts, staffId, version],
   );
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
@@ -81,7 +104,7 @@ export function currentRank(
 }
 
 /** Kasus contoh untuk demo: satu dari tanda kuat yang belum diperiksa, satu pelanggaran pesan massal yang sudah diputus. */
-function seedCases(engine: MitransEngine, detector: ControlDetector): CaseManager {
+function seedCases(engine: MitransEngine, detector: ControlDetector, access: AccessControl): CaseManager {
   const cm = new CaseManager(engine);
   const now = atWib(engine.today, 9);
   const flag = detector.scan(engine).find((f) => f.level === "kuat" && !engine.sales.get(f.saleId)!.review);
@@ -92,7 +115,7 @@ function seedCases(engine: MitransEngine, detector: ControlDetector): CaseManage
       allegation: `Penjualan ${flag.saleId} diduga dibeli oleh akun yang dikendalikan penjual untuk memenuhi status aktif.`,
       evidence: [...flag.reasons.map((r) => `${r} antara akun penjual dan pembeli`), `Skor keterkaitan ${Math.round(flag.score * 100)}% (deteksi otomatis)`],
       saleIds: [flag.saleId],
-      actor: "Kepatuhan: Rina",
+      actor: access.actorName("u-rina"),
       at: now,
     });
   }
@@ -103,12 +126,12 @@ function seedCases(engine: MitransEngine, detector: ControlDetector): CaseManage
       violations: [19],
       allegation: "Mengirim pesan promosi WhatsApp ke grup warga tanpa persetujuan penerima.",
       evidence: ["Pengaduan Pelanggan melalui layanan pengaduan", "Tangkapan layar pesan grup"],
-      actor: "Kepatuhan: Rina",
+      actor: access.actorName("u-rina"),
       at: now,
     });
     cm.submitExplanation(c.id, "Saya mengira grup warga boleh untuk promosi. Saya sudah menghapus pesan dan meminta maaf di grup.", now);
     cm.decide(c.id, {
-      by: "Direksi: Budi",
+      by: access.actorName("u-budi"),
       sanctions: ["teguran"],
       reasons: "Pesan massal tanpa persetujuan melanggar Pasal 18 angka 19; Mitra PLS mengakui dan sudah memperbaiki, sehingga cukup teguran.",
       at: now,

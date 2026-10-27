@@ -13,6 +13,7 @@ Status: **prototipe**. Yang ada di repositori ini adalah engine komisi yang teru
 | Pendaftaran Mitra PLS + kuis Kode Etik | `/daftar` | Selesai (data hanya di memori peramban) |
 | Kantor Maya Mitra PLS | `/mitra` | Selesai (data sintetis) |
 | Dasbor admin | `/admin` | Selesai (data sintetis, tanpa otorisasi) |
+| Hak akses per peran, pemisahan tugas, maker-checker, log audit | `src/engine/access.ts`, `/admin` (Masuk sebagai, Pengguna & peran, Log audit) | Teruji (prototipe) |
 | Pemberitahuan tertulis dan tata cara sanksi | `src/engine/sanctions.ts`, `/admin` tab Kasus & sanksi, Kantor Maya tab Pemberitahuan | Teruji (prototipe) |
 | Deteksi akun yang dikendalikan sendiri + alur pemeriksaan | `src/engine/fraud.ts`, `/admin` tab Akun terkendali | Teruji (prototipe) |
 
@@ -181,4 +182,29 @@ Pemutusan langsung hanya untuk pelanggaran berat Pasal 18 angka 1, 2, 4, 9, 12, 
 
 **Perlu dikonfirmasi konsultan hukum:** (a) penundaan berlaku pemutusan sampai final, sementara sanksi lain langsung berlaku; (b) ambang eskalasi 2 sanksi final; (c) surat elektronik melalui Kantor Maya dan surel cukup sebagai "pemberitahuan tertulis".
 
-**Belum dibangun:** pengiriman surel sungguhan, lampiran bukti berkas, tanda tangan elektronik pejabat, dan hak akses per peran (Kepatuhan, Direksi, pemeriksa keberatan).
+**Belum dibangun:** pengiriman surel sungguhan, lampiran bukti berkas, dan tanda tangan elektronik pejabat. Hak akses per peran ada di bagian 8.
+
+## 8. Hak akses per peran
+
+Satu sumber aturan: `ROLE_PERMISSIONS` di `src/engine/access.ts`. Menu admin hanya menampilkan tab yang diizinkan, dan setiap tindakan diperiksa lagi saat dijalankan (`require`), sehingga tombol yang disembunyikan tidak menjadi satu-satunya pengaman.
+
+| Peran | Izin pokok | Tidak boleh |
+|---|---|---|
+| Admin Sistem | Kelola pengguna dan peran, log audit, simulasi | Memutus kasus, menyiapkan atau menyetujui pembayaran, melihat NIK |
+| Kepatuhan | Deteksi akun terkendali, buka kasus, catat penjelasan, NIK tersamar | Memutus sanksi, memeriksa keberatan |
+| Direksi | Putus sanksi; lihat keuangan, dana, kepatuhan | Memeriksa keberatan, melihat NIK |
+| Pemeriksa Keberatan | Putus keberatan, lihat kasus | Membuka kasus, memutus sanksi pertama |
+| Keuangan | Tutup bulan, siapkan dan setujui berkas transfer, NIK tersamar | Kasus dan sanksi |
+| Layanan Pelanggan | Lihat Mitra PLS dan kasus | Mengubah apa pun |
+
+**Pemisahan tugas.** Ditolak oleh sistem dan dicatat sebagai percobaan yang ditolak:
+- Direksi × Pemeriksa Keberatan (Kode Etik Pasal 21 angka 4), Kepatuhan × Pemeriksa Keberatan, Admin Sistem × Keuangan.
+- Penyiap berkas transfer Jumat tidak boleh menyetujuinya sendiri (maker-checker); nilai berkas dikunci saat disiapkan.
+- Tidak seorang pun dapat mengubah peran atau status dirinya sendiri.
+- Nama pelaku di jejak kasus dan surat diambil dari pengguna yang masuk, bukan diketik.
+
+**Data pribadi (UU 27/2022).** NIK hanya untuk Kepatuhan dan Keuangan, selalu tersamar (`3171********0012`), dan setiap penampilan dicatat. Nomor rekening tidak tampil di layar mana pun. Mitra PLS di Kantor Maya hanya melihat akunnya sendiri dan data jaringan menurut Syarat dan Ketentuan Pasal 23.
+
+**Log audit** mencatat masuk, tindakan berizin, perubahan peran (sebelum → sesudah), penampilan NIK, dan semua percobaan yang ditolak.
+
+**Belum dibangun (produksi):** autentikasi sungguhan (kata sandi + OTP/2FA, sesi kedaluwarsa), pemeriksaan izin di server API, log audit append-only di basis data, peninjauan hak akses berkala (mis. tiap 3 bulan), dan pemilihan "masuk sebagai" Mitra PLS di Kantor Maya yang dalam prototipe ini hanya untuk demo.
