@@ -424,3 +424,25 @@ describe("Langganan dan bayar dari bonus lewat server", () => {
     expect((await call("/api/mitra/langganan/bayar-dari-bonus", { tok, method: "POST", body: '{"setuju": true}' })).status).toBe(403);
   });
 });
+
+describe("PPh 21 dan penarikan lewat server", () => {
+  it("Mitra PLS melihat rincian pajak sendiri dengan NIK tersamar", async () => {
+    const acc = [...engine.accounts.values()].find((a) => a.role === "mitra" && engine.payoutSchedule(a.id).length > 0)!;
+    const masa = engine.payoutSchedule(acc.id)[0].date.slice(0, 7);
+    const tok = await token({ sub: "user_pajak", metadata: { mitraId: acc.id } });
+    const r = await call(`/api/mitra/pajak?masa=${masa}`, { tok });
+    expect(r.status).toBe(200);
+    expect(r.body.buktiPotong.tax).toBe(engine.buktiPotong(acc.id, masa)!.tax);
+    expect(r.body.buktiPotong.nik).toContain("*");
+    expect((await call("/api/mitra/pajak?masa=2027-1", { tok })).status).toBe(400);
+  });
+  it("rekap masa hanya untuk peran dengan izin pembayaran", async () => {
+    const masa = engine.payoutRuns()[0].date.slice(0, 7);
+    const keu = await token({ sub: "user_keu_pph", metadata: { roles: ["keuangan"] } });
+    const r = await call(`/api/admin/pph/${masa}`, { tok: keu });
+    expect(r.status).toBe(200);
+    expect(r.body.rincian.every((b: { nik: string }) => b.nik.includes("*"))).toBe(true);
+    const cs = await token({ sub: "user_cs_pph", metadata: { roles: ["layanan_pelanggan"] } });
+    expect((await call(`/api/admin/pph/${masa}`, { tok: cs })).status).toBe(403);
+  });
+});

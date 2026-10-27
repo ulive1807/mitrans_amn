@@ -29,7 +29,12 @@ export const PPH21 = {
     { upTo: Infinity, bp: 3500 },
   ],
   withoutNpwpSurchargeBp: 2000, // 20% lebih tinggi
+  /** Kode objek pajak distributor penjualan langsung menurut sumber sekunder; cek Perdirjen terbaru. */
+  objectCode: "21-100-04",
 } as const;
+
+/** Dasar pemotongan: 50% bruto, dibulatkan ke bawah. */
+export const dppOf = (gross: number) => Math.floor((Math.max(0, gross) * PPH21.dppBp) / 10_000);
 
 /** Pajak menurut tarif Pasal 17 ayat (1) huruf a atas dasar pemotongan `dpp` (Rupiah bulat, dibulatkan ke bawah). */
 export function pasal17(dpp: number): number {
@@ -51,11 +56,9 @@ export function pph21BukanPegawai(
   withoutNpwp = false,
 ): number {
   if (gross <= 0) return 0;
-  const dpp = (x: number) =>
-    Math.floor((Math.max(0, x) * PPH21.dppBp) / 10_000);
   const tax =
-    pasal17(dpp(priorGrossThisMonth + gross)) -
-    pasal17(dpp(priorGrossThisMonth));
+    pasal17(dppOf(priorGrossThisMonth + gross)) -
+    pasal17(dppOf(priorGrossThisMonth));
   return withoutNpwp
     ? Math.floor((tax * (10_000 + PPH21.withoutNpwpSurchargeBp)) / 10_000)
     : tax;
@@ -85,4 +88,48 @@ export function withholdBySchedule(
     monthGross.set(m, prior + Math.max(0, gross));
     return { date, gross, tax };
   });
+}
+
+/** Satu baris jadwal transfer Mitra PLS. Nilai yang ditransfer = bruto − penarikan − PPh 21 − potongan Langganan. */
+export interface PayoutScheduleLine {
+  date: string;
+  /** Bonus bruto yang dijadwalkan pada Jumat itu. */
+  gross: number;
+  /** Penarikan bonus (clawback) yang dipotong pada Jumat itu. */
+  clawback: number;
+  /** Bruto kena pajak = bruto − penarikan. */
+  taxable: number;
+  tax: number;
+  /** Potongan Langganan yang dibayar dari bonus. */
+  deducted: number;
+  net: number;
+}
+
+/** Status satu penarikan bonus: dipotong dari Jumat mana saja, dan sisa piutang. */
+export interface ClawbackStatus {
+  entry: import("./types").LedgerEntry;
+  amount: number;
+  offsets: { date: string; amount: number }[];
+  outstanding: number;
+}
+
+/** Rincian pemotongan PPh 21 satu Mitra PLS untuk satu masa pajak (bahan bukti potong BP21 di Coretax). */
+export interface BuktiPotong {
+  /** Nomor internal; nomor resmi diberikan Coretax DJP saat bukti potong diterbitkan. */
+  number: string;
+  /** Masa pajak YYYY-MM. */
+  month: string;
+  accountId: string;
+  name: string;
+  nik: string;
+  withoutNpwp: boolean;
+  objectCode: string;
+  lines: { date: string; gross: number; clawback: number; taxable: number; dpp: number; tax: number }[];
+  gross: number;
+  clawback: number;
+  taxable: number;
+  dpp: number;
+  tax: number;
+  /** Masa pajak sudah lewat (bukan sementara). */
+  final: boolean;
 }

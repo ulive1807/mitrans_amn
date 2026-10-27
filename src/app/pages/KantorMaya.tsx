@@ -23,6 +23,7 @@ import { dateLabel, monthLabel, num, pct, rp, rpShort } from "../format";
 import { currentRank, paidTotals, useDemo } from "../store";
 import { Pemberitahuan, StatusBanner } from "./MitraPemberitahuan";
 import { Langganan, ReminderBanner } from "./MitraLangganan";
+import { Pajak } from "./MitraPajak";
 
 type Tab =
   | "ringkasan"
@@ -32,6 +33,7 @@ type Tab =
   | "planb"
   | "rujukan"
   | "langganan"
+  | "pajak"
   | "pemberitahuan";
 const TABS: { id: Tab; label: string }[] = [
   { id: "ringkasan", label: "Ringkasan" },
@@ -41,6 +43,7 @@ const TABS: { id: Tab; label: string }[] = [
   { id: "planb", label: "Plan B · Langganan" },
   { id: "rujukan", label: "Rujukan & orientasi" },
   { id: "langganan", label: "Langganan & tagihan" },
+  { id: "pajak", label: "Pajak & penarikan" },
   { id: "pemberitahuan", label: "Pemberitahuan" },
 ];
 
@@ -154,6 +157,7 @@ export function KantorMaya() {
           )}
           {tab === "rujukan" && <Rujukan engine={engine} accId={acc.id} />}
           {tab === "langganan" && <Langganan accId={acc.id} />}
+          {tab === "pajak" && <Pajak accId={acc.id} />}
           {tab === "pemberitahuan" && <Pemberitahuan accId={acc.id} />}
         </main>
       </div>

@@ -10,6 +10,7 @@ import {
   PLAN,
   PayoutApprovals,
   reminderFor,
+  maskNik,
   atWib,
   demoScenario,
   runScenario,
@@ -226,6 +227,36 @@ export function createApp(opts: AppOptions) {
         };
       },
     ),
+    // Rincian PPh 21 dan penarikan bonus milik sendiri; masa dari query (YYYY-MM).
+    route("GET", "/api/mitra/pajak", "mitra", "Lihat pajak dan penarikan", ({ session, query }) => {
+      const acc = ownMitra(session);
+      const masa = query.get("masa");
+      if (masa !== null && !/^\d{4}-\d{2}$/.test(masa)) throw new HttpError(400, "Masa pajak harus YYYY-MM");
+      const b = masa ? engine.buktiPotong(acc.id, masa) : undefined;
+      return {
+        buktiPotong: b ? { ...b, nik: maskNik(b.nik) } : null,
+        penarikan: engine.clawbackStatus(acc.id).map((c) => ({
+          tanggal: c.entry.accruedAt,
+          jenis: c.entry.type,
+          nominal: c.amount,
+          dipotong: c.offsets,
+          sisa: c.outstanding,
+        })),
+        piutangPenarikan: engine.clawbackOutstanding(acc.id),
+      };
+    }),
+    // Rekap PPh 21 satu masa untuk Keuangan; NIK tersamar.
+    route("GET", "/api/admin/pph/:masa", "pembayaran.lihat", "Lihat rekap PPh 21", ({ params }) => {
+      if (!/^\d{4}-\d{2}$/.test(params.masa)) throw new HttpError(400, "Masa pajak harus YYYY-MM");
+      const list = engine.buktiPotongMasa(params.masa).map((b) => ({ ...b, nik: maskNik(b.nik) }));
+      return {
+        masa: params.masa,
+        penerima: list.length,
+        pph21: list.reduce((a, b) => a + b.tax, 0),
+        brutoKenaPajak: list.reduce((a, b) => a + b.taxable, 0),
+        rincian: list,
+      };
+    }),
     route("GET", "/api/mitra/langganan", "mitra", "Lihat Langganan", ({ session }) => {
       const acc = ownMitra(session);
       const until = engine.accessUntil(acc.id);

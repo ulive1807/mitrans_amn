@@ -25,7 +25,7 @@ import {
   wibDate,
   wibMonth,
 } from "./time";
-import { withholdBySchedule } from "./tax";
+import { PPH21, dppOf, withholdBySchedule, type BuktiPotong, type ClawbackStatus, type PayoutScheduleLine } from "./tax";
 
 const DAY_MS = 86_400_000;
 import {
@@ -768,37 +768,121 @@ export class MitransEngine {
   }
 
   /**
-   * Jadwal transfer satu Mitra PLS per Jumat: bonus bruto, PPh 21 (lihat tax.ts), potongan Langganan, dan nilai
-   * yang ditransfer. Potongan Langganan diambil dari jumlah setelah PPh (S&K Pasal 21 angka 7).
+   * Hitungan inti per akun: penarikan bonus (clawback) dialokasikan ke Jumat transfer berikutnya, lalu PPh 21 dihitung
+   * atas bruto setelah penarikan (tax.ts), lalu potongan Langganan. Murni dari ledger, tanpa keadaan tersimpan.
    */
-  payoutSchedule(accountId: string): { date: string; gross: number; tax: number; deducted: number; net: number }[] {
+  private computeSchedule(accountId: string): {
+    lines: PayoutScheduleLine[];
+    clawbacks: ClawbackStatus[];
+  } {
     const acc = this.mustAccount(accountId);
+    const gross = this.grossByDate(accountId);
+    const dates = [...gross.keys()].sort();
+    const room = new Map(gross);
+    const offsetByDate = new Map<string, number>();
+    const clawbacks: ClawbackStatus[] = [];
+    const claws = this.entriesFor(accountId)
+      .filter((e) => e.status === "clawback" && e.amount < 0)
+      .sort((a, b) => a.accruedAt - b.accruedAt || a.id - b.id);
+    for (const c of claws) {
+      let left = -c.amount;
+      const after = wibDate(c.accruedAt);
+      const offsets: { date: string; amount: number }[] = [];
+      for (const d of dates) {
+        if (left <= 0) break;
+        if (d <= after) continue;
+        const take = Math.min(left, Math.max(0, room.get(d)!));
+        if (take <= 0) continue;
+        room.set(d, room.get(d)! - take);
+        offsetByDate.set(d, (offsetByDate.get(d) ?? 0) + take);
+        offsets.push({ date: d, amount: take });
+        left -= take;
+      }
+      clawbacks.push({ entry: c, amount: -c.amount, offsets, outstanding: left });
+    }
+    const taxable = new Map<string, number>();
+    for (const d of dates) taxable.set(d, gross.get(d)! - (offsetByDate.get(d) ?? 0));
     const deducted = new Map<string, number>();
     for (const d of this.payoutDeductions)
       if (d.accountId === accountId && !d.cancelled) deducted.set(d.date, (deducted.get(d.date) ?? 0) + d.amount);
-    return withholdBySchedule(this.grossByDate(accountId), acc.withoutNpwp).map((l) => {
+    const lines = withholdBySchedule(taxable, acc.withoutNpwp).map((l) => {
+      const g = gross.get(l.date)!;
+      const clawback = offsetByDate.get(l.date) ?? 0;
       const ded = deducted.get(l.date) ?? 0;
-      return { ...l, deducted: ded, net: l.gross - l.tax - ded };
+      return { date: l.date, gross: g, clawback, taxable: l.gross, tax: l.tax, deducted: ded, net: g - clawback - l.tax - ded };
     });
-  }
-
-  /** Bonus yang belum ditransfer (Jumat setelah hari ini). Hanya entri berstatus payable; bonus tim yang belum ditetapkan tidak dihitung. */
-  pendingPayouts(accountId: string): { date: string; gross: number; tax: number; deducted: number; net: number }[] {
-    return this.payoutSchedule(accountId).filter((r) => r.date > this.currentDay);
+    return { lines, clawbacks };
   }
 
   /**
-   * Saldo bonus yang dapat dipakai membayar Langganan.
-   * Konservatif: penarikan bonus (clawback) sejak awal bulan lalu ikut dikurangkan, karena prototipe belum
-   * mencatat kapan penarikan itu dipotong dari transfer.
+   * Jadwal transfer satu Mitra PLS per Jumat: bonus bruto, penarikan bonus, bruto kena pajak, PPh 21, potongan
+   * Langganan, dan nilai yang ditransfer. Potongan Langganan diambil dari sisa setelah PPh (S&K Pasal 21 angka 7).
    */
+  payoutSchedule(accountId: string): PayoutScheduleLine[] {
+    return this.computeSchedule(accountId).lines;
+  }
+
+  /** Bonus yang belum ditransfer (Jumat setelah hari ini). Hanya entri berstatus payable; bonus tim yang belum ditetapkan tidak dihitung. */
+  pendingPayouts(accountId: string): PayoutScheduleLine[] {
+    return this.payoutSchedule(accountId).filter((r) => r.date > this.currentDay);
+  }
+
+  /** Penarikan bonus satu akun: nominal, Jumat tempat dipotong, dan sisa yang masih menjadi piutang. */
+  clawbackStatus(accountId: string): ClawbackStatus[] {
+    return this.computeSchedule(accountId).clawbacks;
+  }
+
+  /** Piutang penarikan bonus yang belum dapat dipotong dari transfer mana pun. */
+  clawbackOutstanding(accountId: string): number {
+    return this.clawbackStatus(accountId).reduce((a, c) => a + c.outstanding, 0);
+  }
+
+  /** Saldo bonus yang dapat dipakai membayar Langganan: transfer mendatang setelah penarikan, PPh, dan potongan, dikurangi piutang penarikan. */
   bonusBalance(accountId: string): number {
-    const pending = this.pendingPayouts(accountId).reduce((a, r) => a + r.net, 0);
-    const since = addMonths(this.currentDay.slice(0, 7), -1);
-    const recentClawback = this.entriesFor(accountId)
-      .filter((e) => e.status === "clawback" && e.month >= since)
-      .reduce((a, e) => a + e.amount, 0);
-    return Math.max(0, pending + recentClawback);
+    const { lines, clawbacks } = this.computeSchedule(accountId);
+    const pending = lines.filter((r) => r.date > this.currentDay).reduce((a, r) => a + r.net, 0);
+    const outstanding = clawbacks.reduce((a, c) => a + c.outstanding, 0);
+    return Math.max(0, pending - outstanding);
+  }
+
+  /**
+   * Rincian pemotongan PPh 21 satu Mitra PLS untuk satu masa pajak (bulan kalender transfer), bahan bukti potong
+   * BP21 yang diterbitkan resmi melalui Coretax DJP. Undefined bila tidak ada transfer pada masa itu.
+   */
+  buktiPotong(accountId: string, month: string): BuktiPotong | undefined {
+    const acc = this.mustAccount(accountId);
+    const lines = this.payoutSchedule(accountId)
+      .filter((l) => l.date.startsWith(month))
+      .map((l) => ({ date: l.date, gross: l.gross, clawback: l.clawback, taxable: l.taxable, dpp: dppOf(l.taxable), tax: l.tax }));
+    if (!lines.length) return undefined;
+    const sum = (f: (l: (typeof lines)[number]) => number) => lines.reduce((a, l) => a + f(l), 0);
+    return {
+      number: `BP21/${month.replace("-", "")}/${acc.code}`,
+      month,
+      accountId,
+      name: acc.name,
+      nik: acc.nik,
+      withoutNpwp: !!acc.withoutNpwp,
+      objectCode: PPH21.objectCode,
+      lines,
+      gross: sum((l) => l.gross),
+      clawback: sum((l) => l.clawback),
+      taxable: sum((l) => l.taxable),
+      dpp: sum((l) => l.dpp),
+      tax: sum((l) => l.tax),
+      final: month < this.currentDay.slice(0, 7),
+    };
+  }
+
+  /** Semua rincian pemotongan pada satu masa pajak (rekap Keuangan untuk e-Bupot). */
+  buktiPotongMasa(month: string): BuktiPotong[] {
+    const out: BuktiPotong[] = [];
+    for (const [id] of this.entriesByAccount) {
+      if (!this.accounts.has(id)) continue;
+      const b = this.buktiPotong(id, month);
+      if (b) out.push(b);
+    }
+    return out.sort((a, b) => b.tax - a.tax || a.accountId.localeCompare(b.accountId));
   }
 
   /**
@@ -832,11 +916,13 @@ export class MitransEngine {
     total: number;
     count: number;
     byType: Record<BonusType, number>;
-    /** PPh 21 yang dipotong pada Jumat itu. */
+    /** Penarikan bonus (clawback) yang dipotong pada Jumat itu. */
+    clawback: number;
+    /** PPh 21 yang dipotong pada Jumat itu (atas bruto setelah penarikan). */
     tax: number;
     /** Potongan Langganan dari bonus pada Jumat itu. */
     deducted: number;
-    /** Nilai yang ditransfer: total bonus dikurangi PPh 21 dan potongan Langganan. */
+    /** Nilai yang ditransfer: total bonus dikurangi penarikan, PPh 21, dan potongan Langganan. */
     transfer: number;
   }[] {
     const runs = new Map<
@@ -846,6 +932,7 @@ export class MitransEngine {
         total: number;
         count: number;
         byType: Record<BonusType, number>;
+        clawback: number;
         tax: number;
         deducted: number;
         transfer: number;
@@ -854,7 +941,7 @@ export class MitransEngine {
     for (const e of this.ledger) {
       if (e.status !== "payable" || !e.payoutDate || e.amount === 0) continue;
       if (e.advance && e.advanceDate) {
-        const a = runs.get(e.advanceDate) ?? { date: e.advanceDate, total: 0, count: 0, byType: emptyByType(), tax: 0, deducted: 0, transfer: 0 };
+        const a = runs.get(e.advanceDate) ?? { date: e.advanceDate, total: 0, count: 0, byType: emptyByType(), clawback: 0, tax: 0, deducted: 0, transfer: 0 };
         a.total += e.advance;
         a.count++;
         a.byType[e.type] += e.advance;
@@ -866,6 +953,7 @@ export class MitransEngine {
         total: 0,
         count: 0,
         byType: emptyByType(),
+        clawback: 0,
         tax: 0,
         deducted: 0,
         transfer: 0,
@@ -880,16 +968,17 @@ export class MitransEngine {
       const r = runs.get(d.date);
       if (r) r.deducted += d.amount;
     }
-    // PPh 21 dihitung per Mitra PLS per Jumat (lapisan tarif atas bruto bulan berjalan), lalu dijumlahkan.
+    // Penarikan bonus dan PPh 21 dihitung per Mitra PLS per Jumat, lalu dijumlahkan.
     for (const [id] of this.entriesByAccount) {
-      const acc = this.accounts.get(id);
-      if (!acc) continue;
-      for (const l of withholdBySchedule(this.grossByDate(id), acc.withoutNpwp)) {
+      if (!this.accounts.has(id)) continue;
+      for (const l of this.computeSchedule(id).lines) {
         const r = runs.get(l.date);
-        if (r) r.tax += l.tax;
+        if (!r) continue;
+        r.clawback += l.clawback;
+        r.tax += l.tax;
       }
     }
-    for (const r of runs.values()) r.transfer = r.total - r.tax - r.deducted;
+    for (const r of runs.values()) r.transfer = r.total - r.clawback - r.tax - r.deducted;
     return [...runs.values()].sort((a, b) => a.date.localeCompare(b.date));
   }
 

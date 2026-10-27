@@ -16,6 +16,7 @@ Status: **prototipe**. Yang ada di repositori ini adalah engine komisi yang teru
 | Hak akses per peran, pemisahan tugas, maker-checker, log audit | `src/engine/access.ts`, `/admin` (Masuk sebagai, Pengguna & peran, Log audit) | Teruji (prototipe) |
 | Pemberitahuan tertulis dan tata cara sanksi | `src/engine/sanctions.ts`, `/admin` tab Kasus & sanksi, Kantor Maya tab Pemberitahuan | Teruji (prototipe) |
 | Deteksi akun yang dikendalikan sendiri + alur pemeriksaan | `src/engine/fraud.ts`, `/admin` tab Akun terkendali | Teruji (prototipe) |
+| Penarikan bonus (clawback) dipotong dari transfer + rincian bukti potong PPh 21 per masa | `computeSchedule`, `clawbackStatus`, `buktiPotong`, `buktiPotongMasa`, Kantor Maya tab Pajak & penarikan, Admin tab PPh 21 & bukti potong, `/api/mitra/pajak`, `/api/admin/pph/:masa` | Teruji (prototipe) |
 | PPh 21 bukan pegawai atas bonus (per Jumat), saldo setelah pajak | `src/engine/tax.ts`, `payoutSchedule`, `payoutRuns().tax` | Teruji; rumus perlu dikonfirmasi konsultan pajak |
 | Pengingat tagihan Langganan + bayar Langganan dari bonus | `src/engine/reminders.ts`, `paySubscriptionFromBonus`, Kantor Maya tab Langganan & tagihan, Admin tab Pengingat Langganan, `/api/mitra/langganan` | Teruji (prototipe); belum mengirim surel/WhatsApp |
 | Pemeriksaan sesi Clerk di server + API berizin | `server/` (`npm run server`), `src/app/api.ts` | Teruji 13 uji dengan token bertanda tangan kunci uji; **belum diuji dengan aplikasi Clerk sungguhan** |
@@ -352,6 +353,23 @@ Antarmuka memanggil API dengan `getToken()` Clerk di header (`src/app/api.ts`). 
 **Sumber dan batas:** Rangkuman ini diambil dari publikasi pajak sekunder, karena naskah resmi tidak dapat dibuka dari sesi ini. Yang perlu dikonfirmasi konsultan pajak sebelum dipakai dengan uang sungguhan:
 - masa pajak sebagai satuan lapisan tarif (dibanding per pembayaran);
 - tambahan 20% bagi penerima tanpa NPWP: tersedia per akun (`withoutNpwp`) tetapi tidak aktif secara bawaan, karena NIK kini berfungsi sebagai NPWP dan sumber yang ditemukan tidak seragam;
-- koreksi pajak atas penarikan bonus (clawback);
+- perlakuan pajak atas penarikan bonus (lihat di bawah);
 - pembulatan;
-- penerbitan bukti potong (kode objek pajak 21-100-04 menurut sumber sekunder) dan pelaporan SPT Masa.
+- kode objek pajak 21-100-04 (menurut sumber sekunder) dan format unggah e-Bupot BP21 di Coretax.
+
+### 13.1 Penarikan bonus (clawback)
+
+Penarikan timbul bila pembelian dibatalkan sesudah bonusnya ditetapkan (S&K Pasal 7; keputusan A12). Prosesnya:
+1. Setiap penarikan dialokasikan, menurut urutan waktu, ke transfer Jumat berikutnya **sesudah** tanggal penarikan, sebanyak bonus bruto yang tersedia pada Jumat itu.
+2. Pada Jumat itu, **bruto kena pajak = bonus bruto − penarikan**, lalu PPh 21 dihitung dari sana. Penarikan mengoreksi pajak tanpa membuat PPh negatif.
+3. Bagian yang belum dapat dipotong (tidak ada transfer berikutnya) menjadi **piutang penarikan**. Piutang ini dikurangkan dari saldo bonus untuk bayar Langganan, dan otomatis dipotong saat bonus berikutnya timbul.
+4. Nilai yang ditransfer = bruto − penarikan − PPh 21 − potongan Langganan. Semua dihitung ulang dari ledger, sehingga tidak ada saldo tersimpan yang bisa tidak sinkron.
+
+Yang belum ditangani: piutang yang tidak pernah tertutup (mis. Mitra PLS berhenti) memerlukan kebijakan penagihan atau penghapusan; bila potongan Langganan sudah dijadwalkan lalu penarikan baru membuat transfer Jumat itu negatif, selisihnya perlu ditangani manual.
+
+### 13.2 Rincian bukti potong PPh 21
+
+`buktiPotong(akun, masa)` merangkum semua transfer pada masa pajak itu per Jumat: bruto, penarikan, bruto kena pajak, DPP 50%, dan PPh 21, beserta nomor internal `BP21/YYYYMM/kode`, kode objek pajak, dan penanda masa selesai atau sementara.
+- **Mitra PLS:** tab Pajak & penarikan di Kantor Maya (dapat dicetak), total tahun berjalan sebagai kredit pajak SPT Tahunan, dan daftar penarikan beserta Jumat tempat dipotong.
+- **Keuangan:** tab PPh 21 & bukti potong di Admin (izin `pembayaran.lihat`), rekap per masa dan ekspor CSV. NIK tersamar, dan setiap ekspor dicatat di log audit.
+- **Bukan bukti potong resmi.** Bukti potong BP21 diterbitkan melalui Coretax DJP; data ini bahan untuk mengisinya. Ekspor dengan NIK lengkap untuk pelaporan harus dari server, dengan izin khusus dan log audit (belum dibangun). Nomor resmi, NPWP/NITKU pemotong, dan penandatangan juga belum dibangun.

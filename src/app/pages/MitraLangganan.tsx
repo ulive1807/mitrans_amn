@@ -230,6 +230,7 @@ export function Langganan({ accId }: { accId: string }) {
                 <tr>
                   <th>Jumat</th>
                   <th className="r">Bonus bruto</th>
+                  <th className="r">Penarikan</th>
                   <th className="r">PPh 21</th>
                   <th className="r">Potongan Langganan</th>
                   <th className="r">Ditransfer</th>
@@ -240,6 +241,7 @@ export function Langganan({ accId }: { accId: string }) {
                   <tr key={r.date}>
                     <td>{dateLabel(r.date)}</td>
                     <td className="r num">{rp(r.gross)}</td>
+                    <td className="r num">{r.clawback ? `−${rp(r.clawback)}` : "–"}</td>
                     <td className="r num">−{rp(r.tax)}</td>
                     <td className="r num">
                       {r.deducted ? `−${rp(r.deducted)}` : "–"}

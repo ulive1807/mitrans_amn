@@ -24,6 +24,7 @@ import { Badge, Kpi, Panel, ProtoRibbon, TopBar } from "../components/ui";
 import { dateLabel, monthLabel, num, pct, rp, rpShort } from "../format";
 import { currentRank, paidTotals, useDemo } from "../store";
 import { KasusSanksi } from "./AdminKasus";
+import { BuktiPotongView, printBuktiPotong } from "../components/BuktiPotong";
 import { useServerCheck } from "../api";
 
 type Tab =
@@ -38,6 +39,7 @@ type Tab =
   | "simulasi"
   | "pengguna"
   | "pengingat"
+  | "pph"
   | "audit";
 /** Setiap tab hanya tampil bagi peran yang memiliki izinnya. */
 const TABS: { id: Tab; label: string; perm: Permission }[] = [
@@ -50,6 +52,7 @@ const TABS: { id: Tab; label: string; perm: Permission }[] = [
   { id: "terkendali", label: "Akun terkendali", perm: "deteksi.lihat" },
   { id: "kasus", label: "Kasus & sanksi", perm: "kasus.lihat" },
   { id: "pengingat", label: "Pengingat Langganan", perm: "mitra.lihat" },
+  { id: "pph", label: "PPh 21 & bukti potong", perm: "pembayaran.lihat" },
   { id: "simulasi", label: "Simulasi engine", perm: "simulasi.jalankan" },
   { id: "pengguna", label: "Pengguna & peran", perm: "pengguna.kelola" },
   { id: "audit", label: "Log audit", perm: "audit.lihat" },
@@ -136,6 +139,7 @@ export function Admin() {
           {tab === "simulasi" && <Simulasi />}
           {tab === "pengguna" && <PenggunaPeran />}
           {tab === "pengingat" && <PengingatLangganan />}
+          {tab === "pph" && <RekapPph />}
           {tab === "audit" && <LogAudit />}
           {!tab && <div className="callout warn">Akun ini tidak memiliki peran aktif. Hubungi Admin Sistem.</div>}
         </main>
@@ -348,6 +352,7 @@ function Jumat() {
               <th className="r">Bonus tim</th>
               <th className="r">Bulanan (Prestasi, Royalti, Pool, Plan B)</th>
               <th className="r">Total bruto</th>
+              <th className="r">Penarikan</th>
               <th className="r">PPh 21</th>
               <th className="r">Potongan Langganan</th>
               <th className="r">Ditransfer</th>
@@ -370,6 +375,7 @@ function Jumat() {
                     <td className="r num">{rp(team)}</td>
                     <td className="r num">{rp(r.total - team - direct)}</td>
                     <td className="r num">{rp(r.total)}</td>
+                    <td className="r num">{r.clawback ? `−${rp(r.clawback)}` : "–"}</td>
                     <td className="r num">−{rp(r.tax)}</td>
                     <td className="r num">{r.deducted ? `−${rp(r.deducted)}` : "–"}</td>
                     <td className="r num">
@@ -1317,6 +1323,123 @@ function PengingatLangganan() {
         {!rows.length && <p className="muted">Tidak ada pengingat pada saringan ini.</p>}
         {rows.length > 200 && <p className="muted">Menampilkan 200 dari {num(rows.length)}.</p>}
       </Panel>
+    </>
+  );
+}
+
+/** Rekap PPh 21 per masa pajak (bahan e-Bupot BP21 di Coretax) dan piutang penarikan bonus. */
+function RekapPph() {
+  const { engine, access, staffId, now, version, bump } = useDemo();
+  const months = useMemo(() => {
+    const set = new Set<string>();
+    for (const r of engine.payoutRuns()) set.add(r.date.slice(0, 7));
+    return [...set].sort().reverse();
+  }, [engine, version]);
+  const [want, setMonth] = useState<string | undefined>();
+  const month = want && months.includes(want) ? want : months.find((m) => m < engine.today.slice(0, 7)) ?? months[0];
+  const [open, setOpen] = useState<string | null>(null);
+  const list = useMemo(() => (month ? engine.buktiPotongMasa(month) : []), [engine, month, version]);
+  const outstanding = useMemo(() => {
+    let total = 0;
+    let n = 0;
+    for (const acc of engine.accounts.values()) {
+      if (acc.role !== "mitra") continue;
+      const o = engine.clawbackOutstanding(acc.id);
+      if (o > 0) {
+        total += o;
+        n++;
+      }
+    }
+    return { total, n };
+  }, [engine, version]);
+  const sum = (f: (b: (typeof list)[number]) => number) => list.reduce((a, b) => a + f(b), 0);
+
+  const exportCsv = () => {
+    if (!month) return;
+    const head = ["nomor_internal", "masa_pajak", "nama", "nik_tersamar", "tanpa_npwp", "kode_objek", "bruto", "penarikan", "bruto_kena_pajak", "dpp", "pph21"];
+    const rows = list.map((b) => [b.number, b.month, b.name, maskNik(b.nik), b.withoutNpwp ? "ya" : "tidak", b.objectCode, b.gross, b.clawback, b.taxable, b.dpp, b.tax]);
+    const csv = [head, ...rows].map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+    a.download = `rekap-pph21-${month}.csv`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+    access.record(staffId, "Ekspor rekap PPh 21", now, `${month}: ${list.length} penerima`);
+    bump();
+  };
+
+  return (
+    <>
+      <div className="kpis">
+        <Kpi label="Penerima" value={num(list.length)} sub={month ? monthLabel(month, true) : "–"} />
+        <Kpi label="Bruto kena pajak" value={rpShort(sum((b) => b.taxable))} sub={`Penarikan ${rpShort(sum((b) => b.clawback))}`} />
+        <Kpi label="PPh 21 dipotong" value={rpShort(sum((b) => b.tax))} sub="Disetor dan dilaporkan di SPT Masa" />
+        <Kpi label="Piutang penarikan" value={rpShort(outstanding.total)} sub={`${num(outstanding.n)} Mitra PLS`} />
+      </div>
+      <div className="callout info" style={{ marginBottom: 12 }}>
+        Rumus: PPh 21 = 50% bruto × tarif Pasal 17 ayat (1) huruf a, lapisan tarif atas bruto bulan berjalan; penarikan bonus mengurangi
+        bruto kena pajak pada transfer tempat ia dipotong. Bukti potong resmi diterbitkan melalui Coretax DJP. Ekspor ini memakai NIK
+        tersamar; NIK lengkap untuk pelaporan hanya diambil dari server dengan log audit. Rumus perlu dikonfirmasi konsultan pajak.
+      </div>
+      <Panel
+        title="Rekap per penerima"
+        hint={
+          <span style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <select value={month} onChange={(e) => setMonth(e.target.value)} aria-label="Masa pajak">
+              {months.map((m) => (
+                <option key={m} value={m}>
+                  {monthLabel(m, true)}
+                </option>
+              ))}
+            </select>
+            <button className="btn-secondary" onClick={exportCsv} disabled={!list.length}>
+              Unduh CSV
+            </button>
+          </span>
+        }
+      >
+        <div className="table-wrap">
+          <table className="t">
+            <thead>
+              <tr>
+                <th>Nama</th>
+                <th>NIK</th>
+                <th className="r">Bruto</th>
+                <th className="r">Penarikan</th>
+                <th className="r">Bruto kena pajak</th>
+                <th className="r">PPh 21</th>
+                <th />
+              </tr>
+            </thead>
+            <tbody>
+              {list.slice(0, 200).map((b) => (
+                <tr key={b.accountId}>
+                  <td>{b.name}</td>
+                  <td className="num">{maskNik(b.nik)}</td>
+                  <td className="r num">{rp(b.gross)}</td>
+                  <td className="r num">{b.clawback ? `−${rp(b.clawback)}` : "–"}</td>
+                  <td className="r num">{rp(b.taxable)}</td>
+                  <td className="r num">{rp(b.tax)}</td>
+                  <td>
+                    <button className="btn-secondary" onClick={() => setOpen(open === b.accountId ? null : b.accountId)}>
+                      {open === b.accountId ? "Tutup" : "Rincian"}
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        {list.length > 200 && <p className="muted">Menampilkan 200 dari {num(list.length)}; unduh CSV untuk semua.</p>}
+      </Panel>
+      {open && month && (() => {
+        const b = engine.buktiPotong(open, month);
+        return b ? (
+          <Panel title={`Rincian ${b.name}`} hint={<button className="btn-secondary" onClick={() => printBuktiPotong(b)}>Cetak</button>}>
+            <BuktiPotongView b={b} />
+          </Panel>
+        ) : null;
+      })()}
     </>
   );
 }
