@@ -45,7 +45,7 @@ Prinsip implementasi:
 
 | # | Hal | Pilihan di engine | Cara mengubah |
 |---|---|---|---|
-| A1 | Penempatan posisi baru di jaringan biner | Di bawah posisi Sponsor, pada kaki dengan Lisensi lebih sedikit, di ujung terluar kaki itu. Sponsor dapat memilih kiri/kanan | `options.placement`, `legPreference` |
+| A1 | Penempatan posisi baru di jaringan biner | **Diputuskan Coach (27 Oktober 2026): kaki kecil, ujung luar.** Posisi baru masuk kaki Sponsor yang Lisensinya lebih sedikit, di ujung terluar kaki itu. Perlu dicantumkan di Rencana Pemasaran dan dikonfirmasi konsultan hukum | `options.placement = 'weaker-leg'` |
 | A2 | Sponsor tanpa posisi (Mitra PLS tanpa Lisensi) mensponsori Mitra PLS yang membeli Lisensi | Posisi baru ditempatkan di bawah posisi terdekat pada garis Sponsor | `volumeNodeFor` |
 | A3 | Volume Lisensi Pelanggan dari penjual tanpa posisi | Dicatat di posisi terdekat pada garis Sponsor penjual | `volumeNodeFor` |
 | A4 | Bonus Sponsor/Berkah pemegang Lisensi bulan ke-4+ tanpa Langganan | Ditahan 2 bulan seperti bonus tim, lalu hangus ke Pool Aktif | `closeMonth` langkah 2–3 |
@@ -111,7 +111,7 @@ NIK disimpan terenkripsi dan di-hash untuk pencarian keunikan (UU 27/2022). Reke
 
 ### 5.4 Urutan kerja yang disarankan
 
-1. Keputusan konsultan hukum atas butir 1–9 Catatan Hukum dan keputusan Coach atas asumsi A1–A12.
+1. Keputusan konsultan hukum atas butir 1–9 Catatan Hukum dan keputusan Coach atas asumsi A2–A12 (A1 sudah diputuskan).
 2. Backend + PostgreSQL + autentikasi, memindahkan engine ke server.
 3. Integrasi e-KYC dan payment gateway di **staging**.
 4. Uji paralel: tutup bulan dihitung engine dan dicek manual oleh Keuangan selama minimal 2 siklus.
