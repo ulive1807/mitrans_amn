@@ -110,6 +110,8 @@ export interface EngineOptions {
    */
   planACapBp: number;
   planBCapBp: number;
+  /** Jumlah penjualan baru pribadi per bulan untuk status aktif (Bab 9.1). Dokumen: 2. */
+  activeMinPersonalSales: number;
 }
 
 export const DEFAULT_OPTIONS: EngineOptions = {
@@ -117,4 +119,5 @@ export const DEFAULT_OPTIONS: EngineOptions = {
   planBRequiresPaidSubscription: false,
   planACapBp: PLAN.planACapBp,
   planBCapBp: PLAN.planBCapBp,
+  activeMinPersonalSales: PLAN.activeMinPersonalSales,
 };

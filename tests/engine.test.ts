@@ -417,3 +417,17 @@ describe("Keputusan A12: pembatalan menarik bonus tim otomatis", () => {
     expect(entries("A", "PASANGAN").some((e) => e.status === "clawback" && e.amount === -PLAN.pairBonus)).toBe(true);
   });
 });
+
+describe("Varian syarat aktif (parameter activeMinPersonalSales)", () => {
+  it("dengan syarat 1 penjualan, satu penjualan baru pribadi sudah membuat aktif", () => {
+    const e1 = new MitransEngine(atWib("2027-01-01", 0, 1), { activeMinPersonalSales: 1 });
+    e1.registerMitra({ id: "X", name: "X", nik: syntheticNik(500), sponsorId: "MITRANS-002", at: jan(2) });
+    e1.passQuiz("X");
+    e1.purchaseLicense({ saleId: "LX", buyerId: "X", at: jan(2) });
+    e1.registerPelanggan({ id: "P", name: "P", nik: syntheticNik(501), sellerId: "X", at: jan(3) });
+    e1.purchaseLicense({ saleId: "LP", buyerId: "P", at: jan(3) });
+    e1.closeThrough("2027-01");
+    expect(e1.isActive("X", "2027-01")).toBe(true);
+    expect(engine.isActive("A", "2027-01")).toBe(false); // bawaan dokumen tetap 2
+  });
+});

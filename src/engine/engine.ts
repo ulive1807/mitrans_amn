@@ -524,7 +524,7 @@ export class MitransEngine {
   isActive(accountId: string, month: string): boolean {
     const closed = this.activeByMonth.get(month);
     if (closed) return closed.has(accountId);
-    return (this.personalSales(month).get(accountId) ?? 0) >= PLAN.activeMinPersonalSales;
+    return (this.personalSales(month).get(accountId) ?? 0) >= this.options.activeMinPersonalSales;
   }
 
 
@@ -840,7 +840,7 @@ export class MitransEngine {
     const ms = this.month(wibMonth(at));
     const n = (ms.runningSales.get(sellerId) ?? 0) + 1;
     ms.runningSales.set(sellerId, n);
-    if (n === PLAN.activeMinPersonalSales) ms.becameActiveAt.set(sellerId, at);
+    if (n === this.options.activeMinPersonalSales) ms.becameActiveAt.set(sellerId, at);
   }
 
   // ---------------------------------------------------------------------------
@@ -1046,7 +1046,7 @@ export class MitransEngine {
     const sales = this.personalSales(month);
     const active = new Set<string>();
     for (const [id, n] of sales) {
-      if (n >= PLAN.activeMinPersonalSales) {
+      if (n >= this.options.activeMinPersonalSales) {
         active.add(id);
         this.accounts.get(id)!.everActive = true;
       }
