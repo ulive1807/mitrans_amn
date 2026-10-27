@@ -619,14 +619,14 @@ const LEGAL = [
     "Fitur pengalihan perlu dibangun (S&K Ps. 9)",
   ],
   [
-    "Syarat Langganan mulai bulan ke-2 vs larangan wajib beli",
+    "Syarat Langganan 30 hari setelah aktivasi vs larangan wajib beli",
     "Permendag 70/2019 Ps. 21 f, g",
-    "v1.4 memajukan syarat dari bulan ke-4 ke bulan ke-2; perlu kajian ulang konsultan hukum",
+    "v1.4 memajukan syarat dari bulan ke-4 ke 30 hari setelah aktivasi; perlu kajian ulang konsultan hukum",
   ],
   [
     "Istilah Lisensi tanpa batas waktu (lifetime)",
     "UU 8/1999 Ps. 7 b, 9, 10",
-    "Akses sesudah bulan aktivasi hanya dengan Langganan; teks penawaran wajib menjelaskannya",
+    "Akses sesudah 30 hari pertama hanya dengan Langganan; teks penawaran wajib menjelaskannya",
   ],
   [
     "Akun struktural Mitrans 001–003",
@@ -672,7 +672,7 @@ function Kepatuhan() {
         <Kpi
           label="Tertahan karena Langganan"
           value={rpShort(last.heldNoSubscription)}
-          sub={`${monthLabel(lastMonth)} · bulan ke-${PLAN.subscriptionRequiredFromMonth}+`}
+          sub={`${monthLabel(lastMonth)} · akses tidak aktif di akhir bulan`}
         />
         <Kpi
           label="Orientasi belum dikonfirmasi"

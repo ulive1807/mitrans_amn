@@ -25,6 +25,8 @@ import {
   wibDate,
   wibMonth,
 } from "./time";
+
+const DAY_MS = 86_400_000;
 import {
   PLAN_A_TYPES,
   PLAN_B_TYPES,
@@ -118,7 +120,8 @@ export class MitransEngine {
   private teamCarry: LedgerEntry[] = [];
   private poolCarry = 0;
   private touchedToday = new Set<string>();
-  private subscriptionsPaid = new Map<string, Set<string>>();
+  /** Periode akses dari Langganan per akun (Lisensi memberi 30 hari pertama sejak aktivasi). */
+  private subscriptionPeriods = new Map<string, Sale[]>();
   private customersWithPaidSubscription = new Set<string>();
   private licenseSalesByBuyer = new Map<string, string[]>();
   private entriesBySale = new Map<string, LedgerEntry[]>();
@@ -363,20 +366,25 @@ export class MitransEngine {
     return acc;
   }
 
-  /** Pembayaran Langganan (RO) bulanan, mulai bulan berikutnya setelah aktivasi Lisensi. */
+  /**
+   * Pembayaran Langganan (RO): memperpanjang akses 30 hari. Tagihan pertama 30 hari setelah aktivasi Lisensi.
+   * Bila dibayar sebelum akses berakhir, periode baru menyambung dari akhir akses; bila sudah lewat, dimulai saat dibayar.
+   * Paling banyak satu periode dibayar di muka.
+   */
   paySubscription(input: {
     saleId: string;
     accountId: string;
-    forMonth: string;
     at: number;
   }): Sale {
     this.advance(input.at);
     const acc = this.mustAccount(input.accountId);
     if (!acc.licenseActivatedAt)
       throw new EngineError("Langganan tanpa Lisensi belum tersedia");
-    const paid = this.subscriptionsPaid.get(acc.id) ?? new Set<string>();
-    if (paid.has(input.forMonth))
-      throw new EngineError("Langganan bulan itu sudah dibayar");
+    const period = PLAN.subscription.periodDays * DAY_MS;
+    const until = this.accessUntil(acc.id) ?? input.at;
+    if (until - input.at > period)
+      throw new EngineError("Langganan periode berikutnya sudah dibayar");
+    const periodStart = Math.max(until, input.at);
     const month = wibMonth(input.at);
     const firstPaid =
       acc.role === "pelanggan" &&
@@ -389,15 +397,17 @@ export class MitransEngine {
       at: input.at,
       month,
       toCustomer: acc.role === "pelanggan",
-      forMonth: input.forMonth,
+      periodStart,
+      periodEnd: periodStart + period,
       firstPaidSubscription: firstPaid,
     };
     this.sales.set(sale.id, sale);
-    paid.add(input.forMonth);
-    this.subscriptionsPaid.set(acc.id, paid);
+    const periods = this.subscriptionPeriods.get(acc.id) ?? [];
+    periods.push(sale);
+    this.subscriptionPeriods.set(acc.id, periods);
     const ms = this.month(month);
     ms.subscriptionSaleIds.push(sale.id);
-    this.month(input.forMonth).subscribed.add(acc.id);
+    ms.subscribed.add(acc.id);
     if (firstPaid) {
       this.customersWithPaidSubscription.add(acc.id);
       this.countPersonalSale(sale.sellerId, input.at);
@@ -657,8 +667,30 @@ export class MitransEngine {
     return result;
   }
 
+  /** Akhir akses (Lisensi 30 hari pertama atau Langganan terakhir yang belum dibatalkan); undefined bila tidak memegang Lisensi. */
+  accessUntil(accountId: string): number | undefined {
+    const acc = this.mustAccount(accountId);
+    if (!acc.licenseActivatedAt) return undefined;
+    let end = acc.licenseActivatedAt + PLAN.license.accessDays * DAY_MS;
+    for (const s of this.subscriptionPeriods.get(accountId) ?? [])
+      if (!s.cancelled && s.periodEnd! > end) end = s.periodEnd!;
+    return end;
+  }
+
+  /** Akses aktif pada waktu t. paidOnly: hanya dari Langganan berbayar, tidak termasuk 30 hari pertama Lisensi. */
+  accessActiveAt(accountId: string, t: number, paidOnly = false): boolean {
+    const acc = this.mustAccount(accountId);
+    const act = acc.licenseActivatedAt;
+    if (act === undefined || t < act) return false;
+    if (!paidOnly && t < act + PLAN.license.accessDays * DAY_MS) return true;
+    return (this.subscriptionPeriods.get(accountId) ?? []).some(
+      (s) => !s.cancelled && s.periodStart! <= t && t < s.periodEnd!,
+    );
+  }
+
+  /** Langganan berbayar menutup akhir bulan itu (23.59 WIB hari terakhir). */
   hasPaidSubscription(accountId: string, month: string): boolean {
-    return this.subscriptionsPaid.get(accountId)?.has(month) ?? false;
+    return this.accessActiveAt(accountId, monthCloseAt(month) - 1, true);
   }
 
   /** Bulan ke berapa sejak aktivasi Lisensi; undefined bila belum memegang Lisensi. */
@@ -668,20 +700,23 @@ export class MitransEngine {
     return monthNumberSince(wibMonth(acc.licenseActivatedAt), month);
   }
 
-  /** Syarat Langganan aktif mulai bulan ke-2 (bulan berikutnya) sejak aktivasi Lisensi (Bab 9.2). */
+  /**
+   * Syarat Langganan untuk bonus tim (Bab 9.2): akses aktif pada akhir bulan bonus.
+   * 30 hari pertama setelah aktivasi termasuk Lisensi; sesudahnya akses aktif hanya dengan Langganan.
+   */
   subscriptionConditionMet(accountId: string, month: string): boolean {
-    const n = this.licenseMonthNumber(accountId, month);
-    if (n === undefined || n < PLAN.subscriptionRequiredFromMonth) return true;
-    return this.hasPaidSubscription(accountId, month);
+    const acc = this.mustAccount(accountId);
+    const end = monthCloseAt(month) - 1;
+    if (acc.licenseActivatedAt === undefined || acc.licenseActivatedAt > end) return true;
+    return this.accessActiveAt(accountId, end);
   }
 
+  /** "Langganan sendiri aktif" untuk Plan B: akses aktif pada akhir bulan. */
   accessActive(accountId: string, month: string): boolean {
-    const n = this.licenseMonthNumber(accountId, month);
-    if (n === undefined) return false;
-    if (this.hasPaidSubscription(accountId, month)) return true;
-    return (
-      !this.options.planBRequiresPaidSubscription &&
-      n <= PLAN.license.accessMonths
+    return this.accessActiveAt(
+      accountId,
+      monthCloseAt(month) - 1,
+      this.options.planBRequiresPaidSubscription,
     );
   }
 
@@ -1260,7 +1295,7 @@ export class MitransEngine {
           hold(
             e,
             isActive(e.accountId)
-              ? `Langganan tidak aktif (bulan ke-${PLAN.subscriptionRequiredFromMonth}+)`
+              ? "Langganan tidak aktif pada akhir bulan"
               : "Tidak aktif pada bulan bonus",
           );
         }

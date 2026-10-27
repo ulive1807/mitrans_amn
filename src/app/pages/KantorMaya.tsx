@@ -273,11 +273,18 @@ function Ringkasan({
               </dd>
               <dt>Kedalaman Bonus Level terbayar</dt>
               <dd>{countBits(node.levelPaidMask)} dari 10</dd>
-              <dt>Langganan bulan {monthLabel(lastMonth)}</dt>
+              <dt>Akses aplikasi</dt>
+              <dd>
+                {(() => {
+                  const until = engine.accessUntil(accId);
+                  return until ? `Sampai ${dateLabel(until - 1)}` : "–";
+                })()}
+              </dd>
+              <dt>Syarat Langganan {monthLabel(lastMonth)}</dt>
               <dd>
                 {engine.subscriptionConditionMet(accId, lastMonth)
-                  ? "Syarat terpenuhi"
-                  : `Wajib aktif (bulan ke-${PLAN.subscriptionRequiredFromMonth}+)`}
+                  ? "Terpenuhi"
+                  : "Belum: akses tidak aktif pada akhir bulan"}
               </dd>
             </dl>
           ) : (

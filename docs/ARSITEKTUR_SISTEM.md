@@ -48,15 +48,15 @@ Prinsip implementasi:
 
 ## 3. Keputusan aturan yang tidak diatur dokumen
 
-Seluruh butir A1–A14 **diputuskan Coach pada 27 Oktober 2026**. Butir yang mengubah isi Rencana Pemasaran (terutama A1, A4, A10, A12) perlu dicantumkan di dokumen dan dikonfirmasi konsultan hukum sebelum diajukan.
+Seluruh butir A1–A16 **diputuskan Coach pada 27 Oktober 2026**. Butir yang mengubah isi Rencana Pemasaran (terutama A1, A4, A10, A12) perlu dicantumkan di dokumen dan dikonfirmasi konsultan hukum sebelum diajukan.
 
 | # | Hal | Keputusan | Kode |
 |---|---|---|---|
 | A1 | Penempatan posisi baru di jaringan biner | Kaki Sponsor yang Lisensinya lebih sedikit, di ujung terluar kaki itu | `options.placement = 'weaker-leg'` |
 | A2 | Sponsor tanpa Lisensi mensponsori Mitra PLS yang membeli Lisensi | Posisi baru di bawah posisi terdekat pada garis Sponsor (aturan A1 tetap berlaku) | `volumeNodeFor` |
 | A3 | Volume Lisensi Pelanggan dari penjual tanpa posisi | Dicatat di posisi terdekat pada garis Sponsor penjual | `volumeNodeFor` |
-| A4 | Bonus Sponsor/Berkah pemegang Lisensi bulan ke-2+ tanpa Langganan | **Selalu dibayar.** Syarat Langganan hanya untuk bonus jaringan (saran Catatan Hukum butir 4). Teks Bab 9.2 perlu diubah | `closeMonth` langkah 1–2 |
-| A5 | "Langganan sendiri aktif" untuk Plan B pada bulan aktivasi Lisensi | Akses bulan aktivasi dianggap aktif (v1.3: bulan 1–3) | `options.planBRequiresPaidSubscription = false` |
+| A4 | Bonus Sponsor/Berkah pemegang Lisensi tanpa Langganan sesudah 30 hari pertama | **Selalu dibayar.** Syarat Langganan hanya untuk bonus jaringan (saran Catatan Hukum butir 4). Teks Bab 9.2 perlu diubah | `closeMonth` langkah 1–2 |
+| A5 | "Langganan sendiri aktif" untuk Plan B selama 30 hari pertama Lisensi | Akses 30 hari pertama dianggap aktif; dinilai pada akhir bulan (v1.3: bulan 1–3) | `options.planBRequiresPaidSubscription = false` |
 | A6 | Konversi: upline di antara posisi baru dan Sponsor | Ikut menghitung (setiap Lisensi dihitung sekali per upline) | `countedBy` |
 | A7 | Generasi Pembinaan melewati Mitra PLS tanpa Lisensi | Tanpa kompresi: bagian generasi itu tidak dibayarkan | `accruePembinaan` |
 | A8 | Klaim Prestasi yang tidak muat di dana bulan ini | Urutan ketat | `closeMonth` langkah 5 |
@@ -65,7 +65,9 @@ Seluruh butir A1–A14 **diputuskan Coach pada 27 Oktober 2026**. Butir yang men
 | A11 | Pool Aktif melebihi ruang plafon Plan A | Dibawa ke bulan berikutnya | `poolCarry` |
 | A12 | Pembatalan setelah unit dipasangkan | **Tarik otomatis** Bonus Sponsor, Berkah, Level, Pasangan, dan Pembinaan dari Lisensi itu; unit pasangannya kembali menjadi sisa. Bila belum dibayar, entri dikurangi; bila sudah, dibuat entri penarikan negatif | `refundSale`, `reverseTeam` |
 | A13 | Syarat aktif (Bab 9.1) | **Paling sedikit 1 penjualan baru pribadi per bulan** (v1.2: 2), setelah perbandingan di `docs/VARIAN_AKTIF.md`. Perlu deteksi akun yang dikendalikan sendiri | `PLAN.activeMinPersonalSales`, `options.activeMinPersonalSales` |
-| A14 | Masa berlaku Lisensi dan awal Langganan (RO) | **Lisensi tanpa batas waktu (lifetime)**, Rp7.500.000 sekali bayar, tidak perlu dibeli ulang; akses termasuk hanya bulan kalender aktivasi. Langganan/RO Rp399.000 mulai bulan kalender berikutnya (v1.3: akses 3 bulan, Langganan mulai bulan ke-4). Bila Langganan berhenti, Lisensi tetap dan dapat dilanjutkan kapan saja | `PLAN.license.lifetime`, `accessMonths = 1`, `subscriptionRequiredFromMonth = 2` |
+| A14 | Masa berlaku Lisensi | **Lisensi tanpa batas waktu (lifetime)**, Rp7.500.000 sekali bayar, tidak perlu dibeli ulang (v1.3: akses 3 bulan). Bila Langganan berhenti, Lisensi tetap dan Langganan dapat dilanjutkan kapan saja | `PLAN.license.lifetime` |
+| A15 | Awal dan periode Langganan (RO) | **30 hari pertama sejak aktivasi termasuk Lisensi; tagihan Langganan Rp399.000 pertama pada hari ke-30**, lalu setiap 30 hari. Bayar sebelum jatuh tempo menyambung dari akhir akses (paling banyak 1 periode di muka); bila sudah lewat, periode dimulai saat dibayar. Syarat Langganan bulanan (bonus tim, Plan B) = akses aktif pada akhir bulan (23.59 WIB) | `PLAN.license.accessDays`, `PLAN.subscription.periodDays`, `accessUntil`, `accessActiveAt` |
+| A16 | Rekening dana layanan Rp426.000 per Lisensi (Bab 12.2 butir 4) | **Dihapus**, karena biaya layanan sesudah 30 hari pertama sudah ditanggung Langganan | dihapus dari `PLAN` |
 
 ## 4. Temuan dari pengujian yang perlu dibahas
 
@@ -76,12 +78,12 @@ Seluruh butir A1–A14 **diputuskan Coach pada 27 Oktober 2026**. Butir yang men
    Angka ini bergantung pada asumsi perilaku simulasi. Sebelum dokumen diajukan, sebaiknya asumsi uji internal yang dipakai di Bab 12.3 ditulis lengkap agar dapat direproduksi.
 3. Pada fase penjualan turun, Pool Aktif dari bonus hangus menekan Plan A sampai plafon 50%. Bila plafon diturunkan ke 40% (catatan hukum butir 1), Pool Aktif akan lebih sering dibawa ke bulan berikutnya.
 
-3. **Lisensi lifetime + Langganan mulai bulan berikutnya (A14, v1.4)**, lihat `docs/BANDING_LISENSI_LIFETIME.md`:
-   - Plan A tidak berubah (harga, PV, dan bonus Lisensi sama). Omzet bersih Langganan dan Plan B naik sekitar 7–8% pada skenario 5 tahun, **dengan anggapan retensi tetap 80%**. Bila retensi turun ke 60% karena tagihan datang lebih cepat, omzet Langganan justru turun sekitar 19% dibanding v1.3.
-   - Penghasilan tertinggi naik jauh lebih cepat daripada total Plan B (mis. Rp408 juta → Rp592 juta pada skenario rata 5 tahun), sedangkan median tetap Rp0: konsentrasi penghasilan bertambah.
-   - Lebih banyak bonus tim tertahan karena syarat Langganan berlaku sejak bulan ke-2.
-   - Rekening dana layanan Rp426.000 per Lisensi (Bab 12.2 butir 4) dihitung untuk masa akses awal 3 bulan, yang kini tinggal bulan aktivasi; nominalnya perlu diputuskan Coach.
-   - Pembeli di akhir bulan kalender mendapat akses beberapa hari sebelum tagihan Langganan pertama; alternatifnya menghitung Langganan pertama 30 hari sejak aktivasi (belum diterapkan).
+3. **Lisensi lifetime + Langganan 30 hari setelah aktivasi (A14–A15, v1.4)**, lihat `docs/BANDING_LISENSI_LIFETIME.md`:
+   - Plan A tidak berubah (harga, PV, dan bonus Lisensi sama). Pada skenario 5 tahun, omzet bersih Langganan naik 8,9–9,1% dan Plan B naik 8,6–9,7%, **dengan anggapan retensi tetap 80% per tagihan**. Bila retensi turun ke 60% karena tagihan datang lebih cepat, omzet Langganan justru turun sekitar 18% dibanding v1.3.
+   - Penghasilan tertinggi berubah tidak searah: turun pada dua skenario 70% (mis. Rp408 juta → Rp393 juta), naik pada skenario 30% (Rp1,77 miliar → Rp2,22 miliar). Median tetap Rp0.
+   - Syarat Langganan untuk bonus tim dinilai pada akhir bulan. Pembayaran yang terlambat melewati akhir bulan membuat bonus tim bulan itu ditahan (bukan hangus) dan dilepas bila syarat terpenuhi dalam 2 bulan.
+   - Satu periode 30 hari kadang menutup dua akhir bulan (mis. 31 Januari–2 Maret menutup akhir Januari dan Februari).
+   - Rekening dana layanan Rp426.000 per Lisensi dihapus (A16); biaya layanan sesudah 30 hari pertama ditanggung dari Langganan.
 
 ## 5. Rancangan produksi (usulan, belum dibangun)
 

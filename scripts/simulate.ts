@@ -156,7 +156,7 @@ lines.push("");
 lines.push("## Catatan pembacaan");
 lines.push("");
 lines.push(
-  "- Skenario organik memakai asumsi: 15% Pelanggan mengonversi, retensi Langganan 80% per bulan, 60% Mitra PLS menjalankan pembinaan, 90% Pelanggan mengonfirmasi orientasi, 1% pembatalan. Penjual dipilih acak berbobot (15% Mitra PLS menjual jauh lebih banyak).",
+  "- Skenario organik memakai asumsi: 15% Pelanggan mengonversi, retensi Langganan 80% per tagihan 30 hari (tagihan pertama 30 hari setelah aktivasi), 60% Mitra PLS menjalankan pembinaan, 90% Pelanggan mengonfirmasi orientasi, 1% pembatalan. Penjual dipilih acak berbobot (15% Mitra PLS menjual jauh lebih banyak).",
 );
 lines.push(
   "- Skenario ideal: setiap Mitra PLS mensponsori tepat 2 Mitra PLS (kiri dan kanan), satu level per bulan, semua berlangganan dan menjalankan pembinaan.",

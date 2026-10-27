@@ -19,12 +19,13 @@ export const PLAN = {
     pvTenths: 675, // 67,5 PV
     /** Lisensi tanpa batas waktu (lifetime): tidak perlu dibeli ulang. Keputusan Coach 27 Oktober 2026 (v1.3: akses 3 bulan). */
     lifetime: true,
-    /** Akses yang sudah termasuk harga Lisensi: bulan kalender pembelian/aktivasi saja (bulan ke-1). */
-    accessMonths: 1,
+    /** Akses yang sudah termasuk harga Lisensi: 30 hari sejak aktivasi. */
+    accessDays: 30,
   },
-  /** Langganan (RO) bulanan, mulai bulan kalender berikutnya setelah aktivasi Lisensi. */
+  /** Langganan (RO): setiap pembayaran memperpanjang akses 30 hari; tagihan pertama 30 hari setelah aktivasi Lisensi. */
   subscription: {
     price: 399_000,
+    periodDays: 30,
     netPrice: 359_459,
     vat: 39_541,
     pvTenths: 35, // 3,5 PV
@@ -80,7 +81,6 @@ export const PLAN = {
   // Bab 9
   activeMinPersonalSales: 1, // Keputusan Coach 27 Oktober 2026 (dokumen v1.2: 2)
   holdMonths: 2,
-  subscriptionRequiredFromMonth: 2, // bulan ke-2 (bulan berikutnya) sejak aktivasi Lisensi; v1.3: bulan ke-4
 
   // Bab 5.5 Konversi Lisensi Pelanggan
   conversionWindowDays: 60,
@@ -92,8 +92,6 @@ export const PLAN = {
   // Keputusan A10 (27 Oktober 2026): bonus tim dibayar mingguan dengan cadangan ditahan sampai tutup bulan
   teamWeeklyAdvanceBp: 8000, // 80% dibayar Jumat, 20% ditahan sampai faktor plafon diketahui
 
-  // Bab 12.2 butir 4
-  serviceFundPerLicense: 426_000,
 } as const;
 
 export type RankName = (typeof PLAN.ranks)[number]["name"];
@@ -106,7 +104,7 @@ export interface EngineOptions {
    */
   placement: "weaker-leg" | "left-first";
   /**
-   * Plan B mensyaratkan "Langganan sendiri aktif". Bila false, akses bulan aktivasi Lisensi (bulan ke-1) juga dianggap aktif.
+   * Plan B mensyaratkan "Langganan sendiri aktif". Bila false, akses 30 hari pertama yang termasuk Lisensi juga dianggap aktif.
    */
   planBRequiresPaidSubscription: boolean;
   /**

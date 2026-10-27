@@ -207,7 +207,7 @@ describe("Status aktif dan masa tunggu 2 bulan (Bab 9.1 dan 9.3)", () => {
 
   it("bonus tim ditahan saat tidak aktif lalu dibayar bila aktif dalam 2 bulan berikutnya", () => {
     // Syarat Langganan (mulai bulan ke-2) dipenuhi agar yang diuji hanya status aktif.
-    engine.paySubscription({ saleId: "S-A-02", accountId: "A", forMonth: "2027-02", at: at("2027-02-06") });
+    engine.paySubscription({ saleId: "S-A-02", accountId: "A", at: at("2027-02-06") });
     engine.closeThrough("2027-02");
     expect(engine.isActive("A", "2027-02")).toBe(false);
     const [pair] = feb("PASANGAN");
@@ -215,7 +215,7 @@ describe("Status aktif dan masa tunggu 2 bulan (Bab 9.1 dan 9.3)", () => {
     expect(pair.status).toBe("held");
     expect(level.status).toBe("held");
     expect(pair.holdUntil).toBe("2027-04");
-    engine.paySubscription({ saleId: "S-A-03", accountId: "A", forMonth: "2027-03", at: at("2027-03-02") });
+    engine.paySubscription({ saleId: "S-A-03", accountId: "A", at: at("2027-03-02") });
     customer("P1", "A", at("2027-03-03"));
     engine.closeThrough("2027-03");
     expect(engine.isActive("A", "2027-03")).toBe(true);
@@ -294,30 +294,41 @@ describe("Konversi Lisensi Pelanggan (Bab 5.5)", () => {
   });
 });
 
-describe("Lisensi lifetime, Langganan mulai bulan berikutnya (Bab 3.1 dan 9.2, v1.4)", () => {
-  it("pemegang Lisensi Januari wajib Langganan aktif mulai Februari", () => {
-    expect(engine.licenseMonthNumber("A", "2027-02")).toBe(2);
+describe("Lisensi lifetime, Langganan 30 hari setelah aktivasi (Bab 3.1 dan 9.2, v1.4)", () => {
+  const DAY = 86_400_000;
+  it("30 hari pertama termasuk Lisensi; tagihan pertama jatuh tempo pada hari ke-30", () => {
+    expect(engine.accessUntil("A")).toBe(jan(2) + 30 * DAY);
+    expect(engine.accessActiveAt("A", jan(2) + 29 * DAY)).toBe(true);
+    expect(engine.accessActiveAt("A", jan(2) + 30 * DAY)).toBe(false);
     expect(engine.subscriptionConditionMet("A", "2027-01")).toBe(true);
     expect(engine.subscriptionConditionMet("A", "2027-02")).toBe(false);
-    engine.paySubscription({
-      saleId: "S-A-02",
-      accountId: "A",
-      forMonth: "2027-02",
-      at: at("2027-02-01"),
-    });
+    engine.paySubscription({ saleId: "S-A-1", accountId: "A", at: jan(2) + 30 * DAY });
+    expect(engine.accessUntil("A")).toBe(jan(2) + 60 * DAY);
     expect(engine.subscriptionConditionMet("A", "2027-02")).toBe(true);
   });
-  it("akses: bulan aktivasi termasuk Lisensi, bulan berikutnya perlu Langganan", () => {
-    expect(engine.accessActive("A", "2027-01")).toBe(true);
-    expect(engine.accessActive("A", "2027-02")).toBe(false);
+  it("pembeli di akhir bulan tetap mendapat 30 hari penuh", () => {
+    mitra("Z", "A", at("2027-01-28"));
+    expect(engine.accessActiveAt("Z", at("2027-02-20"))).toBe(true);
+    expect(engine.accessActiveAt("Z", at("2027-02-28"))).toBe(false);
+  });
+  it("bayar sebelum jatuh tempo menyambung dari akhir akses; paling banyak satu periode di muka", () => {
+    engine.paySubscription({ saleId: "S-A-1", accountId: "A", at: jan(5) });
+    expect(engine.accessUntil("A")).toBe(jan(2) + 60 * DAY);
+    expect(() => engine.paySubscription({ saleId: "S-A-2", accountId: "A", at: jan(6) })).toThrow(/sudah dibayar/);
   });
   it("Lisensi tidak kedaluwarsa: berhenti Langganan lalu lanjut lagi tanpa membeli Lisensi ulang", () => {
-    // A tidak membayar Februari–Mei, lalu melanjutkan Langganan Juni.
     expect(engine.accessActive("A", "2027-05")).toBe(false);
-    engine.paySubscription({ saleId: "S-A-06", accountId: "A", forMonth: "2027-06", at: at("2027-06-01") });
+    engine.paySubscription({ saleId: "S-A-06", accountId: "A", at: at("2027-06-01") });
+    expect(engine.accessUntil("A")).toBe(at("2027-06-01") + 30 * DAY);
     expect(engine.accessActive("A", "2027-06")).toBe(true);
     expect(engine.subscriptionConditionMet("A", "2027-06")).toBe(true);
     expect([...engine.sales.values()].filter((x) => x.kind === "license" && x.buyerId === "A")).toHaveLength(1);
+  });
+  it("Langganan yang dibatalkan tidak lagi memberi akses", () => {
+    engine.paySubscription({ saleId: "S-A-1", accountId: "A", at: at("2027-03-05") });
+    expect(engine.accessActive("A", "2027-03")).toBe(true);
+    engine.refundSale("S-A-1", at("2027-03-07"));
+    expect(engine.accessActive("A", "2027-03")).toBe(false);
   });
   it("keputusan A4: Bonus Sponsor bulan ke-2+ tanpa Langganan tetap dibayar, bonus tim tetap mensyaratkan Langganan", () => {
     mitra("B", "A", at("2027-04-05"), { leg: "L" });
@@ -337,13 +348,11 @@ describe("Plan B (Bab 8.5 dan 9.2)", () => {
       engine.paySubscription({
         saleId: `S-A-${m}`,
         accountId: "A",
-        forMonth: m,
         at: at(`${m}-01`),
       });
       engine.paySubscription({
         saleId: `S-P1-${m}`,
         accountId: "P1",
-        forMonth: m,
         at: at(`${m}-02`),
       });
     }

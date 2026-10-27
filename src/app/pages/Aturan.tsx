@@ -50,13 +50,13 @@ export function Aturan() {
             </thead>
             <tbody>
               <tr>
-                <td>Lisensi (tanpa batas waktu; termasuk akses bulan aktivasi)</td>
+                <td>Lisensi (tanpa batas waktu; termasuk akses 30 hari pertama)</td>
                 <td className="r num">{rp(PLAN.license.price)}</td>
                 <td className="r num">{rp(PLAN.license.netPrice)}</td>
                 <td className="r num">{PLAN.license.pvTenths / 10}</td>
               </tr>
               <tr>
-                <td>Langganan/RO (per bulan, mulai bulan berikutnya)</td>
+                <td>Langganan/RO (per 30 hari, mulai 30 hari setelah aktivasi)</td>
                 <td className="r num">{rp(PLAN.subscription.price)}</td>
                 <td className="r num">{rp(PLAN.subscription.netPrice)}</td>
                 <td className="r num">{PLAN.subscription.pvTenths / 10}</td>
@@ -205,7 +205,7 @@ export function Aturan() {
           <ul>
             <li>
               Bonus Sponsor dan Bonus Layanan Berkah selalu dibayar bila
-              penjualan lunas. Syarat Langganan aktif mulai bulan ke-2 (bulan berikutnya setelah aktivasi Lisensi) hanya
+              penjualan lunas. Syarat Langganan (akses aktif pada akhir bulan, sesudah 30 hari pertama Lisensi) hanya
               berlaku untuk bonus tim.
             </li>
             <li>

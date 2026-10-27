@@ -73,14 +73,14 @@ const STEPS = [
   },
   {
     t: "Orientasi & belajar",
-    d: "Pendampingan 7 hari, workshop bulanan, lalu Langganan mulai bulan berikutnya bila Anda memilih melanjutkan akses.",
+    d: "Pendampingan 7 hari, workshop bulanan, lalu Langganan 30 hari setelah aktivasi bila Anda memilih melanjutkan akses.",
   },
 ];
 
 const FAQ = [
   {
     q: "Apa arti Lisensi tanpa batas waktu (lifetime)?",
-    a: "Lisensi Rp7.500.000 dibayar sekali, tidak kedaluwarsa, dan tidak perlu dibeli ulang. Akses aplikasi pada bulan aktivasi sudah termasuk. Mulai bulan berikutnya, akses berlanjut dengan Langganan Rp399.000 per bulan bila Anda menyetujuinya. Bila Langganan berhenti, akses aplikasi berhenti, tetapi Lisensi tetap milik Anda dan dapat diaktifkan lagi dengan Langganan kapan saja.",
+    a: "Lisensi Rp7.500.000 dibayar sekali, tidak kedaluwarsa, dan tidak perlu dibeli ulang. Akses aplikasi 30 hari pertama sejak aktivasi sudah termasuk. Sesudah itu, akses berlanjut dengan Langganan Rp399.000 per 30 hari bila Anda menyetujuinya. Bila Langganan berhenti, akses aplikasi berhenti, tetapi Lisensi tetap milik Anda dan dapat diaktifkan lagi dengan Langganan kapan saja.",
   },
   {
     q: "Apakah Mitrans-Astra memberi sinyal beli atau jual saham?",
@@ -242,7 +242,7 @@ export function Landing() {
               <span className="chip tag">Mulai di sini</span>
               <h3>Lisensi Mitrans-Astra</h3>
               <div className="muted" style={{ color: "#a8b8af" }}>
-                Lisensi tanpa batas waktu · akses bulan aktivasi sudah termasuk
+                Lisensi tanpa batas waktu · akses 30 hari pertama sudah termasuk
               </div>
               <div className="price">
                 {rp(PLAN.license.price)} <small>sekali bayar</small>
@@ -263,10 +263,10 @@ export function Landing() {
             <div className="price-card plain">
               <h3>Langganan</h3>
               <div className="muted" style={{ color: "#a8b8af" }}>
-                Akses bulanan (RO) mulai bulan berikutnya
+                Akses per 30 hari (RO), mulai 30 hari setelah aktivasi
               </div>
               <div className="price">
-                {rp(PLAN.subscription.price)} <small>per bulan</small>
+                {rp(PLAN.subscription.price)} <small>per 30 hari</small>
               </div>
               <ul>
                 <li>Hanya bila Anda menyetujuinya secara tegas</li>
