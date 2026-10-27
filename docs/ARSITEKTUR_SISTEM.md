@@ -13,6 +13,7 @@ Status: **prototipe**. Yang ada di repositori ini adalah engine komisi yang teru
 | Pendaftaran Mitra PLS + kuis Kode Etik | `/daftar` | Selesai (data hanya di memori peramban) |
 | Kantor Maya Mitra PLS | `/mitra` | Selesai (data sintetis) |
 | Dasbor admin | `/admin` | Selesai (data sintetis, tanpa otorisasi) |
+| Deteksi akun yang dikendalikan sendiri + alur pemeriksaan | `src/engine/fraud.ts`, `/admin` tab Akun terkendali | Teruji (prototipe) |
 
 ## 2. Arsitektur engine
 
@@ -109,7 +110,7 @@ NIK disimpan terenkripsi dan di-hash untuk pencarian keunikan (UU 27/2022). Reke
 - **Tutup bulan dapat diulang (deterministik)**: hasil disimpan bersama versi engine dan versi Rencana Pemasaran. Perubahan Rencana Pemasaran berlaku ke depan (Bab 14 butir 5).
 - **Maker-checker** untuk berkas transfer Jumat.
 - **Peran**: Mitra PLS, Pelanggan, CS, Keuangan, Kepatuhan, Admin. NIK dan rekening tidak pernah tampil ke Mitra PLS lain.
-- **Deteksi akun yang dikendalikan sendiri**: rekening, perangkat, alamat, atau nomor telepon yang sama → ditandai untuk ditinjau (Rencana Pemasaran 9.1).
+- **Deteksi akun yang dikendalikan sendiri**: sudah dibangun dalam prototipe (lihat bagian 6). Pada produksi, hash sinyal memakai HMAC-SHA256 dengan kunci rahasia di server, dan sinyal perangkat berasal dari SDK sidik perangkat.
 - **Pengungkapan penghasilan tahunan** dari `ledger_entries` (median, sebaran, porsi tanpa bonus), seperti tabel di `HASIL_SIMULASI.md`.
 
 ### 5.4 Urutan kerja yang disarankan
@@ -119,3 +120,35 @@ NIK disimpan terenkripsi dan di-hash untuk pencarian keunikan (UU 27/2022). Reke
 3. Integrasi e-KYC dan payment gateway di **staging**.
 4. Uji paralel: tutup bulan dihitung engine dan dicek manual oleh Keuangan selama minimal 2 siklus.
 5. Produksi hanya setelah izin SIUPL terbit dan dokumen diverifikasi asosiasi.
+
+## 6. Deteksi akun yang dikendalikan sendiri
+
+Dasar: Rencana Pemasaran 9.1 (pembelian oleh akun yang dikendalikan sendiri tidak dihitung), Kode Etik Pasal 9 angka 2 (tunda bayar ≤30 hari), Pasal 18 angka 9, 12, 17, dan Pasal 21 (tata cara sanksi). Menjadi wajib setelah keputusan A13 (aktif = 1 penjualan).
+
+**Sinyal dan bobot.** Dua akun dibandingkan pada sinyal yang sama; skor = 1 − Π(1 − bobot).
+
+| Sinyal | Bobot | Catatan |
+|---|---:|---|
+| Rekening bank / sumber pembayaran | 95% | Rekening penerima bonus dan rekening pembayar dibandingkan silang |
+| Nomor telepon | 90% | Dinormalisasi (0812… = +62812…) |
+| Surel | 85% | |
+| Perangkat | 60% | |
+| Alamat | 30% | Tidak pernah cukup sendirian: keluarga serumah wajar |
+| Alamat IP | 20% | Tidak pernah cukup sendirian |
+
+**Tingkat.** Skor ≥85% = **kuat**: pemeriksaan dibuka. 50–85% = **sedang**: dipantau, tanpa tunda bayar. Alamat + IP saja = 44%, tidak ditandai.
+
+**Alur pemeriksaan di engine.**
+
+| Langkah | Akibat |
+|---|---|
+| `openReview` | Bonus Sponsor dan Berkah penjualan itu ditahan saat tutup bulan. Penjualan **tetap dihitung** untuk status aktif selama diperiksa (praduga tak bersalah) |
+| `dismissReview` | Bonus yang ditahan dibayar pada tutup bulan berikutnya |
+| Lewat 30 hari tanpa keputusan | Bonus otomatis dibayar (Kode Etik Pasal 9 angka 2) |
+| `confirmControlled` | Penjualan tidak dihitung; Bonus Sponsor, Berkah, Level, Pasangan, Pembinaan, dan volumenya ditarik. Bila status aktif penjual pada bulan itu hanya karena penjualan ini, bonus tim, Pool Aktif, Royalti, dan Prestasi yang ditetapkan bulan itu ikut ditarik |
+
+**Privasi.** Hanya hash yang disimpan; layar admin menampilkan jenis sinyal (mis. "Rekening bank sama"), bukan nilainya.
+
+**Hasil uji pada data demo sintetis** (`tests/fraud.test.ts`): semua pembelian oleh akun terkendali tertangkap sebagai kuat, dan tidak ada keluarga serumah yang ditandai kuat. Data nyata akan lebih bising; ambang perlu dievaluasi ulang setelah 3 bulan operasi dengan sampel yang diperiksa manual.
+
+**Belum dibangun:** pemberitahuan tertulis otomatis, pencatatan penjelasan Mitra PLS dan keputusan berjenjang (Pasal 21 angka 4), sidik perangkat nyata, dan pola waktu (mis. beli–batal berulang di sekitar tutup bulan).

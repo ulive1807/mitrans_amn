@@ -3,6 +3,7 @@
  * dan bukan perkiraan penghasilan. Semua nama dan NIK sintetis.
  */
 import { MitransEngine } from "./engine";
+import { ControlDetector } from "./fraud";
 import { PLAN, type EngineOptions } from "./plan";
 import {
   addDays,
@@ -101,6 +102,10 @@ export interface ScenarioParams {
   seedLeaders: number;
   options?: Partial<EngineOptions>;
   keepPairLog?: boolean;
+  /** Bila diisi, sinyal akun dibuat dan detektor akun terkendali dijalankan saat pembelian. */
+  controlledRate?: number;
+  /** Peluang Pelanggan sealamat dengan penjual (keluarga), yang tidak boleh ditandai. */
+  familyRate?: number;
 }
 
 export interface SimulationSummary {
@@ -134,6 +139,9 @@ export interface SimulationResult {
   engine: MitransEngine;
   reports: MonthReport[];
   summary: SimulationSummary;
+  detector?: ControlDetector;
+  /** Kebenaran dasar untuk menguji detektor: penjualan yang memang dibeli akun terkendali / keluarga. */
+  truth?: Map<string, 'controlled' | 'family'>;
 }
 
 type SimEvent = { t: number; run: () => void };
@@ -153,6 +161,17 @@ export function runScenario(p: ScenarioParams): SimulationResult {
   const holders: { id: string; activationMonth: number }[] = [];
   const mitraHolders: string[] = [];
   const startIdx = monthIndex(p.startMonth);
+  const detector = p.controlledRate !== undefined ? new ControlDetector() : undefined;
+  const truth = new Map<string, 'controlled' | 'family'>();
+  const ownSignals = (id: string, i: number) => {
+    if (!detector) return;
+    detector.addSignal(id, 'bank', `BANK-${id}`);
+    detector.addSignal(id, 'phone', `08${String(1_000_000_000 + i)}`);
+    detector.addSignal(id, 'email', `${id.toLowerCase()}@contoh.id`);
+    detector.addSignal(id, 'device', `DEV-${id}`);
+    detector.addSignal(id, 'address', `Jl. Contoh No. ${i}`);
+  };
+  const addressOf = new Map<string, string>();
 
   // Antrean peristiwa per hari agar urutan waktu terjaga.
   const buckets = new Map<number, SimEvent[]>();
@@ -181,6 +200,8 @@ export function runScenario(p: ScenarioParams): SimulationResult {
       sponsorId,
       at,
     });
+    ownSignals(id, i);
+    addressOf.set(id, `Jl. Contoh No. ${i}`);
     // Kuis Kode Etik: sebagian besar lulus di hari pendaftaran.
     if (rnd() < 0.92) engine.passQuiz(id);
     else
@@ -291,7 +312,27 @@ export function runScenario(p: ScenarioParams): SimulationResult {
               at,
             });
             const saleId = `L${++saleCounter}`;
+            if (detector) {
+              const u = rnd();
+              const controlled = u < (p.controlledRate ?? 0);
+              const family = !controlled && u < (p.controlledRate ?? 0) + (p.familyRate ?? 0);
+              detector.addSignal(cid, 'bank', controlled ? `BANK-${seller}` : `BANK-${cid}`);
+              detector.addSignal(cid, 'phone', `08${String(2_000_000_000 + i)}`);
+              detector.addSignal(cid, 'email', `${cid.toLowerCase()}@contoh.id`);
+              detector.addSignal(cid, 'device', controlled ? `DEV-${seller}` : `DEV-${cid}`);
+              detector.addSignal(cid, 'address', controlled || family ? addressOf.get(seller) ?? `Jl. Lain ${i}` : `Jl. Pelanggan ${i}`);
+              detector.addPayer(saleId, cid, controlled ? `BANK-${seller}` : `BANK-${cid}`);
+              if (controlled) truth.set(saleId, 'controlled');
+              else if (family) truth.set(saleId, 'family');
+            }
             engine.purchaseLicense({ saleId, buyerId: cid, at });
+            const flag = detector?.evaluateSale(engine.sales.get(saleId)!);
+            if (flag?.level === 'kuat') {
+              engine.openReview(saleId, at, flag.reasons.join(', '));
+              // Keputusan setelah tata cara Kode Etik Pasal 21 (disederhanakan: 10 hari).
+              const dAt = addDays(at, 10);
+              schedule(dAt, safe(() => truth.get(saleId) === 'controlled' ? void engine.confirmControlled(saleId, dAt) : engine.dismissReview(saleId, dAt)));
+            }
             const holder = {
               id: cid,
               activationMonth: monthIndex(monthOf(at)),
@@ -339,7 +380,7 @@ export function runScenario(p: ScenarioParams): SimulationResult {
     }
   }
   engine.closeThrough(monthFromIndex(startIdx + p.months - 1));
-  return { engine, reports: engine.reports, summary: summarize(p, engine) };
+  return { engine, reports: engine.reports, summary: summarize(p, engine), detector, truth };
 }
 
 function monthOf(t: number): string {
@@ -552,6 +593,8 @@ export function demoScenario(): ScenarioParams {
     coachingRate: 0.7,
     orientationRate: 0.85,
     refundRate: 0.02,
+    controlledRate: 0.04,
+    familyRate: 0.06,
     seedLeaders: 2,
     keepPairLog: true,
   };

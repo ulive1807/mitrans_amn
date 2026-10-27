@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import {
   BONUS_LABEL,
   PLAN,
+  atWib,
   runScenario,
   type BonusType,
   type MonthReport,
@@ -14,6 +15,7 @@ import { dateLabel, monthLabel, num, pct, rp, rpShort } from "../format";
 import { currentRank, paidTotals, useDemo } from "../store";
 
 type Tab =
+  | "terkendali"
   | "ikhtisar"
   | "tutup"
   | "jumat"
@@ -28,6 +30,7 @@ const TABS: { id: Tab; label: string }[] = [
   { id: "mitra", label: "Mitra PLS" },
   { id: "dana", label: "Pool & Prestasi" },
   { id: "kepatuhan", label: "Kepatuhan" },
+  { id: "terkendali", label: "Akun terkendali" },
   { id: "simulasi", label: "Simulasi engine" },
 ];
 
@@ -73,6 +76,7 @@ export function Admin() {
           {tab === "mitra" && <DaftarMitra />}
           {tab === "dana" && <Dana reports={reports} />}
           {tab === "kepatuhan" && <Kepatuhan />}
+          {tab === "terkendali" && <AkunTerkendali />}
           {tab === "simulasi" && <Simulasi />}
         </main>
       </div>
@@ -614,14 +618,16 @@ function Kepatuhan() {
             Pembatalan menarik komisi terkait dan mengurangi volume jaringan.
           </li>
           <li>Bonus yang jatuh pada akun struktural tidak dibayarkan.</li>
+          <li>Pembelian oleh akun yang dikendalikan penjual ditandai dari sinyal yang di-hash; pemeriksaan menunda bonus langsung paling lama 30 hari.</li>
           <li>
             Plafon Plan A dan Plan B diperiksa setiap tutup bulan dengan faktor
             yang sama untuk semua klaim.
           </li>
         </ul>
         <p className="muted" style={{ fontSize: 13 }}>
-          Belum dibangun: deteksi akun yang dikendalikan sendiri (rekening,
-          perangkat, alamat sama), verifikasi e-KTP, dan alur sanksi Pasal
+          Deteksi akun yang dikendalikan sendiri ada di tab Akun terkendali.
+          Belum dibangun: verifikasi e-KTP, pemberitahuan tertulis otomatis,
+          dan pencatatan penjelasan Mitra PLS untuk tata cara sanksi Pasal
           20–21.
         </p>
       </Panel>
@@ -761,6 +767,174 @@ function Simulasi() {
           </Panel>
         </>
       )}
+    </>
+  );
+}
+
+const DAY = 86_400_000;
+
+/** Deteksi akun yang dikendalikan sendiri (Rencana Pemasaran 9.1; Kode Etik Pasal 9, 18, 21). */
+function AkunTerkendali() {
+  const { engine, detector, version, bump } = useDemo();
+  const [level, setLevel] = useState<"kuat" | "sedang" | "semua">("kuat");
+  const [msg, setMsg] = useState("");
+  const flags = useMemo(() => detector.scan(engine), [engine, detector, version]);
+  const clusters = useMemo(() => detector.clusters(), [detector, version]);
+  const now = atWib(engine.today, 9);
+  const rows = flags.filter((f) => level === "semua" || f.level === level);
+  const name = (id: string) => {
+    const a = engine.accounts.get(id)!;
+    return `${a.name} (${a.code})`;
+  };
+  const statusOf = (saleId: string) => {
+    const s = engine.sales.get(saleId)!;
+    const r = s.review;
+    if (s.controlled) return <Badge tone="bad">✕ Pelanggaran terkonfirmasi</Badge>;
+    if (s.cancelled) return <Badge tone="mute">↩ Dibatalkan</Badge>;
+    if (!r) return <Badge tone="mute">Belum diperiksa</Badge>;
+    if (r.dismissedAt) return <Badge tone="good">✓ Tidak terbukti</Badge>;
+    if (r.expiredAt) return <Badge tone="warn">⏱ Tunda 30 hari lewat</Badge>;
+    return <Badge tone="warn">⏸ Diperiksa sejak {dateLabel(r.openedAt)}</Badge>;
+  };
+  const act = (fn: () => string) => {
+    try {
+      setMsg(fn());
+      bump();
+    } catch (err) {
+      setMsg(err instanceof Error ? err.message : "Gagal");
+    }
+  };
+  const open = engine.openReviews();
+  return (
+    <>
+      <div className="kpis">
+        <Kpi label="Tanda kuat" value={num(flags.filter((f) => f.level === "kuat").length)} sub="Skor ≥ 85%: pemeriksaan dibuka" />
+        <Kpi label="Tanda sedang" value={num(flags.filter((f) => f.level === "sedang").length)} sub="Skor 50–85%: dipantau, tanpa tunda bayar" />
+        <Kpi label="Pemeriksaan terbuka" value={num(open.length)} sub="Bonus langsung ditunda ≤ 30 hari" />
+        <Kpi label="Terkonfirmasi" value={num([...engine.sales.values()].filter((x) => x.controlled).length)} sub={`${num(clusters.length)} klaster akun terkait kuat`} />
+      </div>
+      <div className="callout info" style={{ marginBottom: 16 }}>
+        Deteksi hanya membuka pemeriksaan, bukan sanksi. Tata cara Kode Etik Pasal 21: pemberitahuan tertulis beserta bukti, penjelasan Mitra PLS paling lama 14 hari,
+        lalu keputusan dengan alasan tertulis. Selama diperiksa, penjualan tetap dihitung untuk status aktif; hanya Bonus Sponsor dan Berkah penjualan itu yang ditunda,
+        paling lama 30 hari (Pasal 9 angka 2).
+      </div>
+      {msg && <div className="callout warn" style={{ marginBottom: 16 }}>{msg}</div>}
+      <Panel
+        title="Penjualan yang ditandai"
+        hint="Pembeli kemungkinan akun yang dikendalikan penjual"
+        actions={
+          <div className="seg" role="group" aria-label="Tingkat">
+            {(["kuat", "sedang", "semua"] as const).map((l) => (
+              <button key={l} className={level === l ? "on" : ""} onClick={() => setLevel(l)}>
+                {l[0].toUpperCase() + l.slice(1)}
+              </button>
+            ))}
+          </div>
+        }
+      >
+        <div className="table-wrap">
+          <table className="t">
+            <thead>
+              <tr>
+                <th>Tanggal</th>
+                <th>Penjual</th>
+                <th>Pembeli</th>
+                <th className="r">Skor</th>
+                <th>Sinyal yang sama</th>
+                <th>Status</th>
+                <th>Tenggat</th>
+                <th>Tindakan</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.slice(0, 200).map((f) => {
+                const s = engine.sales.get(f.saleId)!;
+                const r = s.review;
+                const openNow = r && !r.dismissedAt && !r.confirmedAt && !r.expiredAt;
+                return (
+                  <tr key={f.saleId}>
+                    <td className="num">{dateLabel(f.at)}</td>
+                    <td>{name(f.sellerId)}</td>
+                    <td>{name(f.buyerId)}</td>
+                    <td className="r num">
+                      <Badge tone={f.level === "kuat" ? "bad" : "warn"}>{pct(f.score, 0)}</Badge>
+                    </td>
+                    <td style={{ fontSize: 12.5 }}>{f.reasons.join(" · ")}</td>
+                    <td>{statusOf(f.saleId)}</td>
+                    <td className="muted" style={{ fontSize: 12.5 }}>
+                      {openNow ? (
+                        <>
+                          Penjelasan s.d. {dateLabel(r.openedAt + 14 * DAY)}
+                          <br />
+                          Tunda s.d. {dateLabel(r.openedAt + 30 * DAY)}
+                        </>
+                      ) : (
+                        "–"
+                      )}
+                    </td>
+                    <td style={{ whiteSpace: "nowrap" }}>
+                      {!s.controlled && !s.cancelled && (!r || r.dismissedAt || r.expiredAt) && (
+                        <button className="btn-secondary" onClick={() => act(() => (engine.openReview(f.saleId, now, f.reasons.join(", ")), "Pemeriksaan dibuka. Kirim pemberitahuan tertulis kepada Mitra PLS."))}>
+                          Buka pemeriksaan
+                        </button>
+                      )}
+                      {openNow && (
+                        <>
+                          <button className="btn-secondary" onClick={() => act(() => (engine.dismissReview(f.saleId, now), "Pemeriksaan ditutup: tidak terbukti. Bonus dibayar pada tutup bulan berikutnya."))}>
+                            Tidak terbukti
+                          </button>{" "}
+                          <button
+                            className="btn-primary"
+                            onClick={() =>
+                              act(() => {
+                                const x = engine.confirmControlled(f.saleId, now);
+                                return `Pelanggaran dikonfirmasi. Ditarik ${rp(x.clawedBack)} yang sudah dibayar${x.activeRevoked ? "; status aktif bulan itu dicabut" : ""}.`;
+                              })
+                            }
+                          >
+                            Konfirmasi
+                          </button>
+                        </>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+              {rows.length === 0 && (
+                <tr>
+                  <td colSpan={8} className="muted">
+                    Tidak ada penjualan pada tingkat ini.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </Panel>
+      <Panel title="Klaster akun terkait kuat" hint="Akun yang saling berbagi rekening, telepon, surel, atau kombinasi sinyal kuat">
+        <div className="table-wrap" style={{ maxHeight: 320 }}>
+          <table className="t">
+            <thead>
+              <tr>
+                <th className="r">Akun</th>
+                <th>Anggota</th>
+              </tr>
+            </thead>
+            <tbody>
+              {clusters.slice(0, 100).map((c, i) => (
+                <tr key={i}>
+                  <td className="r num">{c.length}</td>
+                  <td style={{ fontSize: 12.5 }}>{c.map((id) => `${engine.accounts.get(id)!.code} (${engine.accounts.get(id)!.role === "mitra" ? "Mitra PLS" : "Pelanggan"})`).join(" · ")}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <p className="muted" style={{ fontSize: 13 }}>
+          Nilai sinyal (nomor rekening, telepon, alamat) disimpan sebagai hash dan tidak ditampilkan. Alamat atau IP yang sama saja tidak pernah menimbulkan tanda,
+          karena wajar bagi anggota keluarga serumah.
+        </p>
+      </Panel>
     </>
   );
 }

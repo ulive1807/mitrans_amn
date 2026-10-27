@@ -112,6 +112,7 @@ export class MitransEngine {
   private readonly months = new Map<string, MonthState>();
   private readonly pendingByMonth = new Map<string, LedgerEntry[]>();
   private held: LedgerEntry[] = [];
+  private reviewHeld: LedgerEntry[] = [];
   private pendingBerkah: LedgerEntry[] = [];
   /** Kekurangan bayar bonus tim karena faktor plafon; dibayar lebih dulu bulan berikutnya. */
   private teamCarry: LedgerEntry[] = [];
@@ -434,13 +435,28 @@ export class MitransEngine {
     if (sale.cancelled) throw new EngineError("Penjualan sudah dibatalkan");
     sale.cancelled = true;
     sale.cancelledAt = at;
+    // Penjualan akun terkendali sudah ditarik saat konfirmasi; jangan ditarik dua kali.
+    const clawedBack = sale.controlled ? 0 : this.voidSaleBonuses(sale, at, "pembatalan");
+    if (sale.kind === "license") {
+      const buyer = this.accounts.get(sale.buyerId)!;
+      const stillHolds = (this.licenseSalesByBuyer.get(buyer.id) ?? []).some(
+        (id) => !this.sales.get(id)!.cancelled,
+      );
+      if (!stillHolds) buyer.licenseActivatedAt = undefined;
+    }
+    return { clawedBack, needsReview: false };
+  }
+
+  /** Tarik semua komisi dan volume yang timbul dari satu penjualan (pembatalan atau akun terkendali). */
+  private voidSaleBonuses(sale: Sale, at: number, label: string): number {
+    const saleId = sale.id;
     let clawedBack = 0;
     for (const e of [...(this.entriesBySale.get(saleId) ?? [])]) {
       if (e.gross <= 0) continue;
       if (e.status === "pending" || e.status === "held") {
         e.status = "clawback";
         e.amount = 0;
-        e.note = "Dibatalkan sebelum dibayar";
+        e.note = `Ditarik sebelum dibayar (${label})`;
       } else if (e.status === "payable" && e.amount > 0) {
         clawedBack += e.amount;
         this.pushEntry({
@@ -453,18 +469,12 @@ export class MitransEngine {
           month: wibMonth(at),
           accruedAt: at,
           saleId,
-          note: `Penarikan ${e.type} atas pembatalan ${saleId}`,
+          note: `Penarikan ${e.type} atas ${label} ${saleId}`,
         });
       }
     }
     this.pendingBerkah = this.pendingBerkah.filter((e) => e.saleId !== saleId);
-    if (sale.kind === "license") {
-      const buyer = this.accounts.get(sale.buyerId)!;
-      const stillHolds = (this.licenseSalesByBuyer.get(buyer.id) ?? []).some(
-        (id) => !this.sales.get(id)!.cancelled,
-      );
-      if (!stillHolds) buyer.licenseActivatedAt = undefined;
-    }
+    this.reviewHeld = this.reviewHeld.filter((e) => e.saleId !== saleId);
     // Keputusan A12: bonus tim dari Lisensi yang dibatalkan ditarik otomatis.
     if (sale.kind === "license" && sale.volumeNodeId && sale.countedBy) {
       this.walkUp(sale.volumeNodeId, (anc, side) => {
@@ -489,7 +499,75 @@ export class MitransEngine {
         }
       });
     }
-    return { clawedBack, needsReview: false };
+    return clawedBack;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Pemeriksaan akun yang dikendalikan sendiri
+
+  /** Buka pemeriksaan: Bonus Sponsor dan Berkah penjualan ini ditunda paling lama 30 hari (Kode Etik Pasal 9). */
+  openReview(saleId: string, at: number, reason: string): void {
+    this.advance(at);
+    const sale = this.mustSale(saleId);
+    if (sale.cancelled || sale.controlled) throw new EngineError("Penjualan sudah dibatalkan atau dikonfirmasi");
+    if (sale.review && !sale.review.dismissedAt && !sale.review.expiredAt) throw new EngineError("Pemeriksaan sudah terbuka");
+    sale.review = { openedAt: at, reason };
+  }
+
+  /** Pemeriksaan selesai tanpa pelanggaran: bonus yang ditunda dibayar pada tutup bulan berikutnya. */
+  dismissReview(saleId: string, at: number): void {
+    this.advance(at);
+    const sale = this.mustSale(saleId);
+    if (!sale.review || sale.review.confirmedAt) throw new EngineError("Tidak ada pemeriksaan terbuka");
+    sale.review.dismissedAt = at;
+  }
+
+  /**
+   * Pelanggaran terkonfirmasi (setelah tata cara Kode Etik Pasal 21): penjualan tidak dihitung,
+   * komisi dan volumenya ditarik. Bila status aktif penjual pada bulan penjualan hanya karena penjualan ini,
+   * bonus tim, Pool Aktif, Royalti, dan Prestasi bulan itu ikut ditarik.
+   */
+  confirmControlled(saleId: string, at: number): { clawedBack: number; activeRevoked: boolean } {
+    this.advance(at);
+    const sale = this.mustSale(saleId);
+    if (!sale.review || sale.review.dismissedAt) throw new EngineError("Buka pemeriksaan sebelum mengonfirmasi");
+    if (sale.controlled) throw new EngineError("Sudah dikonfirmasi");
+    if (sale.cancelled) throw new EngineError("Penjualan sudah dibatalkan; komisinya sudah ditarik");
+    sale.review.confirmedAt = at;
+    sale.controlled = true;
+    let clawedBack = this.voidSaleBonuses(sale, at, "akun terkendali");
+    let activeRevoked = false;
+    const closed = this.activeByMonth.get(sale.month);
+    if (closed?.has(sale.sellerId)) {
+      const left = this.personalSales(sale.month).get(sale.sellerId) ?? 0;
+      if (left < this.options.activeMinPersonalSales) {
+        closed.delete(sale.sellerId);
+        activeRevoked = true;
+        const types: BonusType[] = ["LEVEL", "PASANGAN", "PEMBINAAN", "POOL_AKTIF", "ROYALTI", "PRESTASI"];
+        for (const e of [...this.entriesFor(sale.sellerId)]) {
+          if (e.status !== "payable" || e.settledMonth !== sale.month || !types.includes(e.type) || e.amount <= 0) continue;
+          clawedBack += e.amount;
+          this.pushEntry({
+            accountId: e.accountId,
+            nik: e.nik,
+            type: e.type,
+            gross: -e.amount,
+            amount: -e.amount,
+            status: "clawback",
+            month: wibMonth(at),
+            accruedAt: at,
+            saleId,
+            note: `Status aktif ${sale.month} dicabut: penjualan ${saleId} oleh akun terkendali`,
+          });
+        }
+      }
+    }
+    return { clawedBack, activeRevoked };
+  }
+
+  /** Penjualan dengan pemeriksaan terbuka. */
+  openReviews(): Sale[] {
+    return [...this.sales.values()].filter((s) => s.review && !s.review.dismissedAt && !s.review.confirmedAt && !s.review.expiredAt);
   }
 
   // ---------------------------------------------------------------------------
@@ -539,14 +617,14 @@ export class MitransEngine {
     const bump = (id: string) => result.set(id, (result.get(id) ?? 0) + 1);
     for (const id of ms.licenseSaleIds) {
       const s = this.sales.get(id)!;
-      if (s.cancelled) continue;
+      if (s.cancelled || s.controlled) continue;
       const seller = this.accounts.get(s.sellerId)!;
       if (seller.role !== "mitra" || s.buyerId === s.sellerId) continue;
       bump(s.sellerId);
     }
     for (const id of ms.subscriptionSaleIds) {
       const s = this.sales.get(id)!;
-      if (s.cancelled || !s.firstPaidSubscription) continue;
+      if (s.cancelled || s.controlled || !s.firstPaidSubscription) continue;
       if (this.accounts.get(s.sellerId)!.role !== "mitra") continue;
       bump(s.sellerId);
     }
@@ -1080,6 +1158,38 @@ export class MitransEngine {
       this.held.push(e);
     };
 
+    // Pemeriksaan akun: tunda paling lama 30 hari sejak dibuka (Kode Etik Pasal 9 angka 2).
+    const underReview = (sale: Sale) => {
+      const r = sale.review;
+      if (!r || r.dismissedAt || r.confirmedAt || r.expiredAt) return false;
+      if (closeAt - r.openedAt > 30 * 86_400_000) {
+        r.expiredAt = closeAt;
+        return false;
+      }
+      return true;
+    };
+    const reviewHold = (e: LedgerEntry) => {
+      e.status = "held";
+      e.reviewHold = true;
+      e.note = "Ditunda: pemeriksaan akun (Kode Etik Pasal 9, paling lama 30 hari)";
+      this.reviewHeld.push(e);
+    };
+    const stillReview: LedgerEntry[] = [];
+    for (const e of this.reviewHeld) {
+      if (e.status !== "held") continue;
+      const sale = this.sales.get(e.saleId!)!;
+      if (underReview(sale)) {
+        stillReview.push(e);
+        continue;
+      }
+      e.reviewHold = false;
+      settle(e, e.gross, closeFriday);
+      e.note = sale.review?.expiredAt
+        ? "Dibayar: batas tunda pemeriksaan 30 hari lewat tanpa keputusan"
+        : "Dibayar setelah pemeriksaan selesai tanpa pelanggaran";
+    }
+    this.reviewHeld = stillReview;
+
     // 1. Bonus Layanan Berkah: cair bila dikonfirmasi dan lewat 30 hari; tanpa konfirmasi 60 hari -> Pool Aktif.
     const stillPending: LedgerEntry[] = [];
     for (const e of this.pendingBerkah) {
@@ -1087,7 +1197,8 @@ export class MitransEngine {
       const due = addDays(sale.at, PLAN.berkahMaturityDays);
       if (sale.orientationConfirmedAt !== undefined && due <= closeAt) {
         // Keputusan A4: Berkah selalu dibayar tanpa syarat Langganan penjual.
-        settle(e, e.gross, payoutFriday(Math.max(due, sale.orientationConfirmedAt)));
+        if (underReview(sale)) reviewHold(e);
+        else settle(e, e.gross, payoutFriday(Math.max(due, sale.orientationConfirmedAt)));
       } else if (
         sale.orientationConfirmedAt === undefined &&
         addDays(sale.at, PLAN.berkahConfirmDeadlineDays) < closeAt
@@ -1108,7 +1219,9 @@ export class MitransEngine {
       if (e.status !== "pending") continue;
       if (e.type === "SPONSOR") {
         // Keputusan A4: Bonus Sponsor selalu dibayar; syarat Langganan hanya untuk bonus jaringan.
-        settle(e, e.gross, payoutFriday(e.accruedAt));
+        const sale = e.saleId ? this.sales.get(e.saleId) : undefined;
+        if (sale && underReview(sale)) reviewHold(e);
+        else settle(e, e.gross, payoutFriday(e.accruedAt));
       } else if (TEAM_TYPES.includes(e.type)) {
         const ok =
           isActive(e.accountId) &&

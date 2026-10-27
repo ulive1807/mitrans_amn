@@ -73,6 +73,17 @@ export interface Sale {
   forMonth?: string;
   cancelled?: boolean;
   cancelledAt?: number;
+  /** Pemeriksaan akun yang dikendalikan sendiri (Kode Etik Pasal 9 dan 21). */
+  review?: {
+    openedAt: number;
+    reason: string;
+    dismissedAt?: number;
+    confirmedAt?: number;
+    /** Tunda pembayaran berakhir karena lewat 30 hari tanpa keputusan. */
+    expiredAt?: number;
+  };
+  /** Terkonfirmasi dibeli oleh akun yang dikendalikan penjual: tidak dihitung dan bonusnya ditarik. */
+  controlled?: boolean;
   /** Node tempat volume Lisensi ini dicatat. */
   volumeNodeId?: string;
   /** Node yang sudah menghitung Lisensi ini (agar konversi tidak menghitung ulang). */
@@ -164,6 +175,8 @@ export interface LedgerEntry {
   note?: string;
   /** Bulan terakhir masa tunggu untuk bonus yang ditahan. */
   holdUntil?: string;
+  /** Ditahan karena pemeriksaan akun (bukan masa tunggu tidak aktif). */
+  reviewHold?: boolean;
 }
 
 export interface RankClaim {

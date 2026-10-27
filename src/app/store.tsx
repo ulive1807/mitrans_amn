@@ -6,6 +6,7 @@ import {
   type ReactNode,
 } from "react";
 import {
+  type ControlDetector,
   demoScenario,
   runScenario,
   type MitransEngine,
@@ -19,6 +20,7 @@ import {
  */
 interface DemoState {
   engine: MitransEngine;
+  detector: ControlDetector;
   reports: MonthReport[];
   lastMonth: string;
   /** Penanda perubahan agar komponen membaca ulang engine setelah aksi. */
@@ -34,6 +36,7 @@ export function DemoProvider({ children }: { children: ReactNode }) {
   const value = useMemo<DemoState>(
     () => ({
       engine: result.engine,
+      detector: result.detector!,
       reports: result.engine.reports,
       lastMonth: result.engine.reports[result.engine.reports.length - 1].month,
       version,
