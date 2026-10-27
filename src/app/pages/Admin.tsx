@@ -601,7 +601,7 @@ function Dana({ reports }: { reports: MonthReport[] }) {
   );
 }
 
-/** Butir dari Catatan untuk Konsultan Hukum v1.1 Bagian 1, yang memengaruhi sistem. */
+/** Butir dari Catatan untuk Konsultan Hukum v1.3 Bagian 1, yang memengaruhi sistem. */
 const LEGAL = [
   [
     "Plafon komisi",
@@ -619,9 +619,14 @@ const LEGAL = [
     "Fitur pengalihan perlu dibangun (S&K Ps. 9)",
   ],
   [
-    "Syarat Langganan bulan ke-4 vs larangan wajib beli",
+    "Syarat Langganan mulai bulan ke-2 vs larangan wajib beli",
     "Permendag 70/2019 Ps. 21 f, g",
-    "Engine memisahkan syarat Bonus Sponsor agar mudah diubah",
+    "v1.4 memajukan syarat dari bulan ke-4 ke bulan ke-2; perlu kajian ulang konsultan hukum",
+  ],
+  [
+    "Istilah Lisensi tanpa batas waktu (lifetime)",
+    "UU 8/1999 Ps. 7 b, 9, 10",
+    "Akses sesudah bulan aktivasi hanya dengan Langganan; teks penawaran wajib menjelaskannya",
   ],
   [
     "Akun struktural Mitrans 001–003",
@@ -667,7 +672,7 @@ function Kepatuhan() {
         <Kpi
           label="Tertahan karena Langganan"
           value={rpShort(last.heldNoSubscription)}
-          sub={`${monthLabel(lastMonth)} · bulan ke-4+`}
+          sub={`${monthLabel(lastMonth)} · bulan ke-${PLAN.subscriptionRequiredFromMonth}+`}
         />
         <Kpi
           label="Orientasi belum dikonfirmasi"
@@ -682,7 +687,7 @@ function Kepatuhan() {
       </div>
       <Panel
         title="Butir hukum yang memengaruhi sistem"
-        hint="Dari Catatan untuk Konsultan Hukum v1.1 · bukan pendapat hukum"
+        hint="Dari Catatan untuk Konsultan Hukum v1.3 · bukan pendapat hukum"
       >
         <table className="t">
           <thead>

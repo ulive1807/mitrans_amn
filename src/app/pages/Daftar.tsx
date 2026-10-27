@@ -6,12 +6,12 @@ import { useDemo } from "../store";
 import { ProtoRibbon, TopBar } from "../components/ui";
 
 const DOCS = [
-  { id: "rp", label: "Rencana Pemasaran Mitrans-Astra v1.2" },
-  { id: "ke", label: "Kode Etik Mitra PLS v1.2" },
+  { id: "rp", label: "Rencana Pemasaran Mitrans-Astra v1.4" },
+  { id: "ke", label: "Kode Etik Mitra PLS v1.4" },
   {
     id: "sk",
     label:
-      "Syarat dan Ketentuan mitrans.id v1.2, termasuk Ketentuan Kemitraan (Bagian B)",
+      "Syarat dan Ketentuan mitrans.id v1.4, termasuk Ketentuan Kemitraan (Bagian B)",
   },
 ];
 

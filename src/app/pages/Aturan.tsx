@@ -13,8 +13,8 @@ export function Aturan() {
         <div className="page-head">
           <h1>Ringkasan Aturan Mitra PLS</h1>
           <p className="muted">
-            Diringkas dari Rencana Pemasaran v{PLAN.version}, Kode Etik v1.2,
-            serta Syarat dan Ketentuan v1.2 (draf 27 Oktober 2026). Ringkasan
+            Diringkas dari Rencana Pemasaran v{PLAN.version}, Kode Etik v1.4,
+            serta Syarat dan Ketentuan v1.4 (draf 27 Oktober 2026). Ringkasan
             ini bukan pengganti dokumen resmi.
           </p>
         </div>
@@ -50,13 +50,13 @@ export function Aturan() {
             </thead>
             <tbody>
               <tr>
-                <td>Lisensi (akses 3 bulan)</td>
+                <td>Lisensi (tanpa batas waktu; termasuk akses bulan aktivasi)</td>
                 <td className="r num">{rp(PLAN.license.price)}</td>
                 <td className="r num">{rp(PLAN.license.netPrice)}</td>
                 <td className="r num">{PLAN.license.pvTenths / 10}</td>
               </tr>
               <tr>
-                <td>Langganan (per bulan, mulai bulan ke-4)</td>
+                <td>Langganan/RO (per bulan, mulai bulan berikutnya)</td>
                 <td className="r num">{rp(PLAN.subscription.price)}</td>
                 <td className="r num">{rp(PLAN.subscription.netPrice)}</td>
                 <td className="r num">{PLAN.subscription.pvTenths / 10}</td>
@@ -205,7 +205,7 @@ export function Aturan() {
           <ul>
             <li>
               Bonus Sponsor dan Bonus Layanan Berkah selalu dibayar bila
-              penjualan lunas. Syarat Langganan aktif mulai bulan ke-4 hanya
+              penjualan lunas. Syarat Langganan aktif mulai bulan ke-2 (bulan berikutnya setelah aktivasi Lisensi) hanya
               berlaku untuk bonus tim.
             </li>
             <li>

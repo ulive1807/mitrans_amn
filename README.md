@@ -1,6 +1,6 @@
 # Mitrans-Astra · Mitra PLS (prototipe)
 
-Prototipe web penjualan langsung Mitrans-Astra: halaman depan, pendaftaran Mitra PLS, Kantor Maya, dasbor admin, dan **engine komisi/PV** sesuai Rencana Pemasaran v1.2.
+Prototipe web penjualan langsung Mitrans-Astra: halaman depan, pendaftaran Mitra PLS, Kantor Maya, dasbor admin, dan **engine komisi/PV** sesuai Rencana Pemasaran v1.4.
 
 > **Prototipe.** Dokumen sumber masih draf yang menunggu tinjauan konsultan hukum dan verifikasi asosiasi. Semua data di aplikasi sintetis. Belum ada backend, pembayaran, atau data pribadi nyata. Jangan dipakai untuk menghitung komisi sungguhan sebelum tahap produksi pada `docs/ARSITEKTUR_SISTEM.md` selesai.
 

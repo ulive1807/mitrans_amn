@@ -65,7 +65,7 @@ lines.push(
   '> Tujuannya menguji apakah aturan dan plafon bekerja. Angka "uji lama v1.2" adalah hasil uji internal Rencana Pemasaran v1.2 Bab 12.3;',
 );
 lines.push(
-  "> Rencana Pemasaran v1.3 Bab 12.3 sudah memakai hasil engine di bawah ini beserta asumsinya.",
+  `> Rencana Pemasaran v${PLAN.version} Bab 12.3 sudah memakai hasil engine di bawah ini beserta asumsinya.`,
 );
 lines.push("");
 lines.push("## Ringkasan per skenario");

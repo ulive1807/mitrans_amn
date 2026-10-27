@@ -73,11 +73,15 @@ const STEPS = [
   },
   {
     t: "Orientasi & belajar",
-    d: "Pendampingan 7 hari, workshop bulanan, lalu Langganan mulai bulan ke-4 bila Anda memilih melanjutkan.",
+    d: "Pendampingan 7 hari, workshop bulanan, lalu Langganan mulai bulan berikutnya bila Anda memilih melanjutkan akses.",
   },
 ];
 
 const FAQ = [
+  {
+    q: "Apa arti Lisensi tanpa batas waktu (lifetime)?",
+    a: "Lisensi Rp7.500.000 dibayar sekali, tidak kedaluwarsa, dan tidak perlu dibeli ulang. Akses aplikasi pada bulan aktivasi sudah termasuk. Mulai bulan berikutnya, akses berlanjut dengan Langganan Rp399.000 per bulan bila Anda menyetujuinya. Bila Langganan berhenti, akses aplikasi berhenti, tetapi Lisensi tetap milik Anda dan dapat diaktifkan lagi dengan Langganan kapan saja.",
+  },
   {
     q: "Apakah Mitrans-Astra memberi sinyal beli atau jual saham?",
     a: "Tidak. Mitrans-Astra adalah alat bantu analisis dan edukasi. Platform tidak memberi rekomendasi atau sinyal beli/jual, tidak bertransaksi atas nama Anda, dan tidak mengelola dana. Investasi saham mengandung risiko, termasuk kehilangan sebagian atau seluruh modal.",
@@ -238,7 +242,7 @@ export function Landing() {
               <span className="chip tag">Mulai di sini</span>
               <h3>Lisensi Mitrans-Astra</h3>
               <div className="muted" style={{ color: "#a8b8af" }}>
-                Termasuk akses {PLAN.license.accessMonths} bulan sejak aktivasi
+                Lisensi tanpa batas waktu · akses bulan aktivasi sudah termasuk
               </div>
               <div className="price">
                 {rp(PLAN.license.price)} <small>sekali bayar</small>
@@ -247,6 +251,7 @@ export function Landing() {
                 <li>Seluruh fitur data, grafik, dan penyaring</li>
                 <li>Materi edukasi dan latihan bertahap</li>
                 <li>Pendampingan orientasi 7 hari oleh Mitra PLS</li>
+                <li>Lisensi tidak kedaluwarsa dan tidak perlu dibeli ulang</li>
                 <li>Lisensi dapat dialihkan melalui aplikasi</li>
               </ul>
               <p className="fineprint">
@@ -258,7 +263,7 @@ export function Landing() {
             <div className="price-card plain">
               <h3>Langganan</h3>
               <div className="muted" style={{ color: "#a8b8af" }}>
-                Perpanjangan akses mulai bulan ke-4
+                Akses bulanan (RO) mulai bulan berikutnya
               </div>
               <div className="price">
                 {rp(PLAN.subscription.price)} <small>per bulan</small>
@@ -270,7 +275,9 @@ export function Landing() {
                 <li>Akses berjalan sampai akhir periode yang dibayar</li>
               </ul>
               <p className="fineprint">
-                Langganan tanpa Lisensi belum tersedia.
+                Tanpa Langganan, akses aplikasi berhenti tetapi Lisensi tetap
+                milik Anda; aktifkan lagi kapan saja tanpa membeli Lisensi
+                ulang. Langganan tanpa Lisensi belum tersedia.
               </p>
             </div>
           </div>

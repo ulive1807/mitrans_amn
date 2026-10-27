@@ -277,7 +277,7 @@ function Ringkasan({
               <dd>
                 {engine.subscriptionConditionMet(accId, lastMonth)
                   ? "Syarat terpenuhi"
-                  : "Wajib aktif (bulan ke-4+)"}
+                  : `Wajib aktif (bulan ke-${PLAN.subscriptionRequiredFromMonth}+)`}
               </dd>
             </dl>
           ) : (

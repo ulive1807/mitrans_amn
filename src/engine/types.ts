@@ -19,7 +19,7 @@ export interface Account {
   mitraSince?: number;
   /** Lulus kuis Kode Etik sehingga tautan rujukan aktif (Bab 6 butir 7). */
   quizPassed: boolean;
-  /** Aktivasi Lisensi pertama milik akun ini (untuk syarat Langganan bulan ke-4 dan masa akses). */
+  /** Aktivasi Lisensi pertama milik akun ini (untuk syarat Langganan mulai bulan ke-2 dan akses bulan aktivasi). */
   licenseActivatedAt?: number;
   /** Id node jaringan biner. Hanya Mitra PLS pemegang Lisensi. */
   nodeId?: string;
@@ -246,6 +246,6 @@ export interface MonthReport {
   heldAmount: number;
   forfeitedAmount: number;
   companyStructural: number;
-  /** Bonus pemegang Lisensi bulan ke-4+ yang tertahan karena Langganan tidak aktif. */
+  /** Bonus pemegang Lisensi bulan ke-2+ yang tertahan karena Langganan tidak aktif. */
   heldNoSubscription: number;
 }

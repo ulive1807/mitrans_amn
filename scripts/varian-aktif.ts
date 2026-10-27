@@ -3,7 +3,7 @@
  * Pemakaian: npx tsx scripts/varian-aktif.ts → docs/VARIAN_AKTIF.md
  */
 import { writeFileSync } from 'node:fs';
-import { runIdealScenario, runScenario, standardScenarios, type SimulationSummary, type MonthReport } from '../src/engine';
+import { PLAN, runIdealScenario, runScenario, standardScenarios, type SimulationSummary, type MonthReport } from '../src/engine';
 
 const pct = (x: number) => `${(x * 100).toFixed(1).replace('.', ',')}%`;
 const rp = (x: number) => `Rp${Math.round(x).toLocaleString('id-ID')}`;
@@ -37,7 +37,7 @@ for (const min of [2, 1]) {
 
 const L: string[] = [];
 L.push('# Varian Syarat Aktif: 2 Penjualan vs 1 Penjualan per Bulan', '');
-L.push(`Dibuat oleh \`npx tsx scripts/varian-aktif.ts\` pada ${new Date().toISOString().slice(0, 10)}. Semua aturan lain sama dengan Rencana Pemasaran v1.3; skenario dan asumsi sama dengan Bab 12.3.`, '');
+L.push(`Dibuat oleh \`npx tsx scripts/varian-aktif.ts\` pada ${new Date().toISOString().slice(0, 10)}. Semua aturan lain sama dengan Rencana Pemasaran v${PLAN.version}; skenario dan asumsi sama dengan Bab 12.3.`, '');
 L.push('> Hasil simulasi jaringan buatan. **Bukan proyeksi penjualan dan bukan perkiraan penghasilan.**', '');
 L.push('## Biaya bonus dan plafon', '');
 L.push('| Skenario | Plan A (aktif 2) | Plan A (aktif 1) | Plan B (aktif 2) | Plan B (aktif 1) | Bulan Plan A tertinggi (aktif 1) | Faktor plafon dipakai (aktif 1) |');

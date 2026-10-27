@@ -90,7 +90,7 @@ export interface ScenarioParams {
   mitraShare: number;
   /** Peluang Pelanggan mengonversi dalam 60 hari. */
   conversionRate: number;
-  /** Peluang pemegang Lisensi membayar Langganan pada bulan ke-4 dan seterusnya (per bulan). */
+  /** Peluang pemegang Lisensi membayar Langganan mulai bulan ke-2 (bulan berikutnya setelah aktivasi), per bulan. */
   subscriptionRetention: number;
   /** Peluang Mitra PLS pemegang Lisensi menjalankan kegiatan pembinaan terkonfirmasi per bulan. */
   coachingRate: number;
@@ -233,7 +233,7 @@ export function runScenario(p: ScenarioParams): SimulationResult {
     const month = monthFromIndex(startIdx + m);
     const days = daysInMonth(month);
 
-    // Langganan bulan ke-4 dan seterusnya, dibayar di awal bulan.
+    // Langganan mulai bulan ke-2 (bulan berikutnya), dibayar di awal bulan.
     for (const h of holders) {
       const n = startIdx + m - h.activationMonth + 1;
       if (n < PLAN.subscriptionRequiredFromMonth) continue;

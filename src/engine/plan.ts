@@ -1,5 +1,5 @@
 /**
- * Parameter Rencana Pemasaran Mitrans-Astra v1.2 (27 Oktober 2026).
+ * Parameter Rencana Pemasaran Mitrans-Astra v1.4 (27 Oktober 2026).
  * Setiap angka di sini dirujuk ke bab dokumen sumbernya. Ubah angka hanya
  * bila dokumen resmi berubah, lalu jalankan ulang `npm test` dan `npm run simulate`.
  *
@@ -9,7 +9,7 @@
  * - persentase disimpan dalam basis poin (1% = 100 bp).
  */
 export const PLAN = {
-  version: "1.3",
+  version: "1.4",
 
   // Bab 3.1 Produk dan harga
   license: {
@@ -17,8 +17,12 @@ export const PLAN = {
     netPrice: 6_756_757, // dasar pengenaan pajak (omzet bersih)
     vat: 743_243,
     pvTenths: 675, // 67,5 PV
-    accessMonths: 3,
+    /** Lisensi tanpa batas waktu (lifetime): tidak perlu dibeli ulang. Keputusan Coach 27 Oktober 2026 (v1.3: akses 3 bulan). */
+    lifetime: true,
+    /** Akses yang sudah termasuk harga Lisensi: bulan kalender pembelian/aktivasi saja (bulan ke-1). */
+    accessMonths: 1,
   },
+  /** Langganan (RO) bulanan, mulai bulan kalender berikutnya setelah aktivasi Lisensi. */
   subscription: {
     price: 399_000,
     netPrice: 359_459,
@@ -76,7 +80,7 @@ export const PLAN = {
   // Bab 9
   activeMinPersonalSales: 1, // Keputusan Coach 27 Oktober 2026 (dokumen v1.2: 2)
   holdMonths: 2,
-  subscriptionRequiredFromMonth: 4, // bulan ke-4 sejak aktivasi Lisensi
+  subscriptionRequiredFromMonth: 2, // bulan ke-2 (bulan berikutnya) sejak aktivasi Lisensi; v1.3: bulan ke-4
 
   // Bab 5.5 Konversi Lisensi Pelanggan
   conversionWindowDays: 60,
@@ -102,7 +106,7 @@ export interface EngineOptions {
    */
   placement: "weaker-leg" | "left-first";
   /**
-   * Plan B mensyaratkan "Langganan sendiri aktif". Bila false, masa akses 3 bulan Lisensi juga dianggap aktif.
+   * Plan B mensyaratkan "Langganan sendiri aktif". Bila false, akses bulan aktivasi Lisensi (bulan ke-1) juga dianggap aktif.
    */
   planBRequiresPaidSubscription: boolean;
   /**

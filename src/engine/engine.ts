@@ -363,7 +363,7 @@ export class MitransEngine {
     return acc;
   }
 
-  /** Pembayaran Langganan bulanan (mulai bulan ke-4). */
+  /** Pembayaran Langganan (RO) bulanan, mulai bulan berikutnya setelah aktivasi Lisensi. */
   paySubscription(input: {
     saleId: string;
     accountId: string;
@@ -668,7 +668,7 @@ export class MitransEngine {
     return monthNumberSince(wibMonth(acc.licenseActivatedAt), month);
   }
 
-  /** Syarat Langganan aktif mulai bulan ke-4 sejak aktivasi Lisensi (Bab 9.2). */
+  /** Syarat Langganan aktif mulai bulan ke-2 (bulan berikutnya) sejak aktivasi Lisensi (Bab 9.2). */
   subscriptionConditionMet(accountId: string, month: string): boolean {
     const n = this.licenseMonthNumber(accountId, month);
     if (n === undefined || n < PLAN.subscriptionRequiredFromMonth) return true;
@@ -1260,7 +1260,7 @@ export class MitransEngine {
           hold(
             e,
             isActive(e.accountId)
-              ? "Langganan tidak aktif (bulan ke-4+)"
+              ? `Langganan tidak aktif (bulan ke-${PLAN.subscriptionRequiredFromMonth}+)`
               : "Tidak aktif pada bulan bonus",
           );
         }

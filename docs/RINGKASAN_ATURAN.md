@@ -1,6 +1,6 @@
 # Ringkasan Aturan Mitra PLS Mitrans-Astra
 
-Sumber: Rencana Pemasaran v1.2, Kode Etik Mitra PLS v1.2, Syarat dan Ketentuan mitrans.id v1.2 (draf 27 Oktober 2026), dan Catatan untuk Konsultan Hukum v1.1.
+Sumber: Rencana Pemasaran v1.4, Kode Etik Mitra PLS v1.4, Syarat dan Ketentuan mitrans.id v1.4 (draf 27 Oktober 2026), dan Catatan untuk Konsultan Hukum v1.3.
 Seluruh dokumen sumber masih **draf**: belum ditinjau konsultan hukum dan belum diverifikasi asosiasi penjualan langsung.
 
 Kolom **Kode** menunjukkan tempat aturan dijalankan engine (`src/engine/`).
@@ -9,8 +9,8 @@ Kolom **Kode** menunjukkan tempat aturan dijalankan engine (`src/engine/`).
 
 | Produk | Harga (termasuk PPN) | Omzet bersih | PV | Kode |
 |---|---:|---:|---:|---|
-| Lisensi (akses 3 bulan) | Rp7.500.000 | Rp6.756.757 | 67,5 | `PLAN.license` |
-| Langganan (per bulan, mulai bulan ke-4) | Rp399.000 | Rp359.459 | 3,5 | `PLAN.subscription` |
+| Lisensi (tanpa batas waktu/lifetime; termasuk akses bulan aktivasi) | Rp7.500.000 | Rp6.756.757 | 67,5 | `PLAN.license` |
+| Langganan/RO (per bulan, mulai bulan berikutnya) | Rp399.000 | Rp359.459 | 3,5 | `PLAN.subscription` |
 
 - Harga sama untuk Mitra PLS dan Pelanggan. Tidak ada opsi tahunan. Langganan tanpa Lisensi belum tersedia.
 - 1 PV = Rp100.000 omzet bersih, hanya untuk menghitung bonus.
@@ -62,7 +62,7 @@ Syarat Plan B: Langganan sendiri aktif, pernah aktif, dan ≥1 kegiatan pembinaa
 - **Aktif** = ≥1 penjualan baru pribadi dalam bulan kalender (keputusan Coach 27 Oktober 2026; v1.2: 2): Lisensi Mitra PLS baru yang disponsori, Lisensi Pelanggan lewat tautannya, Langganan berbayar pertama Pelanggannya (sekali per Pelanggan).
 - Tidak dihitung: pembelian sendiri, akun yang dikendalikan sendiri, pembelian yang dibatalkan.
 - Level, Pasangan, dan Pembinaan pada bulan tidak aktif **ditahan**; dibayar bila aktif dalam 2 bulan berikutnya; bila tidak, hangus ke Pool Aktif.
-- Mulai bulan ke-4 sejak aktivasi Lisensi, pemegang Lisensi wajib Langganan aktif untuk **bonus tim** (Level, Pasangan, Pembinaan). Bonus Sponsor dan Berkah selalu dibayar (keputusan A4).
+- Mulai bulan ke-2 (bulan kalender berikutnya) sejak aktivasi Lisensi, pemegang Lisensi wajib Langganan aktif untuk **bonus tim** (Level, Pasangan, Pembinaan). Bonus Sponsor dan Berkah selalu dibayar (keputusan A4).
 - Bonus tim dibayar 80% setiap Jumat; 20% setelah tutup bulan sesuai faktor plafon (keputusan A10).
 - Pembatalan menarik otomatis semua bonus yang timbul dari Lisensi itu (keputusan A12).
 
