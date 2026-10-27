@@ -1,0 +1,322 @@
+/**
+ * API server prototipe. Setiap rute di bawah /api (kecuali /api/kesehatan) memerlukan sesi Clerk yang sah,
+ * lalu memeriksa izin dengan ROLE_PERMISSIONS yang sama dengan antarmuka. Data masih sintetis (demoScenario).
+ */
+import type { IncomingMessage, ServerResponse } from "node:http";
+import {
+  AccessControl,
+  AccessError,
+  PayoutApprovals,
+  atWib,
+  demoScenario,
+  runScenario,
+  type MitransEngine,
+  type Permission,
+} from "../src/engine";
+import type { Authenticator, Session } from "./session";
+
+export interface AppOptions {
+  authenticate: Authenticator;
+  /** Asal yang boleh memanggil API lintas domain (biasanya sama dengan authorizedParties). */
+  corsOrigins?: string[];
+  engine?: MitransEngine;
+}
+
+type Handler = (ctx: Ctx) => unknown;
+interface Ctx {
+  session: Session;
+  params: Record<string, string>;
+  query: URLSearchParams;
+}
+interface Route {
+  method: "GET" | "POST";
+  pattern: RegExp;
+  keys: string[];
+  /** Izin yang wajib; "mitra" berarti sesi harus tertaut ke Mitra PLS. */
+  need: Permission | "mitra" | "sesi";
+  action: string;
+  run: Handler;
+}
+
+class HttpError extends Error {
+  constructor(
+    readonly status: number,
+    message: string,
+  ) {
+    super(message);
+  }
+}
+
+function route(
+  method: Route["method"],
+  path: string,
+  need: Route["need"],
+  action: string,
+  run: Handler,
+): Route {
+  const keys: string[] = [];
+  const pattern = new RegExp(
+    "^" +
+      path.replace(/:([a-z]+)/g, (_, k: string) => {
+        keys.push(k);
+        return "([^/]+)";
+      }) +
+      "$",
+  );
+  return { method, pattern, keys, need, action, run };
+}
+
+const DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+export function createApp(opts: AppOptions) {
+  const engine = opts.engine ?? runScenario(demoScenario()).engine;
+  const access = new AccessControl();
+  const payouts = new PayoutApprovals(access);
+  const now = () => atWib(engine.today, 9);
+  const lastMonth = () => engine.reports[engine.reports.length - 1]?.month;
+
+  const findMitra = (key: string) => {
+    const acc =
+      engine.accounts.get(key) ??
+      [...engine.accounts.values()].find((a) => a.code === key);
+    return acc && acc.role === "mitra" ? acc : undefined;
+  };
+
+  const runFor = (date: string) => {
+    if (!DATE.test(date)) throw new HttpError(400, "Tanggal tidak sah");
+    const r = engine.payoutRuns().find((x) => x.date === date);
+    if (!r)
+      throw new HttpError(404, "Tidak ada berkas transfer pada tanggal itu");
+    return r;
+  };
+
+  const routes: Route[] = [
+    route("GET", "/api/saya", "sesi", "Periksa sesi", ({ session }) => ({
+      userId: session.userId,
+      roles: session.claims.roles,
+      mitraId: session.claims.mitraId ?? null,
+      izin: [...access.permissions(session.userId)],
+      sumberPeran: session.roleSource,
+      masalah: session.claims.problems,
+    })),
+    route(
+      "GET",
+      "/api/admin/ikhtisar",
+      "ikhtisar.lihat",
+      "Lihat ikhtisar",
+      () => {
+        const r = engine.reports[engine.reports.length - 1];
+        return {
+          bulan: r.month,
+          mitraAktif: r.activeMitra,
+          totalMitra: r.totalMitra,
+          lisensiTerjual: r.licensesSold,
+          planAPersen: r.planAPct,
+          planBPersen: r.planBPct,
+          planAPlafonTerpicu: r.planACapTriggered,
+        };
+      },
+    ),
+    route(
+      "GET",
+      "/api/admin/pembayaran",
+      "pembayaran.lihat",
+      "Lihat pembayaran Jumat",
+      () =>
+        engine
+          .payoutRuns()
+          .slice(-8)
+          .map((r) => {
+            const b = payouts.get(r.date, r.total, r.count);
+            return {
+              tanggal: r.date,
+              total: r.total,
+              entri: r.count,
+              status: b.status,
+              disiapkanOleh: b.preparedBy ?? null,
+              disetujuiOleh: b.approvedBy ?? null,
+            };
+          }),
+    ),
+    // Nilai berkas dihitung server dari ledger; klien tidak mengirim angka.
+    route(
+      "POST",
+      "/api/admin/pembayaran/:date/siapkan",
+      "pembayaran.siapkan",
+      "Siapkan berkas transfer",
+      ({ session, params }) => {
+        const r = runFor(params.date);
+        const b = payouts.prepare(
+          r.date,
+          r.total,
+          r.count,
+          session.userId,
+          now(),
+        );
+        return { tanggal: b.date, status: b.status };
+      },
+    ),
+    route(
+      "POST",
+      "/api/admin/pembayaran/:date/setujui",
+      "pembayaran.setujui",
+      "Setujui berkas transfer",
+      ({ session, params }) => {
+        runFor(params.date);
+        const b = payouts.approve(params.date, session.userId, now());
+        return { tanggal: b.date, status: b.status };
+      },
+    ),
+    route("GET", "/api/admin/audit", "audit.lihat", "Lihat log audit", () =>
+      access.audit.slice(-200).reverse(),
+    ),
+    route(
+      "GET",
+      "/api/mitra/ringkasan",
+      "mitra",
+      "Lihat Kantor Maya",
+      ({ session, query }) => {
+        const acc = findMitra(session.claims.mitraId!);
+        if (!acc)
+          throw new HttpError(
+            404,
+            "Akun Mitra PLS yang ditautkan tidak ditemukan",
+          );
+        const asked = query.get("id");
+        if (asked && asked !== acc.id && asked !== acc.code) {
+          access.audit.push({
+            at: now(),
+            userId: session.userId,
+            userName: session.userId,
+            action: "Lihat Kantor Maya akun lain",
+            allowed: false,
+            detail: asked,
+          });
+          throw new HttpError(
+            403,
+            "Mitra PLS hanya dapat melihat akunnya sendiri",
+          );
+        }
+        let diterima = 0;
+        for (const e of engine.entriesFor(acc.id))
+          if (e.status === "payable" || e.status === "clawback")
+            diterima += e.amount;
+        const m = lastMonth();
+        const ranks = acc.ranksAchieved;
+        return {
+          id: acc.id,
+          kode: acc.code,
+          nama: acc.name,
+          peringkat: ranks?.length ? ranks[ranks.length - 1].rank : null,
+          aktifBulanTerakhir: m ? engine.isActive(acc.id, m) : false,
+          totalDiterima: diterima,
+        };
+      },
+    ),
+  ];
+
+  const send = (
+    req: IncomingMessage,
+    res: ServerResponse,
+    status: number,
+    body: unknown,
+  ) => {
+    const origin = req.headers.origin;
+    if (origin && opts.corsOrigins?.includes(origin)) {
+      res.setHeader("Access-Control-Allow-Origin", origin);
+      res.setHeader("Vary", "Origin");
+    }
+    res.writeHead(status, {
+      "Content-Type": "application/json; charset=utf-8",
+      "Cache-Control": "no-store",
+      "X-Content-Type-Options": "nosniff",
+    });
+    res.end(JSON.stringify(body));
+  };
+
+  return async function handle(
+    req: IncomingMessage,
+    res: ServerResponse,
+  ): Promise<void> {
+    const url = new URL(req.url ?? "/", "http://localhost");
+    const method = (req.method ?? "GET").toUpperCase();
+    try {
+      if (method === "OPTIONS") {
+        const origin = req.headers.origin;
+        if (origin && opts.corsOrigins?.includes(origin)) {
+          res.writeHead(204, {
+            "Access-Control-Allow-Origin": origin,
+            "Access-Control-Allow-Methods": "GET, POST",
+            "Access-Control-Allow-Headers": "Authorization, Content-Type",
+            "Access-Control-Max-Age": "600",
+            Vary: "Origin",
+          });
+        } else res.writeHead(403);
+        res.end();
+        return;
+      }
+      if (url.pathname === "/api/kesehatan")
+        return send(req, res, 200, { ok: true });
+
+      const candidates = routes.filter((r) => r.pattern.test(url.pathname));
+      if (!candidates.length)
+        return send(req, res, 404, { galat: "Tidak ditemukan" });
+      const r = candidates.find((x) => x.method === method);
+      if (!r) return send(req, res, 405, { galat: "Metode tidak diizinkan" });
+
+      const auth = await opts.authenticate(req.headers, method);
+      if (!auth.ok)
+        return send(req, res, auth.status, {
+          galat: "Sesi tidak sah",
+          alasan: auth.reason,
+        });
+      const { session } = auth;
+
+      // Cerminkan pengguna Clerk ke AccessControl dengan peran dari server (bukan dari klien).
+      const prev = access.users.get(session.userId);
+      if (!prev || prev.roles.join() !== session.claims.roles.join())
+        access.addUser({
+          id: session.userId,
+          name: prev?.name ?? session.userId,
+          title: "Akun Clerk",
+          roles: [...session.claims.roles],
+          active: true,
+        });
+
+      const m = r.pattern.exec(url.pathname)!;
+      const params = Object.fromEntries(
+        r.keys.map((k, i) => [k, decodeURIComponent(m[i + 1])]),
+      );
+      if (r.need === "mitra") {
+        if (!session.claims.mitraId) {
+          access.audit.push({
+            at: now(),
+            userId: session.userId,
+            userName: session.userId,
+            action: r.action,
+            allowed: false,
+            detail: "tidak tertaut ke Mitra PLS",
+          });
+          return send(req, res, 403, {
+            galat: "Akun belum ditautkan ke Mitra PLS",
+          });
+        }
+      } else if (r.need !== "sesi")
+        access.require(session.userId, r.need, r.action, now(), url.pathname);
+
+      return send(
+        req,
+        res,
+        200,
+        await r.run({ session, params, query: url.searchParams }),
+      );
+    } catch (err) {
+      if (err instanceof HttpError)
+        return send(req, res, err.status, { galat: err.message });
+      if (err instanceof AccessError)
+        return send(req, res, 403, { galat: err.message });
+      console.error("Galat server", err instanceof Error ? err.message : err);
+      return send(req, res, 500, { galat: "Galat server" });
+    }
+  };
+}

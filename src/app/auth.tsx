@@ -31,6 +31,8 @@ export interface AuthState {
   /** Masalah pada publicMetadata (peran tidak dikenal, rangkap terlarang). */
   problems: string[];
   signOut: () => Promise<void>;
+  /** Token sesi Clerk untuk header Authorization ke API server (null pada mode demo atau belum masuk). */
+  getToken: () => Promise<string | null>;
 }
 
 export const PUBLISHABLE_KEY: string | undefined =
@@ -45,6 +47,7 @@ const DEMO: AuthState = {
   roles: [],
   problems: [],
   signOut: async () => {},
+  getToken: async () => null,
 };
 
 export const AuthCtx = createContext<AuthState>(DEMO);

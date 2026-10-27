@@ -16,6 +16,7 @@ Status: **prototipe**. Yang ada di repositori ini adalah engine komisi yang teru
 | Hak akses per peran, pemisahan tugas, maker-checker, log audit | `src/engine/access.ts`, `/admin` (Masuk sebagai, Pengguna & peran, Log audit) | Teruji (prototipe) |
 | Pemberitahuan tertulis dan tata cara sanksi | `src/engine/sanctions.ts`, `/admin` tab Kasus & sanksi, Kantor Maya tab Pemberitahuan | Teruji (prototipe) |
 | Deteksi akun yang dikendalikan sendiri + alur pemeriksaan | `src/engine/fraud.ts`, `/admin` tab Akun terkendali | Teruji (prototipe) |
+| Pemeriksaan sesi Clerk di server + API berizin | `server/` (`npm run server`), `src/app/api.ts` | Teruji 13 uji dengan token bertanda tangan kunci uji; **belum diuji dengan aplikasi Clerk sungguhan** |
 | Masuk dengan kode OTP (Clerk), pengaman `/admin` dan `/mitra` | `src/app/auth.tsx`, `src/app/clerk.tsx`, `src/app/guard.tsx`, `/masuk`, `src/engine/claims.ts` | Mode demo teruji; mode Clerk teruji sampai pemuatan dan penanganan gagal, **belum diuji dengan akun Clerk sungguhan** |
 
 ## 2. Arsitektur engine
@@ -240,6 +241,56 @@ Satu sumber aturan: `ROLE_PERMISSIONS` di `src/engine/access.ts`. Menu admin han
 4. Wajibkan faktor kedua untuk akun staf (terutama Keuangan dan Direksi) dan atur masa berlaku sesi yang pendek untuk staf.
 5. Tambahkan domain situs ke daftar domain yang diizinkan.
 
-**Batas yang harus diingat.** Pengaman di peramban hanya untuk pengalaman pengguna. Pada produksi, setiap permintaan API wajib memverifikasi token sesi Clerk di server dan membaca peran dari server, lalu memeriksa izin dengan `ROLE_PERMISSIONS` yang sama. Data Mitra PLS harus disaring di server menurut `mitraId`, bukan di peramban.
+**Batas yang harus diingat.** Pengaman di peramban hanya untuk pengalaman pengguna. Pemeriksaan yang menentukan ada di server (Bab 10).
 
 **Status pengujian.** Mode demo: seluruh uji peramban sebelumnya lulus tanpa perubahan. Mode Clerk dengan kunci sintetis: pengalihan `/admin` menunggu sesi, `/masuk` menolak `next=//situs-lain`, dan saat Clerk tidak terjangkau halaman menampilkan pesan gagal. Alur OTP penuh (kirim kode, verifikasi, faktor kedua) **belum diuji** karena memerlukan aplikasi Clerk sungguhan dan akses jaringan ke Clerk.
+
+## 10. Pemeriksaan sesi Clerk di server
+
+`server/` adalah API Node kecil (tanpa kerangka kerja tambahan) yang menjalankan engine yang sama dengan data sintetis. **Setiap rute `/api` kecuali `/api/kesehatan` menolak permintaan tanpa sesi Clerk yang sah.**
+
+**Urutan pemeriksaan per permintaan** (`server/session.ts`, `server/app.ts`):
+1. Ambil token dari `Authorization: Bearer …` atau cookie `__session`. Cookie hanya diterima untuk membaca (GET); perubahan data wajib lewat header agar tidak bisa dipicu dari situs lain (CSRF).
+2. Verifikasi dengan `verifyToken` dari `@clerk/backend` 2.33.7: tanda tangan RS256, `exp`/`nbf`/`iat` (toleransi jam 5 detik), dan `azp` harus salah satu `CLERK_AUTHORIZED_PARTIES`. Token sesi berstatus `pending` ditolak.
+3. Baca peran **hanya dari Clerk**, tidak pernah dari isi permintaan: klaim `metadata` di token (bila token sesi dikustomisasi berisi `{{user.public_metadata}}`), atau Clerk Backend API (`users.getUser`) dengan cache 60 detik. Bila Clerk API gagal → 503, bukan menebak. Tanpa sumber peran → tanpa peran.
+4. Saring peran fail-closed (`claimsFromMetadata`), cerminkan ke `AccessControl`, lalu `require` izin rute. Penolakan dicatat di log audit.
+5. Mitra PLS hanya mendapat data akun `mitraId` miliknya; meminta akun lain → 403 dan tercatat.
+
+**Rute yang tersedia (contoh pola, data sintetis):**
+
+| Rute | Syarat |
+|---|---|
+| `GET /api/kesehatan` | Terbuka |
+| `GET /api/saya` | Sesi sah (peran, izin, sumber peran) |
+| `GET /api/admin/ikhtisar` | `ikhtisar.lihat` |
+| `GET /api/admin/pembayaran` | `pembayaran.lihat` |
+| `POST /api/admin/pembayaran/:tanggal/siapkan` | `pembayaran.siapkan`; nilai dihitung server dari ledger |
+| `POST /api/admin/pembayaran/:tanggal/setujui` | `pembayaran.setujui`; penyiap tidak boleh menyetujui sendiri |
+| `GET /api/admin/audit` | `audit.lihat` |
+| `GET /api/mitra/ringkasan` | Sesi tertaut `mitraId`; hanya akun sendiri |
+
+**Konfigurasi server** (variabel lingkungan server, bukan `VITE_`; lihat `.env.example`). Server **menolak berjalan** bila tidak ada `CLERK_JWT_KEY`/`CLERK_SECRET_KEY`, bila `CLERK_AUTHORIZED_PARTIES` kosong atau salah format, bila produksi memakai `http://` atau `sk_test_`.
+- `CLERK_JWT_KEY` (disarankan): kunci publik PEM dari dasbor Clerk; verifikasi tanpa panggilan jaringan.
+- `CLERK_SECRET_KEY`: rahasia; hanya di server. Diperlukan bila peran dibaca lewat Backend API.
+- `CLERK_AUTHORIZED_PARTIES`: asal situs, mis. `https://mitrans.id`.
+
+Antarmuka memanggil API dengan `getToken()` Clerk di header (`src/app/api.ts`). Di dasbor Admin mode Clerk tampil penanda "Sesi & peran terverifikasi server", atau peringatan bila server menolak atau peran di server berbeda. Saat pengembangan, Vite meneruskan `/api` ke `127.0.0.1:8787`.
+
+**Hasil uji (`tests/server.test.ts`, 13 uji).** Kunci RSA dibuat saat uji, token ditandatangani dengan `signJwt` dan diverifikasi oleh `verifyToken` Clerk yang sama dengan produksi.
+- Diterima: token sah, dengan peran dari klaim.
+- Ditolak (`401`): tanpa token, kedaluwarsa, asal lain, kunci lain, isi diubah, `alg: none`, dan sesi `pending`.
+- Ditolak (`403`):
+  - peran tanpa izin, dan tercatat di audit;
+  - rangkap peran terlarang;
+  - peran yang diselipkan klien lewat parameter atau header;
+  - perubahan data lewat cookie;
+  - penyiap berkas yang menyetujui sendiri;
+  - Mitra PLS yang meminta akun lain.
+- Sumber peran: cache Backend API, `503` saat Clerk API gagal, dan konfigurasi tidak aman ditolak.
+
+**Belum dibangun / batas:**
+- Belum diuji dengan aplikasi Clerk sungguhan.
+- Sesi yang dicabut tetap lolos sampai token kedaluwarsa. Token sesi Clerk berumur pendek (umumnya sekitar 60 detik), dan pencabutan peran lewat Backend API berlaku paling lambat setelah cache 60 detik.
+- Belum ada pembatasan laju (rate limit), basis data, dan log audit permanen. Data server masih di memori dan hilang saat server dimulai ulang.
+- Belum ada HTTPS sendiri; server ini harus berada di belakang hosting/proxy HTTPS.
+- Pemindahan seluruh fitur Admin dan Kantor Maya ke API belum dilakukan. Halaman masih membaca data sintetis di peramban; baru penanda sesi yang memanggil server.

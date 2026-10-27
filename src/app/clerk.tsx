@@ -33,7 +33,7 @@ export function ClerkBridge({
 }
 
 function Bridge({ children }: { children: ReactNode }) {
-  const { isLoaded, isSignedIn, userId } = useAuth();
+  const { isLoaded, isSignedIn, userId, getToken } = useAuth();
   const { user } = useUser();
   const clerk = useClerk();
   const [failed, setFailed] = useState(false);
@@ -59,8 +59,9 @@ function Bridge({ children }: { children: ReactNode }) {
       mitraId: isSignedIn ? claims.mitraId : undefined,
       problems: isSignedIn ? claims.problems : [],
       signOut: () => clerk.signOut(),
+      getToken: () => getToken(),
     }),
-    [isLoaded, failed, isSignedIn, userId, user, claims, clerk],
+    [isLoaded, failed, isSignedIn, userId, user, claims, clerk, getToken],
   );
   return (
     <AuthCtx.Provider value={value}>

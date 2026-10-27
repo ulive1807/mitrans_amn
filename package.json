@@ -10,9 +10,11 @@
     "preview": "vite preview",
     "typecheck": "tsc -b",
     "test": "vitest run",
-    "simulate": "tsx scripts/simulate.ts"
+    "simulate": "tsx scripts/simulate.ts",
+    "server": "tsx server/main.ts"
   },
   "dependencies": {
+    "@clerk/backend": "2.33.7",
     "@clerk/clerk-react": "5.61.10",
     "react": "18.3.1",
     "react-dom": "18.3.1",

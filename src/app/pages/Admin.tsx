@@ -21,6 +21,7 @@ import { Badge, Kpi, Panel, ProtoRibbon, TopBar } from "../components/ui";
 import { dateLabel, monthLabel, num, pct, rp, rpShort } from "../format";
 import { currentRank, paidTotals, useDemo } from "../store";
 import { KasusSanksi } from "./AdminKasus";
+import { useServerCheck } from "../api";
 
 type Tab =
   | "terkendali"
@@ -55,6 +56,7 @@ export function Admin() {
   const visible = TABS.filter((t) => access.can(staffId, t.perm));
   const tab = visible.some((t) => t.id === want) ? want : visible[0]?.id;
   const me = access.user(staffId);
+  const server = useServerCheck();
   return (
     <>
       <ProtoRibbon />
@@ -65,6 +67,17 @@ export function Admin() {
             <b>{me.name}</b>
             <span>{me.roles.map((r) => ROLE_LABEL[r]).join(" · ")}</span>
           </div>
+          {server.state !== "demo" && (
+            <div className={`srv srv-${server.state === "ok" && server.cocok ? "ok" : server.state === "memeriksa" ? "wait" : "bad"}`} role="status">
+              {server.state === "memeriksa"
+                ? "Memeriksa sesi di server…"
+                : server.state === "gagal"
+                  ? `Server: ${server.pesan}`
+                  : server.cocok
+                    ? "Sesi & peran terverifikasi server"
+                    : "Peran di server berbeda; muat ulang halaman"}
+            </div>
+          )}
 {authMode === "demo" && (
             <>
                     <label className="sec" htmlFor="staff">
