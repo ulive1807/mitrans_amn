@@ -74,7 +74,7 @@ export const PLAN = {
   identityMonthlyCap: 1_000_000_000,
 
   // Bab 9
-  activeMinPersonalSales: 2,
+  activeMinPersonalSales: 1, // Keputusan Coach 27 Oktober 2026 (dokumen v1.2: 2)
   holdMonths: 2,
   subscriptionRequiredFromMonth: 4, // bulan ke-4 sejak aktivasi Lisensi
 

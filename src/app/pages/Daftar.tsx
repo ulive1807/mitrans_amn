@@ -205,7 +205,7 @@ export function Daftar() {
             <div className="callout info" style={{ margin: "12px 0" }}>
               Ringkasan: Mitra PLS adalah pelaku usaha mandiri, bukan karyawan
               Perusahaan. Penghasilan hanya dari penjualan nyata dan tidak
-              dijamin. Status aktif memerlukan 2 penjualan baru pribadi per
+              dijamin. Status aktif memerlukan paling sedikit 1 penjualan baru pribadi per
               bulan. <Link to="/aturan">Baca ringkasan aturan</Link>
             </div>
             {DOCS.map((d) => (

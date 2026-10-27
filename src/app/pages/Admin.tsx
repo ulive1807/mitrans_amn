@@ -108,7 +108,7 @@ function Ikhtisar({ reports }: { reports: MonthReport[] }) {
         <Kpi
           label="Mitra PLS aktif"
           value={`${num(last.activeMitra)} / ${num(last.totalMitra)}`}
-          sub={`${pct(last.totalMitra ? last.activeMitra / last.totalMitra : 0)} memenuhi 2 penjualan`}
+          sub={`${pct(last.totalMitra ? last.activeMitra / last.totalMitra : 0)} memenuhi syarat aktif`}
         />
       </div>
       <div className="row2">

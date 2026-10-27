@@ -515,7 +515,9 @@ export class MitransEngine {
 
   /** Tutup bulan berjalan dan semua bulan sebelum `month` (inklusif). */
   closeThrough(month: string): void {
-    this.advance(monthCloseAt(month));
+    const t = monthCloseAt(month);
+    if (wibDate(t) <= this.currentDay) return; // bulan itu sudah ditutup
+    this.advance(t);
   }
 
   // ---------------------------------------------------------------------------

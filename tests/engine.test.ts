@@ -188,20 +188,32 @@ describe("Sisa unit pasangan dipakai hari berikutnya (Lampiran B.2)", () => {
 });
 
 describe("Status aktif dan masa tunggu 2 bulan (Bab 9.1 dan 9.3)", () => {
+  // Keputusan Coach: aktif = paling sedikit 1 penjualan baru pribadi per bulan.
+  const feb = (type: BonusType) => entries("A", type).filter((e) => e.month === "2027-02");
   beforeEach(() => {
-    mitra("B", "A", jan(5), { leg: "L" }); // Januari: hanya 1 penjualan -> tidak aktif
-    mitra("C", "A", at("2027-02-05"), { leg: "R" }); // Februari: pasangan terbentuk, 1 penjualan -> tidak aktif
+    mitra("B", "A", jan(5), { leg: "L" });
+    mitra("C", "A", jan(5), { leg: "R" }); // Januari: A aktif
+    // Februari: A tidak menjual, tetapi jaringannya tumbuh di kedua kaki.
+    mitra("D", "B", at("2027-02-05"), { leg: "L" });
+    mitra("E", "C", at("2027-02-05"), { leg: "R" });
+  });
+
+  it("satu penjualan baru pribadi sudah membuat aktif", () => {
+    expect(engine.personalSales("2027-01").get("A")).toBe(2);
+    engine.closeThrough("2027-01");
+    expect(engine.isActive("A", "2027-01")).toBe(true);
+    expect(engine.isActive("B", "2027-01")).toBe(false);
   });
 
   it("bonus tim ditahan saat tidak aktif lalu dibayar bila aktif dalam 2 bulan berikutnya", () => {
     engine.closeThrough("2027-02");
-    const pair = entries("A", "PASANGAN")[0];
-    const level = entries("A", "LEVEL")[0];
+    expect(engine.isActive("A", "2027-02")).toBe(false);
+    const [pair] = feb("PASANGAN");
+    const [level] = feb("LEVEL");
     expect(pair.status).toBe("held");
     expect(level.status).toBe("held");
     expect(pair.holdUntil).toBe("2027-04");
     customer("P1", "A", at("2027-03-03"));
-    customer("P2", "A", at("2027-03-04"));
     engine.closeThrough("2027-03");
     expect(engine.isActive("A", "2027-03")).toBe(true);
     expect(pair.status).toBe("payable");
@@ -211,23 +223,14 @@ describe("Status aktif dan masa tunggu 2 bulan (Bab 9.1 dan 9.3)", () => {
 
   it("bonus hangus pada akhir bulan ke-2 dan masuk Pool Aktif", () => {
     engine.closeThrough("2027-04");
-    const pair = entries("A", "PASANGAN")[0];
-    expect(pair.status).toBe("forfeited");
-    const april = engine.report("2027-04")!;
-    expect(april.pool.forfeitedTeam).toBe(PLAN.pairBonus + PLAN.levelBonus);
+    expect(feb("PASANGAN")[0].status).toBe("forfeited");
+    expect(engine.report("2027-04")!.pool.forfeitedTeam).toBe(PLAN.pairBonus + PLAN.levelBonus);
   });
 
   it("pembelian untuk diri sendiri tidak dihitung", () => {
-    expect(engine.personalSales("2027-01").get("A")).toBe(1);
-    expect(() =>
-      engine.purchaseLicense({
-        saleId: "self",
-        buyerId: "A",
-        at: at("2027-02-10"),
-      }),
-    ).not.toThrow();
+    engine.purchaseLicense({ saleId: "self", buyerId: "A", at: at("2027-02-10") });
     // Lisensi kedua A dibeli lewat Sponsor-nya (struktural) dan tidak dihitung sebagai penjualan A.
-    expect(engine.personalSales("2027-02").get("A")).toBe(1);
+    expect(engine.personalSales("2027-02").get("A")).toBe(0);
   });
 });
 

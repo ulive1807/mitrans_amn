@@ -43,7 +43,7 @@ Prinsip implementasi:
 
 ## 3. Keputusan aturan yang tidak diatur dokumen
 
-Seluruh butir A1–A12 **diputuskan Coach pada 27 Oktober 2026**. Butir yang mengubah isi Rencana Pemasaran (terutama A1, A4, A10, A12) perlu dicantumkan di dokumen dan dikonfirmasi konsultan hukum sebelum diajukan.
+Seluruh butir A1–A13 **diputuskan Coach pada 27 Oktober 2026**. Butir yang mengubah isi Rencana Pemasaran (terutama A1, A4, A10, A12) perlu dicantumkan di dokumen dan dikonfirmasi konsultan hukum sebelum diajukan.
 
 | # | Hal | Keputusan | Kode |
 |---|---|---|---|
@@ -59,6 +59,7 @@ Seluruh butir A1–A12 **diputuskan Coach pada 27 Oktober 2026**. Butir yang men
 | A10 | Faktor plafon vs pembayaran Jumat | **Uang muka 80% setiap Jumat**, 20% ditahan sampai tutup bulan lalu dibayar sesuai faktor. Bila faktor < 80%, kelebihan uang muka dipotong dari pembayaran berikutnya | `PLAN.teamWeeklyAdvanceBp`, `advance`/`advanceDate` |
 | A11 | Pool Aktif melebihi ruang plafon Plan A | Dibawa ke bulan berikutnya | `poolCarry` |
 | A12 | Pembatalan setelah unit dipasangkan | **Tarik otomatis** Bonus Sponsor, Berkah, Level, Pasangan, dan Pembinaan dari Lisensi itu; unit pasangannya kembali menjadi sisa. Bila belum dibayar, entri dikurangi; bila sudah, dibuat entri penarikan negatif | `refundSale`, `reverseTeam` |
+| A13 | Syarat aktif (Bab 9.1) | **Paling sedikit 1 penjualan baru pribadi per bulan** (v1.2: 2), setelah perbandingan di `docs/VARIAN_AKTIF.md`. Perlu deteksi akun yang dikendalikan sendiri | `PLAN.activeMinPersonalSales`, `options.activeMinPersonalSales` |
 
 ## 4. Temuan dari pengujian yang perlu dibahas
 

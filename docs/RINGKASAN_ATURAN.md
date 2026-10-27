@@ -59,7 +59,7 @@ Syarat Plan B: Langganan sendiri aktif, pernah aktif, dan ≥1 kegiatan pembinaa
 
 ## 5. Status aktif dan masa tunggu
 
-- **Aktif** = ≥2 penjualan baru pribadi dalam bulan kalender: Lisensi Mitra PLS baru yang disponsori, Lisensi Pelanggan lewat tautannya, Langganan berbayar pertama Pelanggannya (sekali per Pelanggan).
+- **Aktif** = ≥1 penjualan baru pribadi dalam bulan kalender (keputusan Coach 27 Oktober 2026; v1.2: 2): Lisensi Mitra PLS baru yang disponsori, Lisensi Pelanggan lewat tautannya, Langganan berbayar pertama Pelanggannya (sekali per Pelanggan).
 - Tidak dihitung: pembelian sendiri, akun yang dikendalikan sendiri, pembelian yang dibatalkan.
 - Level, Pasangan, dan Pembinaan pada bulan tidak aktif **ditahan**; dibayar bila aktif dalam 2 bulan berikutnya; bila tidak, hangus ke Pool Aktif.
 - Mulai bulan ke-4 sejak aktivasi Lisensi, pemegang Lisensi wajib Langganan aktif untuk **bonus tim** (Level, Pasangan, Pembinaan). Bonus Sponsor dan Berkah selalu dibayar (keputusan A4).
