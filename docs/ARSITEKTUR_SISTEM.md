@@ -1,12 +1,12 @@
 # Rancangan Sistem Mitrans-Astra Mitra PLS
 
-Status: **prototipe**. Yang ada di repositori ini adalah engine komisi yang teruji, antarmuka web yang berjalan di peramban dengan data sintetis, dan rancangan untuk tahap produksi. Belum ada backend, basis data, autentikasi, pembayaran, maupun data nyata.
+Status: **prototipe**. Yang ada di repositori ini adalah engine komisi yang teruji, antarmuka web yang berjalan di peramban dengan data sintetis, dan rancangan untuk tahap produksi. Belum ada backend, basis data, pembayaran, maupun data nyata. Masuk OTP lewat Clerk sudah dibangun di sisi peramban dan aktif bila publishable key diisi (Bab 9).
 
 ## 1. Yang sudah dibangun
 
 | Bagian | Lokasi | Status |
 |---|---|---|
-| Engine komisi/PV (Plan A + Plan B, plafon, masa tunggu, konversi, pembatalan) | `src/engine/` | Teruji 54 uji unit/integrasi |
+| Engine komisi/PV (Plan A + Plan B, plafon, masa tunggu, konversi, pembatalan) | `src/engine/` | Teruji (100 uji di `tests/`) |
 | Simulasi jaringan buatan (cermin Bab 12.3) | `src/engine/simulation.ts`, `scripts/simulate.ts` | Hasil di `docs/HASIL_SIMULASI.md` |
 | Halaman depan | `/` | Selesai (prototipe) |
 | Ringkasan aturan (dibangun dari konstanta engine) | `/aturan` | Selesai |
@@ -16,6 +16,7 @@ Status: **prototipe**. Yang ada di repositori ini adalah engine komisi yang teru
 | Hak akses per peran, pemisahan tugas, maker-checker, log audit | `src/engine/access.ts`, `/admin` (Masuk sebagai, Pengguna & peran, Log audit) | Teruji (prototipe) |
 | Pemberitahuan tertulis dan tata cara sanksi | `src/engine/sanctions.ts`, `/admin` tab Kasus & sanksi, Kantor Maya tab Pemberitahuan | Teruji (prototipe) |
 | Deteksi akun yang dikendalikan sendiri + alur pemeriksaan | `src/engine/fraud.ts`, `/admin` tab Akun terkendali | Teruji (prototipe) |
+| Masuk dengan kode OTP (Clerk), pengaman `/admin` dan `/mitra` | `src/app/auth.tsx`, `src/app/clerk.tsx`, `src/app/guard.tsx`, `/masuk`, `src/engine/claims.ts` | Mode demo teruji; mode Clerk teruji sampai pemuatan dan penanganan gagal, **belum diuji dengan akun Clerk sungguhan** |
 
 ## 2. Arsitektur engine
 
@@ -207,4 +208,38 @@ Satu sumber aturan: `ROLE_PERMISSIONS` di `src/engine/access.ts`. Menu admin han
 
 **Log audit** mencatat masuk, tindakan berizin, perubahan peran (sebelum → sesudah), penampilan NIK, dan semua percobaan yang ditolak.
 
-**Belum dibangun (produksi):** autentikasi sungguhan (kata sandi + OTP/2FA, sesi kedaluwarsa), pemeriksaan izin di server API, log audit append-only di basis data, peninjauan hak akses berkala (mis. tiap 3 bulan), dan pemilihan "masuk sebagai" Mitra PLS di Kantor Maya yang dalam prototipe ini hanya untuk demo.
+**Belum dibangun (produksi):** pemeriksaan izin di server API (autentikasi OTP sisi peramban ada di Bab 9), log audit append-only di basis data, peninjauan hak akses berkala (mis. tiap 3 bulan), dan pemilihan "masuk sebagai" yang kini hanya tampil pada mode demo.
+
+## 9. Masuk dengan kode OTP (Clerk)
+
+**Dua mode, dipilih otomatis dari variabel lingkungan `VITE_CLERK_PUBLISHABLE_KEY`:**
+
+| | Mode demo (kunci kosong) | Mode Clerk (kunci diisi) |
+|---|---|---|
+| Cara masuk | Pemilih "masuk sebagai" (data sintetis) | Kode OTP 6 angka lewat surel atau SMS, tanpa kata sandi |
+| Sumber peran staf | `demoStaff()` | Clerk `publicMetadata.roles` |
+| Kantor Maya | Pilih Mitra PLS mana pun | Dikunci ke `publicMetadata.mitraId` (id atau kode Mitra PLS) |
+| Ubah peran dari layar | Ya (Admin Sistem) | Tidak; hanya dari server |
+| Pustaka Clerk diunduh | Tidak (dimuat terpisah) | Ya (±25 kB gzip + clerk-js dari Clerk) |
+
+**Alur `/masuk`.** Surel atau nomor HP (08…, 62…, +62… dinormalkan ke +62…) → `signIn.create` → kode dikirim (`prepareFirstFactor` `email_code`/`phone_code`) → 6 angka → `attemptFirstFactor` → bila akun mewajibkan faktor kedua: aplikasi autentikator (TOTP) atau SMS → `setActive` → kembali ke halaman asal. Kirim ulang dibatasi 60 detik. Pesan galat dalam bahasa Indonesia (kode salah, kedaluwarsa, terlalu banyak percobaan, belum terdaftar). Tujuan `?next=` hanya boleh jalur di situs ini (`safeNext`) untuk mencegah open redirect.
+
+**Pengaman halaman.** `/admin` memerlukan sesi dan minimal satu peran staf; `/mitra` memerlukan sesi dan `mitraId`. Tanpa sesi → dialihkan ke `/masuk?next=…`. Tanpa peran → halaman "Belum ada akses" beserta masalah metadata (mis. peran tidak dikenal). Bila Clerk gagal dimuat → pesan gagal, bukan layar kosong.
+
+**Peran dibaca secara fail-closed** (`claimsFromMetadata`): peran tidak dikenal diabaikan; rangkap terlarang (mis. Direksi + Pemeriksa Keberatan) membuat **semua** peran staf ditolak sampai diperbaiki. `publicMetadata` hanya dapat diubah dari server Clerk, bukan dari peramban pengguna. Contoh isi:
+
+```json
+{ "roles": ["kepatuhan"] }
+{ "mitraId": "M00042" }
+```
+
+**Yang perlu disiapkan Perusahaan di dasbor Clerk** (nama menu mengikuti dasbor Clerk saat itu; belum diverifikasi dari sesi ini karena situs Clerk tidak terjangkau jaringan sesi):
+1. Buat aplikasi Clerk terpisah untuk staging dan produksi; salin **publishable key** (`pk_test_…`/`pk_live_…`) ke pengaturan lingkungan hosting. **Secret key (`sk_…`) tidak pernah dimasukkan ke variabel `VITE_` atau kode peramban**, dan tidak ditempel di percakapan.
+2. Aktifkan masuk dengan kode verifikasi surel dan/atau SMS; matikan kata sandi bila ingin sepenuhnya tanpa kata sandi. SMS ke nomor Indonesia dapat dikenai biaya dan batasan negara oleh Clerk; periksa paket.
+3. Batasi pendaftaran (mode undangan/terbatas) agar staf tidak dapat mendaftar sendiri; peran hanya diberikan Admin Sistem lewat dasbor atau Backend API.
+4. Wajibkan faktor kedua untuk akun staf (terutama Keuangan dan Direksi) dan atur masa berlaku sesi yang pendek untuk staf.
+5. Tambahkan domain situs ke daftar domain yang diizinkan.
+
+**Batas yang harus diingat.** Pengaman di peramban hanya untuk pengalaman pengguna. Pada produksi, setiap permintaan API wajib memverifikasi token sesi Clerk di server dan membaca peran dari server, lalu memeriksa izin dengan `ROLE_PERMISSIONS` yang sama. Data Mitra PLS harus disaring di server menurut `mitraId`, bukan di peramban.
+
+**Status pengujian.** Mode demo: seluruh uji peramban sebelumnya lulus tanpa perubahan. Mode Clerk dengan kunci sintetis: pengalihan `/admin` menunggu sesi, `/masuk` menolak `next=//situs-lain`, dan saat Clerk tidak terjangkau halaman menampilkan pesan gagal. Alur OTP penuh (kirim kode, verifikasi, faktor kedua) **belum diuji** karena memerlukan aplikasi Clerk sungguhan dan akses jaringan ke Clerk.

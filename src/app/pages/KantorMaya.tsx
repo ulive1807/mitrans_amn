@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useAuthState } from "../auth";
 import { useSearchParams } from "react-router-dom";
 import {
   BONUS_LABEL,
@@ -51,11 +52,22 @@ export function KantorMaya() {
         .sort((a, b) => (totals.get(b.id) ?? 0) - (totals.get(a.id) ?? 0)),
     [engine, totals, version],
   );
-  const id = params.get("id") ?? mitraList[0]?.id;
+  const auth = useAuthState();
+  // Mode Clerk: Kantor Maya dikunci ke akun yang ditautkan (publicMetadata.mitraId = id atau kode Mitra PLS).
+  const linked =
+    auth.mode === "clerk" && auth.mitraId
+      ? (engine.accounts.get(auth.mitraId) ?? mitraList.find((m) => m.code === auth.mitraId))
+      : undefined;
+  const id = auth.mode === "clerk" ? linked?.id : (params.get("id") ?? mitraList[0]?.id);
   const acc = id ? engine.accounts.get(id) : undefined;
   const [tab, setTab] = useState<Tab>("ringkasan");
 
-  if (!acc) return <div className="page">Akun tidak ditemukan.</div>;
+  if (!acc)
+    return (
+      <div className="page">
+        {auth.mode === "clerk" ? `Akun Mitra PLS ${auth.mitraId ?? ""} tidak ditemukan. Hubungi Admin Sistem.` : "Akun tidak ditemukan."}
+      </div>
+    );
   const entries = engine.entriesFor(acc.id);
 
   return (
@@ -80,6 +92,8 @@ export function KantorMaya() {
               {t.label}
             </button>
           ))}
+          {auth.mode === "demo" && (
+            <>
           <div className="sec">Demo</div>
           <select
             aria-label="Pilih Mitra PLS demo"
@@ -100,6 +114,8 @@ export function KantorMaya() {
               </option>
             ))}
           </select>
+            </>
+          )}
         </aside>
         <main className="main">
           <div className="main-head">

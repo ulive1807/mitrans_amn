@@ -50,7 +50,7 @@ const TABS: { id: Tab; label: string; perm: Permission }[] = [
 ];
 
 export function Admin() {
-  const { reports, lastMonth, access, staffId, setStaffId } = useDemo();
+  const { reports, lastMonth, access, staffId, setStaffId, authMode } = useDemo();
   const [want, setTab] = useState<Tab>("ikhtisar");
   const visible = TABS.filter((t) => access.can(staffId, t.perm));
   const tab = visible.some((t) => t.id === want) ? want : visible[0]?.id;
@@ -65,7 +65,9 @@ export function Admin() {
             <b>{me.name}</b>
             <span>{me.roles.map((r) => ROLE_LABEL[r]).join(" · ")}</span>
           </div>
-          <label className="sec" htmlFor="staff">
+{authMode === "demo" && (
+            <>
+                    <label className="sec" htmlFor="staff">
             Demo: masuk sebagai
           </label>
           <select
@@ -80,6 +82,8 @@ export function Admin() {
               </option>
             ))}
           </select>
+            </>
+          )}
           <div className="sec">Menu sesuai peran</div>
           {visible.map((t) => (
             <button
@@ -1034,7 +1038,8 @@ function AkunTerkendali() {
 
 /** Pengguna & peran: hanya Admin Sistem; tidak dapat mengubah diri sendiri; pasangan peran terlarang ditolak. */
 function PenggunaPeran() {
-  const { access, staffId, now, bump } = useDemo();
+  const { access, staffId, now, bump, authMode } = useDemo();
+  const readOnly = authMode === "clerk";
   const [msg, setMsg] = useState("");
   const roles = Object.keys(ROLE_LABEL) as Role[];
   const toggle = (uid: string, r: Role) => {
@@ -1051,7 +1056,13 @@ function PenggunaPeran() {
   return (
     <>
       {msg && <div className="callout info" style={{ marginBottom: 12 }}>{msg}</div>}
-      <Panel title="Pengguna staf" hint="Centang untuk memberi atau mencabut peran">
+      {readOnly && (
+        <div className="callout info" style={{ marginBottom: 12 }}>
+          Mode Clerk: peran dibaca dari <code>publicMetadata.roles</code> dan hanya dapat diubah dari server (dasbor Clerk
+          atau Backend API oleh Admin Sistem), bukan dari peramban. Tabel ini hanya untuk dilihat.
+        </div>
+      )}
+      <Panel title="Pengguna staf" hint={readOnly ? "Hanya-baca" : "Centang untuk memberi atau mencabut peran"}>
         <div className="table-wrap">
           <table className="t">
             <thead>
@@ -1076,13 +1087,13 @@ function PenggunaPeran() {
                   <td className="muted">{u.title}</td>
                   {roles.map((r) => (
                     <td key={r} style={{ textAlign: "center" }}>
-                      <input type="checkbox" aria-label={`${u.name} ${ROLE_LABEL[r]}`} checked={u.roles.includes(r)} disabled={u.id === staffId} onChange={() => toggle(u.id, r)} />
+                      <input type="checkbox" aria-label={`${u.name} ${ROLE_LABEL[r]}`} checked={u.roles.includes(r)} disabled={readOnly || u.id === staffId} onChange={() => toggle(u.id, r)} />
                     </td>
                   ))}
                   <td>
                     <button
                       className="btn-secondary"
-                      disabled={u.id === staffId}
+                      disabled={readOnly || u.id === staffId}
                       onClick={() => {
                         try {
                           access.setActive(staffId, u.id, !u.active, now);

@@ -18,6 +18,7 @@ import {
   type MitransEngine,
   type MonthReport,
 } from "../engine";
+import { useAuthState } from "./auth";
 
 /**
  * Prototipe: seluruh data berjalan di peramban dari simulasi sintetis yang deterministik.
@@ -30,7 +31,9 @@ interface DemoState {
   cases: CaseManager;
   access: AccessControl;
   payouts: PayoutApprovals;
-  /** Staf yang sedang masuk (demo). */
+  /** "clerk": staf = pengguna Clerk yang masuk, peran dari server; "demo": pemilih "masuk sebagai". */
+  authMode: "clerk" | "demo";
+  /** Staf yang sedang masuk. */
   staffId: string;
   setStaffId: (id: string) => void;
   /** Waktu demo (09.00 WIB pada hari berjalan engine). */
@@ -53,7 +56,18 @@ export function DemoProvider({ children }: { children: ReactNode }) {
   }, []);
   const payouts = useMemo(() => new PayoutApprovals(access), [access]);
   const cases = useMemo(() => seedCases(result.engine, result.detector!, access), [result, access]);
-  const [staffId, setStaffIdRaw] = useState("u-budi");
+  const [demoStaffId, setStaffIdRaw] = useState("u-budi");
+  const auth = useAuthState();
+  // Mode Clerk: pengguna Clerk dicerminkan ke AccessControl dengan peran dari publicMetadata (sumber kebenaran: server).
+  const clerkStaff = auth.mode === "clerk" && auth.signedIn && auth.userId ? auth.userId : undefined;
+  const roleKey = auth.roles.join(",");
+  useMemo(() => {
+    if (!clerkStaff) return;
+    const first = !access.users.has(clerkStaff);
+    access.addUser({ id: clerkStaff, name: auth.name ?? "Pengguna", title: "Akun Clerk", roles: [...auth.roles], active: true });
+    if (first) access.record(clerkStaff, "Masuk (OTP Clerk)", atWib(result.engine.today, 9));
+  }, [access, clerkStaff, roleKey, auth.name]);
+  const staffId = clerkStaff ?? (auth.mode === "clerk" ? "" : demoStaffId);
   const [version, bump] = useReducer((x: number) => x + 1, 0);
   const value = useMemo<DemoState>(
     () => ({
@@ -62,6 +76,7 @@ export function DemoProvider({ children }: { children: ReactNode }) {
       cases,
       access,
       payouts,
+      authMode: auth.mode,
       staffId,
       setStaffId: (id: string) => {
         access.record(id, "Masuk (demo)", atWib(result.engine.today, 9));
@@ -73,7 +88,7 @@ export function DemoProvider({ children }: { children: ReactNode }) {
       version,
       bump,
     }),
-    [result, cases, access, payouts, staffId, version],
+    [result, cases, access, payouts, staffId, version, auth.mode],
   );
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

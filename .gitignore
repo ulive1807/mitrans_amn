@@ -3,3 +3,6 @@ dist
 *.tsbuildinfo
 .DS_Store
 simulation-output
+.env
+.env.local
+.env.*.local

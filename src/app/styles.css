@@ -242,6 +242,8 @@ input, select, textarea { font: inherit; color: inherit; }
 .topbar nav { display: flex; gap: 6px; margin-left: auto; font-size: 13.5px; flex-wrap: wrap; }
 .topbar nav a { padding: 7px 12px; border-radius: 999px; color: #c9d2cc; }
 .topbar nav a.active, .topbar nav a:hover { background: rgba(212,175,106,0.14); color: var(--gold-300); }
+.topbar nav .nav-out { padding: 7px 12px; border-radius: 999px; color: #c9d2cc; background: none; border: 1px solid rgba(212,175,106,0.3); font: inherit; cursor: pointer; white-space: nowrap; }
+.topbar nav .nav-out:hover { color: var(--gold-300); }
 .brandmark.sm { font-size: 20px; }
 .brandmark.sm svg { width: 24px; height: 24px; }
 
