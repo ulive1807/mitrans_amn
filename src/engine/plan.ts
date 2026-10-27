@@ -85,6 +85,9 @@ export const PLAN = {
   planACapBp: 5000, // 50% omzet bersih Lisensi
   planBCapBp: 4000, // 40% omzet bersih Langganan
 
+  // Keputusan A10 (27 Oktober 2026): bonus tim dibayar mingguan dengan cadangan ditahan sampai tutup bulan
+  teamWeeklyAdvanceBp: 8000, // 80% dibayar Jumat, 20% ditahan sampai faktor plafon diketahui
+
   // Bab 12.2 butir 4
   serviceFundPerLicense: 426_000,
 } as const;

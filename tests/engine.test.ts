@@ -301,14 +301,13 @@ describe("Syarat Langganan bulan ke-4 (Bab 9.2)", () => {
     });
     expect(engine.subscriptionConditionMet("A", "2027-04")).toBe(true);
   });
-  it("Bonus Sponsor bulan ke-4 tanpa Langganan ditahan (asumsi kerja)", () => {
-    customer("P1", "A", at("2027-04-05"));
+  it("keputusan A4: Bonus Sponsor bulan ke-4 tanpa Langganan tetap dibayar, bonus tim tetap mensyaratkan Langganan", () => {
+    mitra("B", "A", at("2027-04-05"), { leg: "L" });
+    mitra("C", "A", at("2027-04-05"), { leg: "R" });
     engine.closeThrough("2027-04");
-    const e = entries("A", "SPONSOR")[0];
-    expect(e.status).toBe("held");
-    expect(engine.report("2027-04")!.heldNoSubscription).toBe(
-      PLAN.sponsorBonus,
-    );
+    expect(entries("A", "SPONSOR").every((e) => e.status === "payable")).toBe(true);
+    expect(entries("A", "PASANGAN")[0].status).toBe("held");
+    expect(entries("A", "PASANGAN")[0].note).toMatch(/Langganan/);
   });
 });
 
@@ -379,5 +378,42 @@ describe("Waktu", () => {
   it("menolak peristiwa mundur", () => {
     engine.advance(jan(20));
     expect(() => customer("P", "A", jan(10))).toThrow(/mundur/);
+  });
+});
+
+describe("Keputusan A10: uang muka mingguan bonus tim", () => {
+  it("80% dibayar Jumat mingguan, 20% setelah tutup bulan", () => {
+    mitra("B", "A", jan(5), { leg: "L" });
+    mitra("C", "A", jan(5), { leg: "R" });
+    engine.closeThrough("2027-01");
+    const p = entries("A", "PASANGAN")[0];
+    expect(p).toMatchObject({ status: "payable", amount: 150_000, advance: 120_000, advanceDate: "2027-01-08", payoutDate: "2027-02-05" });
+    const runs = engine.payoutRuns();
+    expect(runs.find((r) => r.date === "2027-01-08")!.byType.PASANGAN).toBe(120_000);
+    expect(runs.find((r) => r.date === "2027-02-05")!.byType.PASANGAN).toBe(30_000);
+  });
+});
+
+describe("Keputusan A12: pembatalan menarik bonus tim otomatis", () => {
+  beforeEach(() => {
+    mitra("B", "A", jan(5), { leg: "L" });
+    mitra("C", "A", jan(5), { leg: "R" });
+    engine.advance(jan(6)); // pasangan A terbentuk
+  });
+  it("sebelum dibayar: Pasangan dan Level dari Lisensi itu dibatalkan, unit pasangannya kembali menjadi sisa", () => {
+    engine.refundSale("L-C", jan(9));
+    const pair = entries("A", "PASANGAN")[0];
+    expect(pair.status).toBe("clawback");
+    expect(pair.gross).toBe(0);
+    expect(entries("A", "LEVEL")[0].status).toBe("clawback");
+    const node = engine.nodes.get(engine.accounts.get("A")!.nodeId!)!;
+    expect(node.carry).toEqual({ L: 1, R: 0 });
+    expect(node.cumLicenses).toEqual({ L: 1, R: 0 });
+  });
+  it("sesudah dibayar: dibuat entri penarikan negatif", () => {
+    engine.closeThrough("2027-01");
+    const r = engine.refundSale("L-C", at("2027-02-03"));
+    expect(r.clawedBack).toBe(PLAN.sponsorBonus + PLAN.levelBonus + PLAN.pairBonus);
+    expect(entries("A", "PASANGAN").some((e) => e.status === "clawback" && e.amount === -PLAN.pairBonus)).toBe(true);
   });
 });

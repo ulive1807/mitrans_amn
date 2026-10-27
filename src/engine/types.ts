@@ -155,6 +155,9 @@ export interface LedgerEntry {
   /** Bulan penetapan (tutup bulan) atau Jumat mingguan. */
   settledMonth?: string;
   payoutDate?: string;
+  /** Uang muka bonus tim yang dibayar pada Jumat mingguan (keputusan A10). Sisanya dibayar pada `payoutDate`. */
+  advance?: number;
+  advanceDate?: string;
   saleId?: string;
   /** Untuk Bonus Pembinaan: generasi. Untuk Bonus Level: kedalaman. */
   ref?: number;

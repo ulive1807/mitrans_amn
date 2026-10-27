@@ -86,8 +86,7 @@ export function Aturan() {
                   {rp(PLAN.sponsorBonus)} per Lisensi yang dijual langsung
                 </td>
                 <td>
-                  Lunas, tidak dibatalkan; pemegang Lisensi bulan ke-4+ wajib
-                  Langganan aktif
+                  Lunas, tidak dibatalkan (tanpa syarat Langganan, keputusan A4)
                 </td>
               </tr>
               <tr>
@@ -204,6 +203,19 @@ export function Aturan() {
         <div className="card">
           <h2>5. Status aktif, masa tunggu, dan jadwal bayar</h2>
           <ul>
+            <li>
+              Bonus Sponsor dan Bonus Layanan Berkah selalu dibayar bila
+              penjualan lunas. Syarat Langganan aktif mulai bulan ke-4 hanya
+              berlaku untuk bonus tim.
+            </li>
+            <li>
+              Bonus tim dibayar 80% setiap Jumat; 20% sisanya setelah tutup
+              bulan sesuai faktor plafon.
+            </li>
+            <li>
+              Bila Lisensi dibatalkan, semua bonus yang timbul darinya ditarik
+              otomatis.
+            </li>
             <li>
               Aktif = paling sedikit {PLAN.activeMinPersonalSales} penjualan
               baru pribadi dalam satu bulan kalender (pembelian sendiri tidak

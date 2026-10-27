@@ -439,7 +439,11 @@ function BonusTable({ entries }: { entries: LedgerEntry[] }) {
                   <StatusBadge status={e.status} />
                 </td>
                 <td className="num">
-                  {e.payoutDate ? dateLabel(e.payoutDate) : "–"}
+                  {e.advance && e.advanceDate
+                    ? `${dateLabel(e.advanceDate)} (80%) · ${dateLabel(e.payoutDate!)}`
+                    : e.payoutDate
+                      ? dateLabel(e.payoutDate)
+                      : "–"}
                 </td>
                 <td className="muted" style={{ fontSize: 12.5 }}>
                   {e.note ??

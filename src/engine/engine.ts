@@ -121,6 +121,7 @@ export class MitransEngine {
   private customersWithPaidSubscription = new Set<string>();
   private licenseSalesByBuyer = new Map<string, string[]>();
   private entriesBySale = new Map<string, LedgerEntry[]>();
+  private entriesByAccount = new Map<string, LedgerEntry[]>();
   private activeByMonth = new Map<string, Set<string>>();
   private companyByMonth = new Map<string, number>();
   private clawbackByMonth = new Map<string, LedgerEntry[]>();
@@ -464,17 +465,31 @@ export class MitransEngine {
       );
       if (!stillHolds) buyer.licenseActivatedAt = undefined;
     }
-    let needsReview = false;
+    // Keputusan A12: bonus tim dari Lisensi yang dibatalkan ditarik otomatis.
     if (sale.kind === "license" && sale.volumeNodeId && sale.countedBy) {
       this.walkUp(sale.volumeNodeId, (anc, side) => {
         if (!sale.countedBy!.has(anc.id)) return;
         anc.cumLicenses[side] = Math.max(0, anc.cumLicenses[side] - 1);
         if (anc.todayIn[side] > 0) anc.todayIn[side]--;
         else if (anc.carry[side] > 0) anc.carry[side]--;
-        else needsReview = true; // unit sudah dipasangkan
+        else {
+          // Unit sudah dipasangkan: batalkan satu pasangan, unit pasangannya kembali menjadi sisa.
+          const other: Side = side === "L" ? "R" : "L";
+          anc.carry[other]++;
+          this.touchedToday.add(anc.id);
+          clawedBack += this.reverseTeam(anc.accountId, "PASANGAN", PLAN.pairBonus, at, saleId);
+          let cur = this.accounts.get(anc.accountId)!;
+          for (let gen = 1; gen <= PLAN.pembinaanRatesBp.length && cur.sponsorId; gen++) {
+            const sponsor = this.accounts.get(cur.sponsorId)!;
+            if (sponsor.nodeId) {
+              clawedBack += this.reverseTeam(sponsor.id, "PEMBINAAN", applyBp(PLAN.pairBonus, pembinaanRateBp(gen)), at, saleId);
+            }
+            cur = sponsor;
+          }
+        }
       });
     }
-    return { clawedBack, needsReview };
+    return { clawedBack, needsReview: false };
   }
 
   // ---------------------------------------------------------------------------
@@ -582,7 +597,7 @@ export class MitransEngine {
   }
 
   entriesFor(accountId: string): LedgerEntry[] {
-    return this.ledger.filter((e) => e.accountId === accountId);
+    return this.entriesByAccount.get(accountId) ?? [];
   }
 
   report(month: string): MonthReport | undefined {
@@ -607,15 +622,23 @@ export class MitransEngine {
     >();
     for (const e of this.ledger) {
       if (e.status !== "payable" || !e.payoutDate || e.amount === 0) continue;
+      if (e.advance && e.advanceDate) {
+        const a = runs.get(e.advanceDate) ?? { date: e.advanceDate, total: 0, count: 0, byType: emptyByType() };
+        a.total += e.advance;
+        a.count++;
+        a.byType[e.type] += e.advance;
+        runs.set(e.advanceDate, a);
+      }
+      const rest = e.amount - (e.advance ?? 0);
       const r = runs.get(e.payoutDate) ?? {
         date: e.payoutDate,
         total: 0,
         count: 0,
         byType: emptyByType(),
       };
-      r.total += e.amount;
+      r.total += rest;
       r.count++;
-      r.byType[e.type] += e.amount;
+      r.byType[e.type] += rest;
       runs.set(e.payoutDate, r);
     }
     return [...runs.values()].sort((a, b) => a.date.localeCompare(b.date));
@@ -864,6 +887,9 @@ export class MitransEngine {
   private pushEntry(e: Omit<LedgerEntry, "id">): LedgerEntry {
     const entry: LedgerEntry = { id: this.nextEntryId++, ...e };
     this.ledger.push(entry);
+    const byAcc = this.entriesByAccount.get(entry.accountId) ?? [];
+    byAcc.push(entry);
+    this.entriesByAccount.set(entry.accountId, byAcc);
     if (entry.saleId) {
       const list = this.entriesBySale.get(entry.saleId) ?? [];
       list.push(entry);
@@ -979,6 +1005,37 @@ export class MitransEngine {
     }
   }
 
+  /**
+   * Kurangi bonus tim karena pembatalan: potong dulu entri sejenis yang belum dibayar (menunggu/ditahan);
+   * bila sudah dibayar, buat entri penarikan negatif. Mengembalikan nominal yang ditarik dari yang sudah dibayar.
+   */
+  private reverseTeam(accountId: string, type: BonusType, amount: number, at: number, saleId: string): number {
+    const acc = this.accounts.get(accountId)!;
+    if (acc.role === "struktural" || amount <= 0) return 0;
+    const list = this.entriesByAccount.get(accountId) ?? [];
+    for (let k = list.length - 1; k >= 0; k--) {
+      const e = list[k];
+      if (e.type !== type || e.gross < amount || (e.status !== "pending" && e.status !== "held")) continue;
+      e.gross -= amount;
+      e.note = `${e.note ? e.note + "; " : ""}dikurangi ${amount} atas pembatalan ${saleId}`;
+      if (e.gross === 0) e.status = "clawback";
+      return 0;
+    }
+    this.pushEntry({
+      accountId,
+      nik: acc.nik,
+      type,
+      gross: -amount,
+      amount: -amount,
+      status: "clawback",
+      month: wibMonth(at),
+      accruedAt: at,
+      saleId,
+      note: `Penarikan ${type} atas pembatalan ${saleId}`,
+    });
+    return amount;
+  }
+
   // ---------------------------------------------------------------------------
   // Tutup bulan
 
@@ -1027,16 +1084,8 @@ export class MitransEngine {
       const sale = this.sales.get(e.saleId!)!;
       const due = addDays(sale.at, PLAN.berkahMaturityDays);
       if (sale.orientationConfirmedAt !== undefined && due <= closeAt) {
-        if (this.subscriptionConditionMet(e.accountId, month)) {
-          settle(
-            e,
-            e.gross,
-            payoutFriday(Math.max(due, sale.orientationConfirmedAt)),
-          );
-        } else {
-          heldNoSubscription += e.gross;
-          hold(e, "Langganan penjual tidak aktif (bulan ke-4+)");
-        }
+        // Keputusan A4: Berkah selalu dibayar tanpa syarat Langganan penjual.
+        settle(e, e.gross, payoutFriday(Math.max(due, sale.orientationConfirmedAt)));
       } else if (
         sale.orientationConfirmedAt === undefined &&
         addDays(sale.at, PLAN.berkahConfirmDeadlineDays) < closeAt
@@ -1056,12 +1105,8 @@ export class MitransEngine {
     for (const e of this.pendingByMonth.get(month) ?? []) {
       if (e.status !== "pending") continue;
       if (e.type === "SPONSOR") {
-        if (this.subscriptionConditionMet(e.accountId, month)) {
-          settle(e, e.gross, payoutFriday(e.accruedAt));
-        } else {
-          heldNoSubscription += e.gross;
-          hold(e, "Langganan penjual tidak aktif (bulan ke-4+)");
-        }
+        // Keputusan A4: Bonus Sponsor selalu dibayar; syarat Langganan hanya untuk bonus jaringan.
+        settle(e, e.gross, payoutFriday(e.accruedAt));
       } else if (TEAM_TYPES.includes(e.type)) {
         const ok =
           isActive(e.accountId) &&
@@ -1152,11 +1197,15 @@ export class MitransEngine {
       const pay = teamFactor >= 1 ? e.gross : Math.floor(e.gross * teamFactor);
       const becameActive = ms.becameActiveAt.get(e.accountId) ?? e.accruedAt;
       const weekly = payoutFriday(Math.max(e.accruedAt, becameActive));
-      settle(
-        e,
-        pay,
-        teamFactor >= 1 && e.month === month ? weekly : closeFriday,
-      );
+      settle(e, pay, closeFriday);
+      if (e.month === month) {
+        // Keputusan A10: uang muka mingguan, sisanya setelah faktor plafon diketahui.
+        e.advance = Math.min(applyBp(e.gross, PLAN.teamWeeklyAdvanceBp), e.gross);
+        e.advanceDate = weekly;
+        if (pay < e.advance) {
+          e.note = `Uang muka melebihi hak setelah faktor plafon; selisih ${e.advance - pay} dipotong dari pembayaran berikutnya`;
+        }
+      }
       if (pay < e.gross) {
         e.note = `Faktor plafon ${(teamFactor * 100).toFixed(2)}%`;
         this.teamCarry.push(this.carryEntry(e, e.gross - pay, month));

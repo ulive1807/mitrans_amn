@@ -41,22 +41,24 @@ Prinsip implementasi:
 - **Waktu WIB**: tanggal, bulan, dan batas Jumat 07.00 WIB (= Jumat 00.00 UTC) dihitung di `time.ts`.
 - **Parameter terpusat** di `plan.ts`. Halaman `/aturan` membaca konstanta yang sama.
 
-## 3. Asumsi kerja (dokumen tidak mengatur; perlu keputusan Coach)
+## 3. Keputusan aturan yang tidak diatur dokumen
 
-| # | Hal | Pilihan di engine | Cara mengubah |
+Seluruh butir A1–A12 **diputuskan Coach pada 27 Oktober 2026**. Butir yang mengubah isi Rencana Pemasaran (terutama A1, A4, A10, A12) perlu dicantumkan di dokumen dan dikonfirmasi konsultan hukum sebelum diajukan.
+
+| # | Hal | Keputusan | Kode |
 |---|---|---|---|
-| A1 | Penempatan posisi baru di jaringan biner | **Diputuskan Coach (27 Oktober 2026): kaki kecil, ujung luar.** Posisi baru masuk kaki Sponsor yang Lisensinya lebih sedikit, di ujung terluar kaki itu. Perlu dicantumkan di Rencana Pemasaran dan dikonfirmasi konsultan hukum | `options.placement = 'weaker-leg'` |
-| A2 | Sponsor tanpa posisi (Mitra PLS tanpa Lisensi) mensponsori Mitra PLS yang membeli Lisensi | Posisi baru ditempatkan di bawah posisi terdekat pada garis Sponsor | `volumeNodeFor` |
+| A1 | Penempatan posisi baru di jaringan biner | Kaki Sponsor yang Lisensinya lebih sedikit, di ujung terluar kaki itu | `options.placement = 'weaker-leg'` |
+| A2 | Sponsor tanpa Lisensi mensponsori Mitra PLS yang membeli Lisensi | Posisi baru di bawah posisi terdekat pada garis Sponsor (aturan A1 tetap berlaku) | `volumeNodeFor` |
 | A3 | Volume Lisensi Pelanggan dari penjual tanpa posisi | Dicatat di posisi terdekat pada garis Sponsor penjual | `volumeNodeFor` |
-| A4 | Bonus Sponsor/Berkah pemegang Lisensi bulan ke-4+ tanpa Langganan | Ditahan 2 bulan seperti bonus tim, lalu hangus ke Pool Aktif | `closeMonth` langkah 2–3 |
-| A5 | "Langganan sendiri aktif" untuk Plan B pada bulan 1–3 | Masa akses Lisensi dianggap aktif | `options.planBRequiresPaidSubscription` |
-| A6 | Konversi: upline di antara posisi baru dan Sponsor | Ikut menghitung (belum pernah menghitung Lisensi itu) | `countedBy` |
+| A4 | Bonus Sponsor/Berkah pemegang Lisensi bulan ke-4+ tanpa Langganan | **Selalu dibayar.** Syarat Langganan hanya untuk bonus jaringan (saran Catatan Hukum butir 4). Teks Bab 9.2 perlu diubah | `closeMonth` langkah 1–2 |
+| A5 | "Langganan sendiri aktif" untuk Plan B pada bulan 1–3 | Masa akses Lisensi dianggap aktif | `options.planBRequiresPaidSubscription = false` |
+| A6 | Konversi: upline di antara posisi baru dan Sponsor | Ikut menghitung (setiap Lisensi dihitung sekali per upline) | `countedBy` |
 | A7 | Generasi Pembinaan melewati Mitra PLS tanpa Lisensi | Tanpa kompresi: bagian generasi itu tidak dibayarkan | `accruePembinaan` |
-| A8 | Klaim Prestasi yang tidak muat di dana bulan ini | Urutan ketat: klaim berikutnya ikut menunggu walau nominalnya lebih kecil | `closeMonth` langkah 5 |
-| A9 | Kelebihan batas Rp1 miliar dari Plan B, sisa Royalti RO, faktor Plan B | Tidak dibawa; tetap pada Perusahaan | `closeMonth` langkah 9 |
-| A10 | Faktor plafon vs pembayaran Jumat | Faktor ditetapkan saat tutup bulan. Bila faktor < 100%, bonus tim dibayar pada Jumat tutup bulan, bukan mingguan | `closeMonth` langkah 4 |
-| A11 | Pool Aktif melebihi ruang plafon Plan A | Sisanya dibawa ke bulan berikutnya | `poolCarry` |
-| A12 | Pembatalan setelah unit dipasangkan | Volume dan saldo dikurangi; bonus pasangan yang sudah timbul ditandai untuk ditinjau admin | `refundSale().needsReview` |
+| A8 | Klaim Prestasi yang tidak muat di dana bulan ini | Urutan ketat | `closeMonth` langkah 5 |
+| A9 | Kelebihan plafon Plan B, batas per identitas Plan B, sisa Royalti RO | Tetap pada Perusahaan | `closeMonth` langkah 9 |
+| A10 | Faktor plafon vs pembayaran Jumat | **Uang muka 80% setiap Jumat**, 20% ditahan sampai tutup bulan lalu dibayar sesuai faktor. Bila faktor < 80%, kelebihan uang muka dipotong dari pembayaran berikutnya | `PLAN.teamWeeklyAdvanceBp`, `advance`/`advanceDate` |
+| A11 | Pool Aktif melebihi ruang plafon Plan A | Dibawa ke bulan berikutnya | `poolCarry` |
+| A12 | Pembatalan setelah unit dipasangkan | **Tarik otomatis** Bonus Sponsor, Berkah, Level, Pasangan, dan Pembinaan dari Lisensi itu; unit pasangannya kembali menjadi sisa. Bila belum dibayar, entri dikurangi; bila sudah, dibuat entri penarikan negatif | `refundSale`, `reverseTeam` |
 
 ## 4. Temuan dari pengujian yang perlu dibahas
 
@@ -111,7 +113,7 @@ NIK disimpan terenkripsi dan di-hash untuk pencarian keunikan (UU 27/2022). Reke
 
 ### 5.4 Urutan kerja yang disarankan
 
-1. Keputusan konsultan hukum atas butir 1–9 Catatan Hukum dan keputusan Coach atas asumsi A2–A12 (A1 sudah diputuskan).
+1. Keputusan konsultan hukum atas butir 1–9 Catatan Hukum, dan pencantuman keputusan A1–A12 ke Rencana Pemasaran.
 2. Backend + PostgreSQL + autentikasi, memindahkan engine ke server.
 3. Integrasi e-KYC dan payment gateway di **staging**.
 4. Uji paralel: tutup bulan dihitung engine dan dicek manual oleh Keuangan selama minimal 2 siklus.

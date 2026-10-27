@@ -34,7 +34,7 @@ Kolom **Kode** menunjukkan tempat aturan dijalankan engine (`src/engine/`).
 
 | Bonus | Nominal | Batas | Penerima | Kode |
 |---|---|---|---|---|
-| Sponsor | Rp750.000 per Lisensi dijual langsung | – | Penjual | `purchaseLicense` |
+| Sponsor | Rp750.000 per Lisensi dijual langsung | Selalu dibayar bila lunas (A4) | Penjual | `purchaseLicense` |
 | Layanan Berkah | Rp50.000 per Lisensi kepada Pelanggan (termasuk yang dikonversi) | Konfirmasi orientasi + 30 hari; tanpa konfirmasi 60 hari → Pool | Penjual | `closeMonth` langkah 1 |
 | Level | Rp750.000 sekali per kedalaman 1–10 saat kedua kaki pertama kali berisi Lisensi **Mitra PLS** | Rp7.500.000 seumur keanggotaan | Pemegang posisi | `markLevel` |
 | Pasangan | Rp150.000 per pasangan | 10 level; 20 pasangan/hari; sisa unit dibawa | Pemegang posisi | `pairDay`, `endOfDay` |
@@ -62,7 +62,9 @@ Syarat Plan B: Langganan sendiri aktif, pernah aktif, dan ≥1 kegiatan pembinaa
 - **Aktif** = ≥2 penjualan baru pribadi dalam bulan kalender: Lisensi Mitra PLS baru yang disponsori, Lisensi Pelanggan lewat tautannya, Langganan berbayar pertama Pelanggannya (sekali per Pelanggan).
 - Tidak dihitung: pembelian sendiri, akun yang dikendalikan sendiri, pembelian yang dibatalkan.
 - Level, Pasangan, dan Pembinaan pada bulan tidak aktif **ditahan**; dibayar bila aktif dalam 2 bulan berikutnya; bila tidak, hangus ke Pool Aktif.
-- Mulai bulan ke-4 sejak aktivasi Lisensi, pemegang Lisensi wajib Langganan aktif untuk Bonus Sponsor, Berkah, dan bonus tim.
+- Mulai bulan ke-4 sejak aktivasi Lisensi, pemegang Lisensi wajib Langganan aktif untuk **bonus tim** (Level, Pasangan, Pembinaan). Bonus Sponsor dan Berkah selalu dibayar (keputusan A4).
+- Bonus tim dibayar 80% setiap Jumat; 20% setelah tutup bulan sesuai faktor plafon (keputusan A10).
+- Pembatalan menarik otomatis semua bonus yang timbul dari Lisensi itu (keputusan A12).
 
 ## 6. Plafon dan batas
 
