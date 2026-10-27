@@ -13,6 +13,7 @@ Status: **prototipe**. Yang ada di repositori ini adalah engine komisi yang teru
 | Pendaftaran Mitra PLS + kuis Kode Etik | `/daftar` | Selesai (data hanya di memori peramban) |
 | Kantor Maya Mitra PLS | `/mitra` | Selesai (data sintetis) |
 | Dasbor admin | `/admin` | Selesai (data sintetis, tanpa otorisasi) |
+| Pemberitahuan tertulis dan tata cara sanksi | `src/engine/sanctions.ts`, `/admin` tab Kasus & sanksi, Kantor Maya tab Pemberitahuan | Teruji (prototipe) |
 | Deteksi akun yang dikendalikan sendiri + alur pemeriksaan | `src/engine/fraud.ts`, `/admin` tab Akun terkendali | Teruji (prototipe) |
 
 ## 2. Arsitektur engine
@@ -151,4 +152,33 @@ Dasar: Rencana Pemasaran 9.1 (pembelian oleh akun yang dikendalikan sendiri tida
 
 **Hasil uji pada data demo sintetis** (`tests/fraud.test.ts`): semua pembelian oleh akun terkendali tertangkap sebagai kuat, dan tidak ada keluarga serumah yang ditandai kuat. Data nyata akan lebih bising; ambang perlu dievaluasi ulang setelah 3 bulan operasi dengan sampel yang diperiksa manual.
 
-**Belum dibangun:** pemberitahuan tertulis otomatis, pencatatan penjelasan Mitra PLS dan keputusan berjenjang (Pasal 21 angka 4), sidik perangkat nyata, dan pola waktu (mis. beli–batal berulang di sekitar tutup bulan).
+**Belum dibangun:** sidik perangkat nyata dan pola waktu (mis. beli–batal berulang di sekitar tutup bulan). Pemberitahuan tertulis dan tata cara sanksi ada di bagian 7.
+
+## 7. Pemberitahuan tertulis dan tata cara sanksi
+
+Dasar: Kode Etik Pasal 7, 9 angka 2, 15, 18, 20, 21, 22.
+
+| Langkah | Aturan | Surat |
+|---|---|---|
+| 1. Kasus dibuka | Wajib menyebut dugaan Pasal 18 dan bukti (Ps. 21.1). Penjualan terkait ditunda bayar ≤30 hari (Ps. 9.2) | Surat Pemberitahuan Dugaan Pelanggaran (`PDP`); Pemberitahuan Penundaan Pembayaran (`PTB`) |
+| 2. Penjelasan | Mitra PLS mengirim lewat Kantor Maya paling lama 14 hari (Ps. 21.2); setelah itu admin dapat mencatat "tanpa penjelasan" | – |
+| 3. Keputusan | Paling lambat 14 hari setelah penjelasan, beralasan tertulis (Ps. 21.3); keterlambatan ditandai | Surat Keputusan (`KEP`) |
+| 4. Keberatan | Sekali, ≤14 hari setelah keputusan; diperiksa pejabat yang bukan pembuka kasus dan bukan pemutus pertama (Ps. 21.4) | Surat Keputusan atas Keberatan (`KKB`) |
+| 5. Final | Keberatan diputus, atau masa keberatan lewat (`tick`) | – |
+
+Nomor surat: `001/KEP-PLS/XI/2026` (urut per jenis per tahun). Surat dikirim ke Kantor Maya dan surel terdaftar; waktu dibaca tercatat saat Mitra PLS membuka halaman Pemberitahuan. Setiap langkah tercatat di jejak kasus.
+
+**Sanksi (Ps. 20) dan akibatnya di engine.**
+
+| Sanksi | Akibat | Kapan berlaku |
+|---|---|---|
+| Teguran tertulis | Tercatat | Saat keputusan |
+| Penarikan | `confirmControlled` untuk penjualan terkait: komisi, volume, dan bila perlu status aktif bulan itu ditarik | Saat keputusan |
+| Pembekuan ≤3 bulan | Tautan rujukan tidak dapat dipakai; komisi yang sudah menjadi hak tetap dihitung | Saat keputusan |
+| Pemutusan | Keanggotaan berakhir; komisi yang sudah menjadi hak tetap dibayar (Ps. 7); hak pembelian kembali (Ps. 15) | **Setelah final**, agar hak keberatan bermakna |
+
+Pemutusan langsung hanya untuk pelanggaran berat Pasal 18 angka 1, 2, 4, 9, 12, 15, 16, atau setelah 2 sanksi final sebelumnya. Bila keberatan mencabut pembekuan atau pemutusan, engine memulihkannya otomatis. Bila keberatan mencabut **penarikan**, pembayaran koreksi dicatat sebagai tindak lanjut manual untuk Keuangan.
+
+**Perlu dikonfirmasi konsultan hukum:** (a) penundaan berlaku pemutusan sampai final, sementara sanksi lain langsung berlaku; (b) ambang eskalasi 2 sanksi final; (c) surat elektronik melalui Kantor Maya dan surel cukup sebagai "pemberitahuan tertulis".
+
+**Belum dibangun:** pengiriman surel sungguhan, lampiran bukti berkas, tanda tangan elektronik pejabat, dan hak akses per peran (Kepatuhan, Direksi, pemeriksa keberatan).

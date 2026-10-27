@@ -13,9 +13,11 @@ import { BarChart, LineChart } from "../components/Chart";
 import { Badge, Kpi, Panel, ProtoRibbon, TopBar } from "../components/ui";
 import { dateLabel, monthLabel, num, pct, rp, rpShort } from "../format";
 import { currentRank, paidTotals, useDemo } from "../store";
+import { KasusSanksi } from "./AdminKasus";
 
 type Tab =
   | "terkendali"
+  | "kasus"
   | "ikhtisar"
   | "tutup"
   | "jumat"
@@ -31,6 +33,7 @@ const TABS: { id: Tab; label: string }[] = [
   { id: "dana", label: "Pool & Prestasi" },
   { id: "kepatuhan", label: "Kepatuhan" },
   { id: "terkendali", label: "Akun terkendali" },
+  { id: "kasus", label: "Kasus & sanksi" },
   { id: "simulasi", label: "Simulasi engine" },
 ];
 
@@ -77,6 +80,7 @@ export function Admin() {
           {tab === "dana" && <Dana reports={reports} />}
           {tab === "kepatuhan" && <Kepatuhan />}
           {tab === "terkendali" && <AkunTerkendali />}
+          {tab === "kasus" && <KasusSanksi />}
           {tab === "simulasi" && <Simulasi />}
         </main>
       </div>
@@ -625,10 +629,9 @@ function Kepatuhan() {
           </li>
         </ul>
         <p className="muted" style={{ fontSize: 13 }}>
-          Deteksi akun yang dikendalikan sendiri ada di tab Akun terkendali.
-          Belum dibangun: verifikasi e-KTP, pemberitahuan tertulis otomatis,
-          dan pencatatan penjelasan Mitra PLS untuk tata cara sanksi Pasal
-          20–21.
+          Deteksi akun yang dikendalikan sendiri ada di tab Akun terkendali;
+          surat dan tata cara sanksi Pasal 20–21 ada di tab Kasus & sanksi.
+          Belum dibangun: verifikasi e-KTP dan pengiriman surel sungguhan.
         </p>
       </Panel>
     </>
@@ -775,7 +778,7 @@ const DAY = 86_400_000;
 
 /** Deteksi akun yang dikendalikan sendiri (Rencana Pemasaran 9.1; Kode Etik Pasal 9, 18, 21). */
 function AkunTerkendali() {
-  const { engine, detector, version, bump } = useDemo();
+  const { engine, detector, cases, version, bump } = useDemo();
   const [level, setLevel] = useState<"kuat" | "sedang" | "semua">("kuat");
   const [msg, setMsg] = useState("");
   const flags = useMemo(() => detector.scan(engine), [engine, detector, version]);
@@ -814,7 +817,7 @@ function AkunTerkendali() {
         <Kpi label="Terkonfirmasi" value={num([...engine.sales.values()].filter((x) => x.controlled).length)} sub={`${num(clusters.length)} klaster akun terkait kuat`} />
       </div>
       <div className="callout info" style={{ marginBottom: 16 }}>
-        Deteksi hanya membuka pemeriksaan, bukan sanksi. Tata cara Kode Etik Pasal 21: pemberitahuan tertulis beserta bukti, penjelasan Mitra PLS paling lama 14 hari,
+        Deteksi hanya menjadi dasar membuka kasus, bukan sanksi. Tata cara Kode Etik Pasal 21: pemberitahuan tertulis beserta bukti, penjelasan Mitra PLS paling lama 14 hari,
         lalu keputusan dengan alasan tertulis. Selama diperiksa, penjualan tetap dihitung untuk status aktif; hanya Bonus Sponsor dan Berkah penjualan itu yang ditunda,
         paling lama 30 hari (Pasal 9 angka 2).
       </div>
@@ -873,29 +876,32 @@ function AkunTerkendali() {
                       )}
                     </td>
                     <td style={{ whiteSpace: "nowrap" }}>
-                      {!s.controlled && !s.cancelled && (!r || r.dismissedAt || r.expiredAt) && (
-                        <button className="btn-secondary" onClick={() => act(() => (engine.openReview(f.saleId, now, f.reasons.join(", ")), "Pemeriksaan dibuka. Kirim pemberitahuan tertulis kepada Mitra PLS."))}>
-                          Buka pemeriksaan
-                        </button>
-                      )}
-                      {openNow && (
-                        <>
-                          <button className="btn-secondary" onClick={() => act(() => (engine.dismissReview(f.saleId, now), "Pemeriksaan ditutup: tidak terbukti. Bonus dibayar pada tutup bulan berikutnya."))}>
-                            Tidak terbukti
-                          </button>{" "}
+                      {(() => {
+                        const kasus = cases.cases.find((c) => c.saleIds.includes(f.saleId));
+                        if (kasus) return <Badge tone="info">Kasus {kasus.id}</Badge>;
+                        if (s.controlled || s.cancelled) return null;
+                        return (
                           <button
-                            className="btn-primary"
+                            className="btn-secondary"
                             onClick={() =>
                               act(() => {
-                                const x = engine.confirmControlled(f.saleId, now);
-                                return `Pelanggaran dikonfirmasi. Ditarik ${rp(x.clawedBack)} yang sudah dibayar${x.activeRevoked ? "; status aktif bulan itu dicabut" : ""}.`;
+                                const c = cases.openCase({
+                                  accountId: f.sellerId,
+                                  violations: [12],
+                                  allegation: `Penjualan ${f.saleId} diduga dibeli oleh akun yang dikendalikan penjual untuk memenuhi status aktif.`,
+                                  evidence: [...f.reasons.map((x) => `${x} antara akun penjual dan pembeli`), `Skor keterkaitan ${Math.round(f.score * 100)}% (deteksi otomatis)`],
+                                  saleIds: [f.saleId],
+                                  actor: "Kepatuhan (demo)",
+                                  at: now,
+                                });
+                                return `Kasus ${c.id} dibuka; surat pemberitahuan dan penundaan dikirim. Lanjutkan di tab Kasus & sanksi.`;
                               })
                             }
                           >
-                            Konfirmasi
+                            Buka kasus
                           </button>
-                        </>
-                      )}
+                        );
+                      })()}
                     </td>
                   </tr>
                 );

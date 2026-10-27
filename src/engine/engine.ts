@@ -565,6 +565,32 @@ export class MitransEngine {
     return { clawedBack, activeRevoked };
   }
 
+  /** Pembekuan keanggotaan (sanksi). Komisi yang sudah menjadi hak tetap dihitung. */
+  freezeAccount(accountId: string, until: number): void {
+    this.mustAccount(accountId).frozenUntil = until;
+  }
+
+  unfreezeAccount(accountId: string): void {
+    this.mustAccount(accountId).frozenUntil = undefined;
+  }
+
+  /**
+   * Pemutusan keanggotaan (Kode Etik Pasal 7 dan 20). Komisi yang sudah menjadi hak tetap dibayarkan,
+   * kecuali yang diperoleh dari pelanggaran (ditarik melalui confirmControlled).
+   */
+  terminateAccount(accountId: string, at: number): void {
+    this.advance(at);
+    const acc = this.mustAccount(accountId);
+    acc.terminated = true;
+    acc.terminatedAt = at;
+  }
+
+  reinstateAccount(accountId: string): void {
+    const acc = this.mustAccount(accountId);
+    acc.terminated = false;
+    acc.terminatedAt = undefined;
+  }
+
   /** Penjualan dengan pemeriksaan terbuka. */
   openReviews(): Sale[] {
     return [...this.sales.values()].filter((s) => s.review && !s.review.dismissedAt && !s.review.confirmedAt && !s.review.expiredAt);
@@ -777,6 +803,8 @@ export class MitransEngine {
       throw new EngineError("Penjual harus Mitra PLS");
     if (seller.terminated)
       throw new EngineError("Keanggotaan penjual sudah berakhir");
+    if (seller.frozenUntil !== undefined && this.currentDayEnd - 86_400_000 < seller.frozenUntil)
+      throw new EngineError("Keanggotaan penjual sedang dibekukan (sanksi Kode Etik Pasal 20)");
     if (!seller.quizPassed)
       throw new EngineError(
         "Tautan rujukan penjual belum aktif (kuis Kode Etik belum lulus)",

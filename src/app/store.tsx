@@ -7,6 +7,8 @@ import {
 } from "react";
 import {
   type ControlDetector,
+  CaseManager,
+  atWib,
   demoScenario,
   runScenario,
   type MitransEngine,
@@ -21,6 +23,9 @@ import {
 interface DemoState {
   engine: MitransEngine;
   detector: ControlDetector;
+  cases: CaseManager;
+  /** Waktu demo (09.00 WIB pada hari berjalan engine). */
+  now: number;
   reports: MonthReport[];
   lastMonth: string;
   /** Penanda perubahan agar komponen membaca ulang engine setelah aksi. */
@@ -32,17 +37,20 @@ const Ctx = createContext<DemoState | null>(null);
 
 export function DemoProvider({ children }: { children: ReactNode }) {
   const result = useMemo(() => runScenario(demoScenario()), []);
+  const cases = useMemo(() => seedCases(result.engine, result.detector!), [result]);
   const [version, bump] = useReducer((x: number) => x + 1, 0);
   const value = useMemo<DemoState>(
     () => ({
       engine: result.engine,
       detector: result.detector!,
+      cases,
+      now: atWib(result.engine.today, 9),
       reports: result.engine.reports,
       lastMonth: result.engine.reports[result.engine.reports.length - 1].month,
       version,
       bump,
     }),
-    [result, version],
+    [result, cases, version],
   );
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
@@ -70,4 +78,41 @@ export function currentRank(
   const acc = engine.accounts.get(accountId);
   const r = acc?.ranksAchieved;
   return r && r.length ? r[r.length - 1].rank : null;
+}
+
+/** Kasus contoh untuk demo: satu dari tanda kuat yang belum diperiksa, satu pelanggaran pesan massal yang sudah diputus. */
+function seedCases(engine: MitransEngine, detector: ControlDetector): CaseManager {
+  const cm = new CaseManager(engine);
+  const now = atWib(engine.today, 9);
+  const flag = detector.scan(engine).find((f) => f.level === "kuat" && !engine.sales.get(f.saleId)!.review);
+  if (flag) {
+    cm.openCase({
+      accountId: flag.sellerId,
+      violations: [12],
+      allegation: `Penjualan ${flag.saleId} diduga dibeli oleh akun yang dikendalikan penjual untuk memenuhi status aktif.`,
+      evidence: [...flag.reasons.map((r) => `${r} antara akun penjual dan pembeli`), `Skor keterkaitan ${Math.round(flag.score * 100)}% (deteksi otomatis)`],
+      saleIds: [flag.saleId],
+      actor: "Kepatuhan: Rina",
+      at: now,
+    });
+  }
+  const other = [...engine.accounts.values()].find((a) => a.role === "mitra" && a.nodeId && a.id !== flag?.sellerId && a.quizPassed);
+  if (other) {
+    const c = cm.openCase({
+      accountId: other.id,
+      violations: [19],
+      allegation: "Mengirim pesan promosi WhatsApp ke grup warga tanpa persetujuan penerima.",
+      evidence: ["Pengaduan Pelanggan melalui layanan pengaduan", "Tangkapan layar pesan grup"],
+      actor: "Kepatuhan: Rina",
+      at: now,
+    });
+    cm.submitExplanation(c.id, "Saya mengira grup warga boleh untuk promosi. Saya sudah menghapus pesan dan meminta maaf di grup.", now);
+    cm.decide(c.id, {
+      by: "Direksi: Budi",
+      sanctions: ["teguran"],
+      reasons: "Pesan massal tanpa persetujuan melanggar Pasal 18 angka 19; Mitra PLS mengakui dan sudah memperbaiki, sehingga cukup teguran.",
+      at: now,
+    });
+  }
+  return cm;
 }

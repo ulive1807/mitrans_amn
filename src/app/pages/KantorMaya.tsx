@@ -20,6 +20,7 @@ import {
 } from "../components/ui";
 import { dateLabel, monthLabel, num, pct, rp, rpShort } from "../format";
 import { currentRank, paidTotals, useDemo } from "../store";
+import { Pemberitahuan, StatusBanner } from "./MitraPemberitahuan";
 
 type Tab =
   | "ringkasan"
@@ -27,7 +28,8 @@ type Tab =
   | "bonus"
   | "peringkat"
   | "planb"
-  | "rujukan";
+  | "rujukan"
+  | "pemberitahuan";
 const TABS: { id: Tab; label: string }[] = [
   { id: "ringkasan", label: "Ringkasan" },
   { id: "jaringan", label: "Jaringan biner" },
@@ -35,6 +37,7 @@ const TABS: { id: Tab; label: string }[] = [
   { id: "peringkat", label: "Peringkat & Royalti" },
   { id: "planb", label: "Plan B · Langganan" },
   { id: "rujukan", label: "Rujukan & orientasi" },
+  { id: "pemberitahuan", label: "Pemberitahuan" },
 ];
 
 export function KantorMaya() {
@@ -108,6 +111,7 @@ export function KantorMaya() {
               </p>
             </div>
           </div>
+          <StatusBanner accId={acc.id} onOpen={() => setTab("pemberitahuan")} />
           {tab === "ringkasan" && (
             <Ringkasan
               engine={engine}
@@ -129,6 +133,7 @@ export function KantorMaya() {
             />
           )}
           {tab === "rujukan" && <Rujukan engine={engine} accId={acc.id} />}
+          {tab === "pemberitahuan" && <Pemberitahuan accId={acc.id} />}
         </main>
       </div>
     </>

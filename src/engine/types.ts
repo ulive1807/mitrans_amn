@@ -28,6 +28,9 @@ export interface Account {
   /** Peringkat yang sudah tercapai (sekali per identitas). */
   ranksAchieved: { rank: RankName; at: number; claimed: boolean }[];
   terminated?: boolean;
+  terminatedAt?: number;
+  /** Pembekuan keanggotaan sebagai sanksi (Kode Etik Pasal 20 angka 4): tidak dapat menjual sampai waktu ini. */
+  frozenUntil?: number;
 }
 
 export interface BinaryNode {
