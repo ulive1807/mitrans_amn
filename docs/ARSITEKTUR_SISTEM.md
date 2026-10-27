@@ -16,6 +16,7 @@ Status: **prototipe**. Yang ada di repositori ini adalah engine komisi yang teru
 | Hak akses per peran, pemisahan tugas, maker-checker, log audit | `src/engine/access.ts`, `/admin` (Masuk sebagai, Pengguna & peran, Log audit) | Teruji (prototipe) |
 | Pemberitahuan tertulis dan tata cara sanksi | `src/engine/sanctions.ts`, `/admin` tab Kasus & sanksi, Kantor Maya tab Pemberitahuan | Teruji (prototipe) |
 | Deteksi akun yang dikendalikan sendiri + alur pemeriksaan | `src/engine/fraud.ts`, `/admin` tab Akun terkendali | Teruji (prototipe) |
+| PPh 21 bukan pegawai atas bonus (per Jumat), saldo setelah pajak | `src/engine/tax.ts`, `payoutSchedule`, `payoutRuns().tax` | Teruji; rumus perlu dikonfirmasi konsultan pajak |
 | Pengingat tagihan Langganan + bayar Langganan dari bonus | `src/engine/reminders.ts`, `paySubscriptionFromBonus`, Kantor Maya tab Langganan & tagihan, Admin tab Pengingat Langganan, `/api/mitra/langganan` | Teruji (prototipe); belum mengirim surel/WhatsApp |
 | Pemeriksaan sesi Clerk di server + API berizin | `server/` (`npm run server`), `src/app/api.ts` | Teruji 13 uji dengan token bertanda tangan kunci uji; **belum diuji dengan aplikasi Clerk sungguhan** |
 | Masuk dengan kode OTP (Clerk), pengaman `/admin` dan `/mitra` | `src/app/auth.tsx`, `src/app/clerk.tsx`, `src/app/guard.tsx`, `/masuk`, `src/engine/claims.ts` | Mode demo teruji; mode Clerk teruji sampai pemuatan dan penanganan gagal, **belum diuji dengan akun Clerk sungguhan** |
@@ -331,6 +332,26 @@ Antarmuka memanggil API dengan `getToken()` Clerk di header (`src/app/api.ts`). 
 - Pembayaran di muka paling banyak satu periode; Pelanggan tidak dapat memakai fitur ini.
 
 **Hal yang perlu diputuskan sebelum produksi:**
-1. Potongan harus diambil dari bonus **setelah** pemotongan PPh. Engine prototipe belum menghitung pajak, sehingga saldo yang tampil adalah bruto.
+1. ~~Potongan harus diambil dari bonus setelah PPh~~ Sudah dibangun (Bab 13): saldo dan potongan memakai bonus setelah PPh 21.
 2. Klausul "potong bonus" sudah dicantumkan di S&K v1.4 Pasal 21 angka 7 (dirujuk dari Pasal 5), dan jadwal pengingat di Pasal 6. Konsultan hukum perlu menilai butir 19 Catatan Hukum v1.3: apakah fitur ini dapat dibaca sebagai dorongan membeli (Permendag 70/2019 Pasal 21 huruf f dan g), dasar perjumpaan utang, serta perlakuan PPN/PPh. Fitur dibuat pilihan dan tidak otomatis karena alasan itu.
 3. Penyedia surel/WhatsApp, teks persetujuan, dan cara berhenti berlangganan pesan.
+
+## 13. PPh 21 atas komisi dan bonus
+
+`src/engine/tax.ts`. Mitra PLS adalah penerima penghasilan **bukan pegawai** (PMK 168/2023 Pasal 3 ayat (2) huruf l: distributor perusahaan penjualan langsung).
+
+**Rumus:** PPh 21 = tarif Pasal 17 ayat (1) huruf a UU PPh × 50% bonus bruto. Lapisan tarifnya 5% sampai Rp60 juta, 15% sampai Rp250 juta, 25% sampai Rp500 juta, 30% sampai Rp5 miliar, dan 35% di atasnya. Tidak ada penghitungan kumulatif tahunan; PMK 168/2023 menghapus skema "berkesinambungan".
+
+**Penerapan di sistem:**
+- Setiap transfer Jumat adalah satu pembayaran.
+- Lapisan tarif dipakai atas bruto bulan kalender berjalan (masa pajak): pajak suatu Jumat = pajak atas bruto bulan itu sampai Jumat itu − pajak Jumat sebelumnya pada bulan yang sama.
+- Contoh: bruto Rp4.462.707 → DPP Rp2.231.353 → PPh Rp111.567.
+- `payoutSchedule` dan `pendingPayouts` memuat bruto, PPh 21, potongan Langganan, dan nilai transfer per Jumat. `bonusBalance` adalah saldo setelah PPh dan potongan, sehingga bayar dari bonus memakai sisa setelah pajak (S&K Pasal 21 angka 7). Potongan Langganan tidak mengubah PPh, karena dasar pajaknya tetap bonus bruto.
+- Daftar transfer Jumat (Admin, API) memuat kolom PPh 21; nilai yang ditransfer = bruto − PPh − potongan; berkas maker-checker memakai nilai itu.
+
+**Sumber dan batas:** Rangkuman ini diambil dari publikasi pajak sekunder, karena naskah resmi tidak dapat dibuka dari sesi ini. Yang perlu dikonfirmasi konsultan pajak sebelum dipakai dengan uang sungguhan:
+- masa pajak sebagai satuan lapisan tarif (dibanding per pembayaran);
+- tambahan 20% bagi penerima tanpa NPWP: tersedia per akun (`withoutNpwp`) tetapi tidak aktif secara bawaan, karena NIK kini berfungsi sebagai NPWP dan sumber yang ditemukan tidak seragam;
+- koreksi pajak atas penarikan bonus (clawback);
+- pembulatan;
+- penerbitan bukti potong (kode objek pajak 21-100-04 menurut sumber sekunder) dan pelaporan SPT Masa.

@@ -31,6 +31,8 @@ export interface Account {
   terminatedAt?: number;
   /** Pembekuan keanggotaan sebagai sanksi (Kode Etik Pasal 20 angka 4): tidak dapat menjual sampai waktu ini. */
   frozenUntil?: number;
+  /** Penerima tanpa NPWP (NIK tidak dapat dipakai sebagai NPWP): tarif PPh 21 20% lebih tinggi. */
+  withoutNpwp?: boolean;
 }
 
 export interface BinaryNode {

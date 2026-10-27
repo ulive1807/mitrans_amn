@@ -136,7 +136,7 @@ export function Langganan({ accId }: { accId: string }) {
         <Kpi
           label="Bonus belum ditransfer"
           value={rp(data.balance)}
-          sub="Sudah ditetapkan, menunggu Jumat transfer"
+          sub="Setelah PPh 21, menunggu Jumat transfer"
         />
       </div>
 
@@ -196,8 +196,8 @@ export function Langganan({ accId }: { accId: string }) {
             </>
           )}
           <p className="muted" style={{ marginTop: 10, fontSize: 12.5 }}>
-            Pilihan, bukan kewajiban. Bonus bruto dan perhitungan pajaknya tidak
-            berubah; yang berkurang hanya nilai transfer. Plan B atas Langganan
+            Pilihan, bukan kewajiban. Dipotong dari bonus setelah PPh 21; bonus
+            bruto dan PPh 21-nya tidak berubah, yang berkurang hanya nilai transfer. Plan B atas Langganan
             ini tetap dihitung untuk upline seperti pembayaran biasa (S&amp;K Pasal 21
             angka 7).
           </p>
@@ -229,7 +229,8 @@ export function Langganan({ accId }: { accId: string }) {
               <thead>
                 <tr>
                   <th>Jumat</th>
-                  <th className="r">Bonus</th>
+                  <th className="r">Bonus bruto</th>
+                  <th className="r">PPh 21</th>
                   <th className="r">Potongan Langganan</th>
                   <th className="r">Ditransfer</th>
                 </tr>
@@ -239,6 +240,7 @@ export function Langganan({ accId }: { accId: string }) {
                   <tr key={r.date}>
                     <td>{dateLabel(r.date)}</td>
                     <td className="r num">{rp(r.gross)}</td>
+                    <td className="r num">−{rp(r.tax)}</td>
                     <td className="r num">
                       {r.deducted ? `−${rp(r.deducted)}` : "–"}
                     </td>

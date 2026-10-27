@@ -25,6 +25,7 @@ import {
   wibDate,
   wibMonth,
 } from "./time";
+import { withholdBySchedule } from "./tax";
 
 const DAY_MS = 86_400_000;
 import {
@@ -754,29 +755,36 @@ export class MitransEngine {
   }
 
   /** Daftar transfer per Jumat (Bab 11.1). */
-  /**
-   * Bonus yang belum ditransfer per Jumat (tanggal setelah hari ini), sudah dikurangi potongan Langganan.
-   * Hanya entri berstatus payable; bonus tim yang belum ditetapkan pada tutup bulan tidak dihitung.
-   */
-  pendingPayouts(accountId: string): { date: string; gross: number; deducted: number; net: number }[] {
-    const today = this.currentDay;
-    const by = new Map<string, { date: string; gross: number; deducted: number; net: number }>();
-    const add = (date: string, gross: number, deducted: number) => {
-      if (date <= today) return;
-      const r = by.get(date) ?? { date, gross: 0, deducted: 0, net: 0 };
-      r.gross += gross;
-      r.deducted += deducted;
-      r.net = r.gross - r.deducted;
-      by.set(date, r);
-    };
+  /** Bonus bruto per Jumat transfer (semua tanggal) untuk satu akun. */
+  private grossByDate(accountId: string): Map<string, number> {
+    const by = new Map<string, number>();
+    const add = (date: string, x: number) => by.set(date, (by.get(date) ?? 0) + x);
     for (const e of this.entriesFor(accountId)) {
       if (e.status !== "payable" || !e.payoutDate || e.amount === 0) continue;
-      if (e.advance && e.advanceDate) add(e.advanceDate, e.advance, 0);
-      add(e.payoutDate, e.amount - (e.advance ?? 0), 0);
+      if (e.advance && e.advanceDate) add(e.advanceDate, e.advance);
+      add(e.payoutDate, e.amount - (e.advance ?? 0));
     }
+    return by;
+  }
+
+  /**
+   * Jadwal transfer satu Mitra PLS per Jumat: bonus bruto, PPh 21 (lihat tax.ts), potongan Langganan, dan nilai
+   * yang ditransfer. Potongan Langganan diambil dari jumlah setelah PPh (S&K Pasal 21 angka 7).
+   */
+  payoutSchedule(accountId: string): { date: string; gross: number; tax: number; deducted: number; net: number }[] {
+    const acc = this.mustAccount(accountId);
+    const deducted = new Map<string, number>();
     for (const d of this.payoutDeductions)
-      if (d.accountId === accountId && !d.cancelled) add(d.date, 0, d.amount);
-    return [...by.values()].sort((a, b) => a.date.localeCompare(b.date));
+      if (d.accountId === accountId && !d.cancelled) deducted.set(d.date, (deducted.get(d.date) ?? 0) + d.amount);
+    return withholdBySchedule(this.grossByDate(accountId), acc.withoutNpwp).map((l) => {
+      const ded = deducted.get(l.date) ?? 0;
+      return { ...l, deducted: ded, net: l.gross - l.tax - ded };
+    });
+  }
+
+  /** Bonus yang belum ditransfer (Jumat setelah hari ini). Hanya entri berstatus payable; bonus tim yang belum ditetapkan tidak dihitung. */
+  pendingPayouts(accountId: string): { date: string; gross: number; tax: number; deducted: number; net: number }[] {
+    return this.payoutSchedule(accountId).filter((r) => r.date > this.currentDay);
   }
 
   /**
@@ -824,9 +832,11 @@ export class MitransEngine {
     total: number;
     count: number;
     byType: Record<BonusType, number>;
+    /** PPh 21 yang dipotong pada Jumat itu. */
+    tax: number;
     /** Potongan Langganan dari bonus pada Jumat itu. */
     deducted: number;
-    /** Nilai yang ditransfer: total bonus dikurangi potongan. */
+    /** Nilai yang ditransfer: total bonus dikurangi PPh 21 dan potongan Langganan. */
     transfer: number;
   }[] {
     const runs = new Map<
@@ -836,6 +846,7 @@ export class MitransEngine {
         total: number;
         count: number;
         byType: Record<BonusType, number>;
+        tax: number;
         deducted: number;
         transfer: number;
       }
@@ -843,7 +854,7 @@ export class MitransEngine {
     for (const e of this.ledger) {
       if (e.status !== "payable" || !e.payoutDate || e.amount === 0) continue;
       if (e.advance && e.advanceDate) {
-        const a = runs.get(e.advanceDate) ?? { date: e.advanceDate, total: 0, count: 0, byType: emptyByType(), deducted: 0, transfer: 0 };
+        const a = runs.get(e.advanceDate) ?? { date: e.advanceDate, total: 0, count: 0, byType: emptyByType(), tax: 0, deducted: 0, transfer: 0 };
         a.total += e.advance;
         a.count++;
         a.byType[e.type] += e.advance;
@@ -855,6 +866,7 @@ export class MitransEngine {
         total: 0,
         count: 0,
         byType: emptyByType(),
+        tax: 0,
         deducted: 0,
         transfer: 0,
       };
@@ -868,7 +880,16 @@ export class MitransEngine {
       const r = runs.get(d.date);
       if (r) r.deducted += d.amount;
     }
-    for (const r of runs.values()) r.transfer = r.total - r.deducted;
+    // PPh 21 dihitung per Mitra PLS per Jumat (lapisan tarif atas bruto bulan berjalan), lalu dijumlahkan.
+    for (const [id] of this.entriesByAccount) {
+      const acc = this.accounts.get(id);
+      if (!acc) continue;
+      for (const l of withholdBySchedule(this.grossByDate(id), acc.withoutNpwp)) {
+        const r = runs.get(l.date);
+        if (r) r.tax += l.tax;
+      }
+    }
+    for (const r of runs.values()) r.transfer = r.total - r.tax - r.deducted;
     return [...runs.values()].sort((a, b) => a.date.localeCompare(b.date));
   }
 

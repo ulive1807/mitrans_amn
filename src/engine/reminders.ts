@@ -115,7 +115,7 @@ export function reminderFor(
   const how =
     `Perpanjangan ${rp(price)} untuk 30 hari, dibayar ke kanal resmi Perusahaan` +
     (canPayFromBonus
-      ? ` atau dipotong dari bonus Anda yang belum ditransfer (saldo ${rp(bonusBalance)}).`
+      ? ` atau dipotong dari bonus Anda yang belum ditransfer (saldo setelah PPh 21 ${rp(bonusBalance)}).`
       : ".");
   const note =
     acc.role === "mitra"

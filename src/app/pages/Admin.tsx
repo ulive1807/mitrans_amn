@@ -348,6 +348,7 @@ function Jumat() {
               <th className="r">Bonus tim</th>
               <th className="r">Bulanan (Prestasi, Royalti, Pool, Plan B)</th>
               <th className="r">Total bruto</th>
+              <th className="r">PPh 21</th>
               <th className="r">Potongan Langganan</th>
               <th className="r">Ditransfer</th>
               <th>Persetujuan</th>
@@ -369,6 +370,7 @@ function Jumat() {
                     <td className="r num">{rp(team)}</td>
                     <td className="r num">{rp(r.total - team - direct)}</td>
                     <td className="r num">{rp(r.total)}</td>
+                    <td className="r num">−{rp(r.tax)}</td>
                     <td className="r num">{r.deducted ? `−${rp(r.deducted)}` : "–"}</td>
                     <td className="r num">
                       <b>{rp(r.transfer)}</b>

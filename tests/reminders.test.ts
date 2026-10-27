@@ -134,7 +134,8 @@ describe("Bayar Langganan dari bonus", () => {
     );
     const run = engine.payoutRuns().find((r) => r.date === "2027-02-05")!;
     expect(run.deducted).toBe(PLAN.subscription.price);
-    expect(run.transfer).toBe(run.total - PLAN.subscription.price);
+    expect(run.tax).toBeGreaterThan(0);
+    expect(run.transfer).toBe(run.total - run.tax - PLAN.subscription.price);
   });
 
   it("ditolak bila saldo tidak cukup; tidak ada penjualan atau potongan yang tercatat", () => {
