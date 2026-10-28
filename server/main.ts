@@ -6,6 +6,10 @@
  *   CLERK_SECRET_KEY         secret key Clerk (JWKS + membaca publicMetadata bila token tidak membawa klaim metadata)
  *   CLERK_AUTHORIZED_PARTIES asal situs yang sah, dipisah koma, mis. https://mitrans.id,https://staging.mitrans.id
  *   PORT (8787), HOST (127.0.0.1)
+ * Integrasi atlastrade.io (opsional; aktif hanya bila ketiganya diisi):
+ *   RUJUKAN_TICKET_SECRET    rahasia tiket rujukan, paling sedikit 32 karakter, sama dengan di atlastrade.io
+ *   ATLAS_WEBHOOK_SECRET     rahasia tanda tangan webhook, paling sedikit 32 karakter, berbeda dari rahasia tiket
+ *   ATLAS_CHECKOUT_URL       alamat checkout Lisensi, mis. https://www.atlastrade.io/checkout
  * Server menolak berjalan bila konfigurasi tidak aman (fail-closed).
  */
 import { createServer } from "node:http";
@@ -38,8 +42,28 @@ export function readConfig(env: NodeJS.ProcessEnv) {
     errors.push("CLERK_SECRET_KEY tidak berformat sk_test_/sk_live_.");
   if (env.NODE_ENV === "production" && secretKey?.startsWith("sk_test_"))
     errors.push("Di produksi, pakai sk_live_.");
+  const ticketSecret = env.RUJUKAN_TICKET_SECRET?.trim() || undefined;
+  const webhookSecret = env.ATLAS_WEBHOOK_SECRET?.trim() || undefined;
+  const checkoutUrl = env.ATLAS_CHECKOUT_URL?.trim() || undefined;
+  let integration: { ticketSecret: string; webhookSecret: string; checkoutUrl: string } | undefined;
+  if (ticketSecret || webhookSecret || checkoutUrl) {
+    if (!ticketSecret || !webhookSecret || !checkoutUrl)
+      errors.push("Integrasi atlastrade.io: isi RUJUKAN_TICKET_SECRET, ATLAS_WEBHOOK_SECRET, dan ATLAS_CHECKOUT_URL sekaligus.");
+    else {
+      if (ticketSecret.length < 32 || webhookSecret.length < 32)
+        errors.push("Rahasia integrasi minimal 32 karakter.");
+      if (ticketSecret === webhookSecret)
+        errors.push("Rahasia tiket dan rahasia webhook harus berbeda.");
+      if (!/^https?:\/\/[^\s]+$/.test(checkoutUrl))
+        errors.push("ATLAS_CHECKOUT_URL tidak sah.");
+      else if (env.NODE_ENV === "production" && !checkoutUrl.startsWith("https://"))
+        errors.push("Di produksi, ATLAS_CHECKOUT_URL wajib https.");
+      integration = { ticketSecret, webhookSecret, checkoutUrl };
+    }
+  }
   return {
     errors,
+    integration,
     jwtKey,
     secretKey,
     authorizedParties,
@@ -55,13 +79,16 @@ async function main() {
     process.exit(1);
   }
   const authenticate = await clerkAuthenticator(cfg);
-  const app = createApp({ authenticate, corsOrigins: cfg.authorizedParties });
+  const app = createApp({ authenticate, corsOrigins: cfg.authorizedParties, integration: cfg.integration });
   createServer((req, res) => void app(req, res)).listen(
     cfg.port,
     cfg.host,
     () => {
       console.log(
         `API Mitra PLS di http://${cfg.host}:${cfg.port} · asal sah: ${cfg.authorizedParties.join(", ")}`,
+      );
+      console.log(
+        `Integrasi atlastrade.io: ${cfg.integration ? `aktif · checkout ${cfg.integration.checkoutUrl}` : "tidak aktif"}`,
       );
       console.log(
         `Verifikasi: ${cfg.jwtKey ? "CLERK_JWT_KEY (tanpa jaringan)" : "JWKS lewat CLERK_SECRET_KEY"} · peran: klaim metadata${cfg.secretKey ? " atau Backend API" : " saja"}`,

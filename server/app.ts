@@ -17,13 +17,33 @@ import {
   type MitransEngine,
   type Permission,
 } from "../src/engine";
+import { randomUUID } from "node:crypto";
 import type { Authenticator, Session } from "./session";
+import {
+  TICKET_TTL_MS,
+  parseEvent,
+  signTicket,
+  verifyTicket,
+  verifyWebhook,
+  type AtlasEvent,
+} from "./integration";
 
 export interface AppOptions {
   authenticate: Authenticator;
   /** Asal yang boleh memanggil API lintas domain (biasanya sama dengan authorizedParties). */
   corsOrigins?: string[];
   engine?: MitransEngine;
+  /** Integrasi dengan atlastrade.io. Tanpa ini, /r/:kode dan webhook tidak aktif. */
+  integration?: {
+    /** Rahasia tiket rujukan (dibagi dengan atlastrade.io untuk memeriksa tiket di checkout). */
+    ticketSecret: string;
+    /** Rahasia tanda tangan webhook dari atlastrade.io. */
+    webhookSecret: string;
+    /** Alamat checkout Lisensi, mis. https://www.atlastrade.io/checkout */
+    checkoutUrl: string;
+    /** Jam dinding (milidetik) untuk masa berlaku tiket dan tanda tangan; bawaan Date.now. */
+    clock?: () => number;
+  };
 }
 
 type Handler = (ctx: Ctx) => unknown;
@@ -82,6 +102,14 @@ export function createApp(opts: AppOptions) {
   const lastMonth = () => engine.reports[engine.reports.length - 1]?.month;
 
   let bonusPayments = 0;
+  // ID pengguna Clerk → akun engine. Satu instance Clerk dipakai bersama atlastrade.io, jadi ID-nya sama.
+  const accountByUser = new Map<string, string>();
+  // Peristiwa webhook yang sudah diproses: nomor peristiwa → hasil (idempoten).
+  const processed = new Map<string, unknown>();
+  const integ = opts.integration;
+  const clock = integ?.clock ?? Date.now;
+  const canSell = (acc: { role: string; quizPassed: boolean; terminated?: boolean; frozenUntil?: number }) =>
+    acc.role === "mitra" && acc.quizPassed && !acc.terminated && !(acc.frozenUntil !== undefined && acc.frozenUntil > now());
   const ownMitra = (session: Session) => {
     const acc = findMitra(session.claims.mitraId!);
     if (!acc) throw new HttpError(404, "Akun Mitra PLS yang ditautkan tidak ditemukan");
@@ -100,6 +128,95 @@ export function createApp(opts: AppOptions) {
     if (!r)
       throw new HttpError(404, "Tidak ada berkas transfer pada tanggal itu");
     return r;
+  };
+
+  /** Tautan rujukan affiliatemarketing.network/r/KODE → checkout atlastrade.io dengan tiket bertanda tangan. */
+  const referral = (code: string): { status: number; location?: string; body?: unknown } => {
+    const acc = findMitra(code);
+    if (!integ || !acc || !canSell(acc)) return { status: 404, body: { galat: "Tautan rujukan tidak aktif" } };
+    const iat = clock();
+    const ticket = signTicket({ sponsor: acc.code, nonce: randomUUID(), iat, exp: iat + TICKET_TTL_MS }, integ.ticketSecret);
+    const url = new URL(integ.checkoutUrl);
+    url.searchParams.set("t", ticket);
+    return { status: 302, location: url.toString() };
+  };
+
+  const audit = (action: string, detail: string, allowed = true) =>
+    access.audit.push({ at: now(), userId: "atlastrade.io", userName: "atlastrade.io", action, allowed, detail });
+
+  /** Memproses satu peristiwa atlastrade.io. Galat engine dilempar sebagai 409 dan tidak dicatat sebagai sudah diproses. */
+  const applyEvent = (ev: AtlasEvent) => {
+    switch (ev.type) {
+      case "license.activated": {
+        const d = ev.data;
+        const at = d.paidAt ?? now();
+        let accId = accountByUser.get(d.userId);
+        let rujukan: "akun" | "tiket" | "langsung" = "akun";
+        let alasanTiket: string | undefined;
+        if (!accId) {
+          if (!d.name || !d.nik) throw new HttpError(422, "Pembeli baru: name dan nik wajib dikirim dari checkout");
+          // Sponsor dikunci saat akun pertama dibuat. Tanpa tiket sah, penjualan dicatat sebagai penjualan langsung Perusahaan.
+          let seller = "MITRANS-001";
+          rujukan = "langsung";
+          if (d.ticket) {
+            const t = verifyTicket(d.ticket, integ!.ticketSecret, clock());
+            const sponsor = t.ok ? findMitra(t.ticket.sponsor) : undefined;
+            if (!t.ok) alasanTiket = t.reason;
+            else if (!sponsor || !canSell(sponsor)) alasanTiket = "sponsor-tidak-aktif";
+            else {
+              seller = sponsor.id;
+              rujukan = "tiket";
+            }
+          }
+          if (engine.sales.has(d.saleId)) throw new HttpError(409, `Penjualan ${d.saleId} sudah ada`);
+          accId = engine.registerPelanggan({ id: `U-${d.userId}`, name: d.name, nik: d.nik, sellerId: seller, at }).id;
+          accountByUser.set(d.userId, accId);
+        }
+        const sale = engine.purchaseLicense({ saleId: d.saleId, buyerId: accId, at });
+        return { akun: accId, penjualan: sale.id, penjual: sale.sellerId, rujukan, ...(alasanTiket ? { tiketDitolak: alasanTiket } : {}) };
+      }
+      case "subscription.paid": {
+        const accId = accountByUser.get(ev.data.userId);
+        if (!accId) throw new HttpError(409, "Pengguna belum dikenal di sistem Mitra PLS");
+        if (engine.sales.has(ev.data.saleId)) throw new HttpError(409, `Penjualan ${ev.data.saleId} sudah ada`);
+        const sale = engine.paySubscription({ saleId: ev.data.saleId, accountId: accId, at: ev.data.paidAt ?? now() });
+        return { akun: accId, penjualan: sale.id, aksesSampai: sale.periodEnd };
+      }
+      case "sale.refunded": {
+        if (!engine.sales.has(ev.data.saleId)) throw new HttpError(409, `Penjualan ${ev.data.saleId} tidak dikenal`);
+        const r = engine.refundSale(ev.data.saleId, ev.data.refundedAt ?? now());
+        return { penjualan: ev.data.saleId, bonusDitarik: r.clawedBack, perluTinjauan: r.needsReview };
+      }
+    }
+  };
+
+  const webhook = async (req: IncomingMessage) => {
+    if (!integ) throw new HttpError(404, "Tidak ditemukan");
+    const raw = await readBody(req);
+    const sig = req.headers["x-atlas-signature"];
+    const check = verifyWebhook(raw, typeof sig === "string" ? sig : undefined, integ.webhookSecret, Math.floor(clock() / 1000));
+    if (!check.ok) {
+      audit("Webhook atlastrade.io ditolak", check.reason, false);
+      throw new HttpError(401, "Tanda tangan webhook tidak sah");
+    }
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      throw new HttpError(400, "Isi permintaan bukan JSON yang sah");
+    }
+    const ev = parseEvent(parsed);
+    if (typeof ev === "string") throw new HttpError(400, ev);
+    if (processed.has(ev.id)) return { ...(processed.get(ev.id) as object), duplikat: true };
+    try {
+      const result = { peristiwa: ev.id, jenis: ev.type, ...applyEvent(ev) };
+      processed.set(ev.id, result);
+      audit(`Webhook ${ev.type}`, `${ev.id}: ${JSON.stringify(result)}`);
+      return result;
+    } catch (err) {
+      if (err instanceof EngineError) throw new HttpError(409, err.message);
+      throw err;
+    }
   };
 
   const routes: Route[] = [
@@ -349,6 +466,21 @@ export function createApp(opts: AppOptions) {
       }
       if (url.pathname === "/api/kesehatan")
         return send(req, res, 200, { ok: true });
+      // Rute publik integrasi: tidak memakai sesi Clerk.
+      const ref = /^\/r\/([A-Za-z0-9-]{1,32})$/.exec(url.pathname);
+      if (ref && method === "GET") {
+        const r = referral(ref[1]);
+        if (r.location) {
+          res.writeHead(302, { Location: r.location, "Cache-Control": "no-store", "Referrer-Policy": "no-referrer" });
+          res.end();
+          return;
+        }
+        return send(req, res, r.status, r.body);
+      }
+      if (url.pathname === "/api/integrasi/atlastrade") {
+        if (method !== "POST") return send(req, res, 405, { galat: "Metode tidak diizinkan" });
+        return send(req, res, 200, await webhook(req));
+      }
 
       const candidates = routes.filter((r) => r.pattern.test(url.pathname));
       if (!candidates.length)
@@ -363,6 +495,10 @@ export function createApp(opts: AppOptions) {
           alasan: auth.reason,
         });
       const { session } = auth;
+      if (session.claims.mitraId) {
+        const acc = findMitra(session.claims.mitraId);
+        if (acc) accountByUser.set(session.userId, acc.id);
+      }
 
       // Cerminkan pengguna Clerk ke AccessControl dengan peran dari server (bukan dari klien).
       const prev = access.users.get(session.userId);
@@ -413,8 +549,8 @@ export function createApp(opts: AppOptions) {
   };
 }
 
-/** Membaca isi JSON permintaan, paling besar 8 KB. Isi kosong dibaca sebagai undefined. */
-async function readJson(req: IncomingMessage): Promise<unknown> {
+/** Membaca isi permintaan apa adanya, paling besar 8 KB. */
+async function readBody(req: IncomingMessage): Promise<string> {
   const chunks: Buffer[] = [];
   let size = 0;
   for await (const c of req) {
@@ -422,7 +558,12 @@ async function readJson(req: IncomingMessage): Promise<unknown> {
     if (size > 8192) throw new HttpError(413, "Isi permintaan terlalu besar");
     chunks.push(c as Buffer);
   }
-  const text = Buffer.concat(chunks).toString("utf8").trim();
+  return Buffer.concat(chunks).toString("utf8");
+}
+
+/** Membaca isi JSON permintaan, paling besar 8 KB. Isi kosong dibaca sebagai undefined. */
+async function readJson(req: IncomingMessage): Promise<unknown> {
+  const text = (await readBody(req)).trim();
   if (!text) return undefined;
   try {
     return JSON.parse(text);

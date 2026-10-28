@@ -74,6 +74,7 @@ Seluruh butir A1–A19 **diputuskan Coach pada 27–28 Oktober 2026**. Butir yan
 | A17 | Bayar Langganan dari bonus | Atas persetujuan tegas per pembayaran, dari transfer setelah PPh, hanya Langganan milik sendiri | `paySubscriptionFromBonus`, S&K Pasal 21 angka 7 |
 | A18 | Piutang penarikan bonus yang tidak tertutup | **Dipotong dari hak lain** (pembelian kembali, pengembalian dana, pembayaran lain), **lalu dihapus 12 bulan** sejak tanggal penarikan | `recordOtherEntitlement`, `PLAN.clawbackWriteOffMonths`, `clawbackStatus` |
 | A19 | Hari libur dalam perhitungan sistem | **Tidak memakai kalender hari libur**; semua batas waktu sistem (saldo aman 14 hari, Langganan 30 hari, penghapusan piutang 12 bulan, pengingat) memakai hari kalender, karena bisnis tetap berjalan pada hari libur. Hak Mitra PLS dan Pelanggan yang di dokumen tertulis "hari kerja" tidak diubah | `PLAN.bonusSafetyDays` (hari kalender) |
+| A20 | Dua domain, satu akun | **Satu badan hukum (PT Mitra Transformasi Inteligensi), satu instance Clerk dengan domain satelit.** affiliatemarketing.network memegang tautan rujukan, Kantor Maya, dan bonus; atlastrade.io memegang checkout, pembayaran, pengembalian dana, dan akses Lisensi. Sponsor dibawa lewat tiket bertanda tangan dan dikunci saat akun pertama dibuat; pembayaran dan pengembalian dana dikirim lewat webhook bertanda tangan. Pembelian tanpa tiket sah = penjualan langsung Perusahaan | `server/integration.ts`, Bab 14 |
 
 ## 4. Temuan dari pengujian yang perlu dibahas
 
@@ -102,7 +103,7 @@ Seluruh butir A1–A19 **diputuskan Coach pada 27–28 Oktober 2026**. Butir yan
 | Antrean pekerjaan | Penjadwal untuk akhir hari, Jumat 07.00 WIB, dan tutup bulan | Proses berkala yang dapat diulang |
 | Pembayaran | Payment gateway berizin BI, rekening resmi Perusahaan | S&K Pasal 5 |
 | Verifikasi identitas | Penyedia e-KYC berizin | Satu NIK satu akun, usia ≥18 |
-| Domain | `mitrans.id` (akun, kantor maya), `affiliatemarketing.network` (tautan rujukan, halaman penawaran) | Rencana Pemasaran Bab 2 |
+| Domain | `mitrans.id` (akun), `affiliatemarketing.network` (tautan rujukan, halaman penawaran, Kantor Maya), `atlastrade.io` (checkout Lisensi dan Langganan, pengembalian dana, akses aplikasi) | Rencana Pemasaran Bab 2; keputusan A20 |
 
 ### 5.2 Model data inti
 
@@ -387,3 +388,29 @@ Tampilan: Kantor Maya (tab Pajak & penarikan) menunjukkan sumber potongan (trans
 - **Mitra PLS:** tab Pajak & penarikan di Kantor Maya (dapat dicetak), total tahun berjalan sebagai kredit pajak SPT Tahunan, dan daftar penarikan beserta Jumat tempat dipotong.
 - **Keuangan:** tab PPh 21 & bukti potong di Admin (izin `pembayaran.lihat`), rekap per masa dan ekspor CSV. NIK tersamar, dan setiap ekspor dicatat di log audit.
 - **Bukan bukti potong resmi.** Bukti potong BP21 diterbitkan melalui Coretax DJP; data ini bahan untuk mengisinya. Ekspor dengan NIK lengkap untuk pelaporan harus dari server, dengan izin khusus dan log audit (belum dibangun). Nomor resmi, NPWP/NITKU pemotong, dan penandatangan juga belum dibangun.
+
+## 14. Integrasi affiliatemarketing.network dan atlastrade.io (keputusan A20)
+
+Keputusan Coach (28 Oktober 2026): kedua domain dikelola **PT Mitra Transformasi Inteligensi**; login memakai **Clerk dengan domain satelit**; **pembayaran, pembatalan, dan pengembalian dana terjadi di atlastrade.io**; S&K dan Kode Etik menyebut mitrans.id, affiliatemarketing.network, dan atlastrade.io sebagai domain resmi.
+
+**Alur pengguna:** klik tautan Mitra PLS → checkout atlastrade.io → daftar sekali dengan OTP → bayar lewat kanal resmi → Kantor Maya di affiliatemarketing.network tanpa daftar ulang.
+
+| Langkah | Yang terjadi | Kode |
+|---|---|---|
+| 1. Tautan rujukan | `GET /r/KODE` di affiliatemarketing.network. Bila Mitra PLS aktif (lulus kuis, tidak dibekukan atau diputus), server membuat **tiket rujukan** (kode sponsor, nomor unik, terbit, berakhir 72 jam) yang ditandatangani HMAC-SHA256, lalu mengarahkan (302) ke `ATLAS_CHECKOUT_URL?t=<tiket>`. Tiket tidak berisi data pribadi. Tautan tidak aktif → 404 | `referral`, `signTicket` |
+| 2. Checkout | atlastrade.io memeriksa tiket dengan rahasia yang sama (`RUJUKAN_TICKET_SECRET`) dan menyimpannya bersama pesanan. Pengguna masuk dengan Clerk (sesi berlaku di kedua domain). Nama dan NIK diisi **sekali** di checkout | di atlastrade.io |
+| 3. Webhook | atlastrade.io mengirim `POST /api/integrasi/atlastrade` dengan header `X-Atlas-Signature: t=<detik>,v1=<HMAC-SHA256 hex atas "t.isi">`. Ditolak (401) bila tanda tangan salah, isi diubah, atau selisih waktu > 5 menit. Peristiwa bernomor sama hanya diproses sekali | `verifyWebhook`, `parseEvent` |
+| 4a. `license.activated` | Pengguna sudah dikenal (ID Clerk tertaut) → Lisensi dicatat untuk akun itu; **sponsor tidak berubah** walau membawa tiket lain. Pengguna baru → akun Pelanggan dibuat dengan sponsor dari tiket. Tiket tidak sah, kedaluwarsa, atau sponsornya tidak aktif → **penjualan langsung Perusahaan** (MITRANS-001), alasannya dicatat. Pengguna baru tanpa nama/NIK → 422 | `applyEvent` |
+| 4b. `subscription.paid` | Langganan Rp399.000 dicatat; akses diperpanjang 30 hari (aturan A15) | `paySubscription` |
+| 4c. `sale.refunded` | Pembatalan atau pengembalian dana dicatat; bonus ditarik (A12, Bab 13.1) | `refundSale` |
+
+**Konfigurasi** (`server/main.ts`, fail-closed): `RUJUKAN_TICKET_SECRET` dan `ATLAS_WEBHOOK_SECRET` masing-masing ≥ 32 karakter dan berbeda; `ATLAS_CHECKOUT_URL` wajib https di produksi; ketiganya diisi sekaligus atau tidak sama sekali (integrasi nonaktif). `CLERK_AUTHORIZED_PARTIES` perlu memuat asal kedua domain. Rahasia disimpan di pengelola rahasia server, tidak pernah di repositori atau di aplikasi peramban.
+
+**Pengaturan Clerk (dikerjakan pemilik akun Clerk, belum dilakukan):** domain utama dan domain satelit ditambahkan di dasbor Clerk, DNS diverifikasi, lalu aplikasi satelit dijalankan dengan `isSatellite` dan `domain`/`signInUrl` sesuai dokumentasi Clerk terbaru. Ketersediaan fitur pada paket Clerk yang dipakai perlu diperiksa sebelum produksi.
+
+**Keterbatasan prototipe (belum dibangun):**
+- Tautan ID Clerk → akun disimpan di memori server; di produksi disimpan di basis data (dan `publicMetadata.mitraId`), termasuk untuk Pelanggan.
+- Daftar peristiwa yang sudah diproses juga di memori; di produksi berupa tabel dengan kunci unik nomor peristiwa, ditulis dalam transaksi yang sama dengan penjualan.
+- Waktu bayar dari atlastrade.io (`paidAt`) dipakai apa adanya; di produksi harus dibatasi (tidak di masa depan, tidak sebelum tutup bulan yang sudah final).
+- Rotasi rahasia (dua rahasia berlaku bersamaan selama pergantian) dan antrean ulang di sisi atlastrade.io belum ada.
+- Engine mewajibkan NIK untuk setiap pembeli (satu identitas satu akun); karena itu NIK diminta sekali di checkout dan diteruskan lewat webhook. Pembagian data di dalam PT yang sama tetap harus dijelaskan di Kebijakan Privasi (UU PDP).
