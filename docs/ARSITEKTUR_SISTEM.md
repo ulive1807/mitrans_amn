@@ -51,7 +51,7 @@ Prinsip implementasi:
 
 ## 3. Keputusan aturan yang tidak diatur dokumen
 
-Seluruh butir A1–A18 **diputuskan Coach pada 27–28 Oktober 2026**. Butir yang mengubah isi Rencana Pemasaran (terutama A1, A4, A10, A12) perlu dicantumkan di dokumen dan dikonfirmasi konsultan hukum sebelum diajukan.
+Seluruh butir A1–A19 **diputuskan Coach pada 27–28 Oktober 2026**. Butir yang mengubah isi Rencana Pemasaran (terutama A1, A4, A10, A12) perlu dicantumkan di dokumen dan dikonfirmasi konsultan hukum sebelum diajukan.
 
 | # | Hal | Keputusan | Kode |
 |---|---|---|---|
@@ -73,6 +73,7 @@ Seluruh butir A1–A18 **diputuskan Coach pada 27–28 Oktober 2026**. Butir yan
 | A16 | Rekening dana layanan Rp426.000 per Lisensi (Bab 12.2 butir 4) | **Dihapus**, karena biaya layanan sesudah 30 hari pertama sudah ditanggung Langganan | dihapus dari `PLAN` |
 | A17 | Bayar Langganan dari bonus | Atas persetujuan tegas per pembayaran, dari transfer setelah PPh, hanya Langganan milik sendiri | `paySubscriptionFromBonus`, S&K Pasal 21 angka 7 |
 | A18 | Piutang penarikan bonus yang tidak tertutup | **Dipotong dari hak lain** (pembelian kembali, pengembalian dana, pembayaran lain), **lalu dihapus 12 bulan** sejak tanggal penarikan | `recordOtherEntitlement`, `PLAN.clawbackWriteOffMonths`, `clawbackStatus` |
+| A19 | Hari libur dalam perhitungan sistem | **Tidak memakai kalender hari libur**; semua batas waktu sistem (saldo aman 14 hari, Langganan 30 hari, penghapusan piutang 12 bulan, pengingat) memakai hari kalender, karena bisnis tetap berjalan pada hari libur. Hak Mitra PLS dan Pelanggan yang di dokumen tertulis "hari kerja" tidak diubah | `PLAN.bonusSafetyDays` (hari kalender) |
 
 ## 4. Temuan dari pengujian yang perlu dibahas
 
