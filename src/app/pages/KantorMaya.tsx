@@ -24,9 +24,11 @@ import { currentRank, paidTotals, useDemo } from "../store";
 import { Pemberitahuan, StatusBanner } from "./MitraPemberitahuan";
 import { Langganan, ReminderBanner } from "./MitraLangganan";
 import { Pajak } from "./MitraPajak";
+import { AgentMarketing } from "./MitraAgent";
 
 type Tab =
   | "ringkasan"
+  | "agent"
   | "jaringan"
   | "bonus"
   | "peringkat"
@@ -37,6 +39,7 @@ type Tab =
   | "pemberitahuan";
 const TABS: { id: Tab; label: string }[] = [
   { id: "ringkasan", label: "Ringkasan" },
+  { id: "agent", label: "Agent Marketing" },
   { id: "jaringan", label: "Jaringan biner" },
   { id: "bonus", label: "Komisi & bonus" },
   { id: "peringkat", label: "Peringkat & Royalti" },
@@ -144,8 +147,9 @@ export function KantorMaya() {
               lastMonth={lastMonth}
             />
           )}
+          {tab === "agent" && <AgentMarketing accId={acc.id} />}
           {tab === "jaringan" && <Jaringan engine={engine} accId={acc.id} />}
-          {tab === "bonus" && <BonusTable entries={entries} />}
+          {tab === "bonus" && <BonusTable engine={engine} entries={entries} />}
           {tab === "peringkat" && <Peringkat engine={engine} accId={acc.id} />}
           {tab === "planb" && (
             <PlanB
@@ -404,7 +408,40 @@ function Jaringan({ engine, accId }: { engine: MitransEngine; accId: string }) {
   );
 }
 
-function BonusTable({ entries }: { entries: LedgerEntry[] }) {
+/** Label tahap pembayaran: tercatat seketika, ditransfer pada Jumat jadwalnya, dan dapat ditarik bila pembelian dibatalkan. */
+function StageCell({ engine, e }: { engine: MitransEngine; e: LedgerEntry }) {
+  const st = engine.entryStage(e);
+  const risk = st.cancellableUntil ? (
+    <div className="muted" style={{ fontSize: 12 }}>
+      Dapat ditarik bila pembelian dibatalkan s.d. {dateLabel(st.cancellableUntil)}
+    </div>
+  ) : null;
+  if (st.stage === "ditransfer") return <Badge tone="good">✓ Ditransfer {dateLabel(st.transferDate!)}</Badge>;
+  if (st.stage === "sebagian")
+    return (
+      <>
+        <Badge tone="info">Uang muka 80% ditransfer · sisa {dateLabel(st.transferDate!)}</Badge>
+        {risk}
+      </>
+    );
+  if (st.stage === "tercatat")
+    return (
+      <>
+        <Badge tone="info">
+          Tercatat ·{" "}
+          {st.transferDate
+            ? `ditransfer ${dateLabel(st.transferDate)}`
+            : st.awaiting === "syarat"
+              ? "menunggu syarat"
+              : "ditetapkan saat tutup bulan"}
+        </Badge>
+        {risk}
+      </>
+    );
+  return <StatusBadge status={e.status} />;
+}
+
+function BonusTable({ engine, entries }: { engine: MitransEngine; entries: LedgerEntry[] }) {
   const [type, setType] = useState<BonusType | "ALL">("ALL");
   const [status, setStatus] = useState<string>("ALL");
   const rows = entries
@@ -416,6 +453,10 @@ function BonusTable({ entries }: { entries: LedgerEntry[] }) {
     .sort((a, b) => b.accruedAt - a.accruedAt);
   return (
     <Panel title="Rincian komisi dan bonus" hint={`${num(rows.length)} entri`}>
+      <div className="callout info" style={{ marginBottom: 12 }}>
+        Bonus <b>tercatat</b> seketika saat penjualan terjadi, lalu <b>ditransfer</b> pada Jumat jadwalnya setelah dipotong PPh 21.
+        Bonus dari penjualan masih dapat <b>ditarik</b> bila pembelian dibatalkan dalam masa pembatalan {PLAN.bonusSafetyDays} hari.
+      </div>
       <div className="toolbar">
         <select
           value={type}
@@ -435,9 +476,9 @@ function BonusTable({ entries }: { entries: LedgerEntry[] }) {
           aria-label="Status"
         >
           <option value="ALL">Semua status</option>
-          <option value="payable">Dibayar</option>
+          <option value="payable">Ditetapkan (dijadwalkan atau ditransfer)</option>
           <option value="held">Ditahan</option>
-          <option value="pending">Menunggu syarat</option>
+          <option value="pending">Tercatat, belum ditetapkan</option>
           <option value="forfeited">Hangus</option>
           <option value="ineligible">Tidak memenuhi syarat</option>
           <option value="clawback">Ditarik</option>
@@ -450,7 +491,7 @@ function BonusTable({ entries }: { entries: LedgerEntry[] }) {
               <th>Timbul</th>
               <th>Jenis</th>
               <th className="r">Bruto</th>
-              <th className="r">Dibayar</th>
+              <th className="r">Ditetapkan</th>
               <th>Status</th>
               <th>Jumat bayar</th>
               <th>Keterangan</th>
@@ -473,7 +514,7 @@ function BonusTable({ entries }: { entries: LedgerEntry[] }) {
                     : "–"}
                 </td>
                 <td>
-                  <StatusBadge status={e.status} />
+                  <StageCell engine={engine} e={e} />
                 </td>
                 <td className="num">
                   {e.advance && e.advanceDate

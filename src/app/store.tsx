@@ -11,6 +11,7 @@ import {
   CaseManager,
   AccessControl,
   PayoutApprovals,
+  EbookStore,
   demoStaff,
   atWib,
   demoScenario,
@@ -31,6 +32,8 @@ interface DemoState {
   cases: CaseManager;
   access: AccessControl;
   payouts: PayoutApprovals;
+  /** E-book Mitra PLS (Agent Marketing) dan kunci Sponsor dari pembelian e-book. */
+  ebooks: EbookStore;
   /** "clerk": staf = pengguna Clerk yang masuk, peran dari server; "demo": pemilih "masuk sebagai". */
   authMode: "clerk" | "demo";
   /** Staf yang sedang masuk. */
@@ -56,6 +59,7 @@ export function DemoProvider({ children }: { children: ReactNode }) {
   }, []);
   const payouts = useMemo(() => new PayoutApprovals(access), [access]);
   const cases = useMemo(() => seedCases(result.engine, result.detector!, access), [result, access]);
+  const ebooks = useMemo(() => seedEbooks(result.engine), [result]);
   const [demoStaffId, setStaffIdRaw] = useState("u-budi");
   const auth = useAuthState();
   // Mode Clerk: pengguna Clerk dicerminkan ke AccessControl dengan peran dari publicMetadata (sumber kebenaran: server).
@@ -76,6 +80,7 @@ export function DemoProvider({ children }: { children: ReactNode }) {
       cases,
       access,
       payouts,
+      ebooks,
       authMode: auth.mode,
       staffId,
       setStaffId: (id: string) => {
@@ -88,7 +93,7 @@ export function DemoProvider({ children }: { children: ReactNode }) {
       version,
       bump,
     }),
-    [result, cases, access, payouts, staffId, version, auth.mode],
+    [result, cases, access, payouts, ebooks, staffId, version, auth.mode],
   );
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
@@ -153,4 +158,33 @@ function seedCases(engine: MitransEngine, detector: ControlDetector, access: Acc
     });
   }
   return cm;
+}
+
+/** E-book contoh (data sintetis) untuk Mitra PLS demo teratas: satu tayang dengan pembeli, satu menunggu pemeriksaan, satu perlu revisi. */
+function seedEbooks(engine: MitransEngine): EbookStore {
+  const store = new EbookStore(engine);
+  const now = atWib(engine.today, 9);
+  const totals = paidTotals(engine);
+  const owners = [...engine.accounts.values()]
+    .filter((a) => a.role === "mitra" && a.quizPassed && !a.terminated && !(a.frozenUntil && a.frozenUntil > now))
+    .sort((a, b) => (totals.get(b.id) ?? 0) - (totals.get(a.id) ?? 0))
+    .slice(0, 3);
+  if (owners.length < 3) return store;
+  const base = {
+    summary: "Panduan dasar untuk keluarga: istilah penting, cara membaca laporan keuangan, dan risiko yang perlu dipahami sebelum berinvestasi.",
+    webinarOffer: true,
+  };
+  const a = store.create(owners[0].id, { ...base, title: "Mengenal Saham Syariah untuk Keluarga", price: 49_000, lpHeadline: "Belajar saham syariah dari nol, bertahap dan jujur soal risiko", lpBody: "E-book 60 halaman: istilah dasar, cara memilih emiten syariah, dan latihan membaca laporan keuangan. Setelah membeli, Anda dapat memilih kelas webinar RT3 Selasa, Rabu, atau Kamis pukul 19.00 WIB." }, now);
+  store.submit(a.id, owners[0].id, now);
+  store.review(a.id, "u-rina", "setujui", undefined, now);
+  for (const [i, name] of ["Pembeli Contoh 1", "Pembeli Contoh 2", "Pembeli Contoh 3"].entries()) {
+    const o = store.order(a.slug, { userId: `user_demo_cub_${i + 1}`, name, email: `pembeli${i + 1}@contoh.test`, whatsapp: `08123456780${i}`, waConsent: i !== 1 }, now);
+    if (i < 2) store.markPaid(o.id, o.price, now);
+  }
+  const b = store.create(owners[1].id, { ...base, title: "Rahasia Cuan dari Saham Syariah", price: 99_000, lpHeadline: "Pasti untung 5% per bulan dengan sinyal beli harian", lpBody: "Ikuti sinyal beli dari kami dan raih passive income. Diawasi OJK." }, now);
+  store.submit(b.id, owners[1].id, now);
+  const c = store.create(owners[2].id, { ...base, title: "Anggaran Keluarga dan Dana Darurat", price: 25_000, lpHeadline: "Mulai dari dana darurat sebelum berinvestasi", lpBody: "Langkah praktis menyusun anggaran bulanan keluarga." }, now);
+  store.submit(c.id, owners[2].id, now);
+  store.review(c.id, "u-rina", "revisi", "Tambahkan penjelasan bahwa e-book ini edukasi, bukan nasihat investasi pribadi, dan cantumkan nama penulis.", now);
+  return store;
 }
