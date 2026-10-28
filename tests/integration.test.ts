@@ -690,3 +690,32 @@ describe("Perjalanan pembeli e-book lewat API dan aktivasi afiliasi", () => {
     expect(s.engine.sales.size).toBe([...s.engine.sales.values()].filter((x) => x.buyerId !== "U-user_cub").length);
   });
 });
+
+describe("Kuis, rekening, dan impor laporan Zoom lewat API", () => {
+  it("kuis mengaktifkan tautan rujukan hanya bila semua benar", async () => {
+    const { QUIZ } = await import("../src/engine/quiz");
+    const s = await setup();
+    const ok = Object.fromEntries(QUIZ.map((q) => [q.id, q.answer]));
+    expect((await s.get("/r/MTR-C")).status).toBe(404);
+    const bad = await s.post("/api/mitra/kuis", { jawaban: { ...ok, sinyal: 0 } }, "user_c|C");
+    expect(bad.body).toMatchObject({ lulus: false, salah: [{ id: "sinyal" }] });
+    expect((await s.post("/api/mitra/kuis", { jawaban: ok }, "user_c|C")).body.lulus).toBe(true);
+    expect((await s.get("/r/MTR-C")).status).toBe(302);
+  });
+
+  it("rekening atas nama sendiri; nomor tersamar di jawaban", async () => {
+    const s = await setup();
+    expect((await s.post("/api/mitra/rekening", { bank: "BSI", nomor: "7123456789", pemilik: "Orang Lain" }, "user_a|A")).status).toBe(409);
+    expect((await s.post("/api/mitra/rekening", { bank: "BSI", nomor: "7123456789", pemilik: "A" }, "user_a|A")).body).toEqual({ bank: "BSI", nomor: "****6789", pemilik: "A" });
+  });
+
+  it("impor CSV Zoom hanya untuk peran kelas.kelola; isi besar diterima sampai 512 KB", async () => {
+    const s = await setup();
+    const big = "Name,User Email,Duration (Minutes)\n" + Array.from({ length: 1000 }, (_, i) => `P${i},p${i}@contoh.test,45`).join("\n");
+    expect(big.length).toBeGreaterThan(8192);
+    const sid = "RT3-2027-01-05";
+    s.engine.advance(at("2027-01-06"));
+    expect((await s.post(`/api/admin/rt3/${sid}/zoom`, { csv: big }, "user_x||keuangan")).status).toBe(403);
+    expect((await s.post(`/api/admin/rt3/${sid}/zoom`, { csv: big }, "user_cs||layanan_pelanggan")).body).toEqual({ hadir: 0, kurangDariBatas: 0, diLuarPesanan: 1000 });
+  });
+});

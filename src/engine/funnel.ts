@@ -17,9 +17,11 @@ export const RT3 = {
   weekdays: [2, 3, 4],
   hourWib: 19,
   /** Kapasitas per kelas (asumsi prototipe; sesuaikan dengan lisensi Zoom). */
-  capacity: 300,
+  capacity: 1000,
   /** Pemilihan atau penggantian kelas ditutup 60 menit sebelum mulai. */
   closeMinutes: 60,
+  /** Dianggap hadir bila total waktu di Zoom paling sedikit 30 menit (asumsi prototipe; tetapkan setelah durasi kelas pasti). */
+  minAttendMinutes: 30,
 } as const;
 
 const DAY_LABEL: Record<number, string> = {
@@ -238,7 +240,7 @@ export class Funnel {
   >();
   readonly bookings = new Map<
     string,
-    { sessionId: string; at: number; attended?: boolean }
+    { sessionId: string; at: number; attended?: boolean; minutes?: number }
   >();
   readonly wa = new WhatsAppQueue();
 
@@ -371,6 +373,33 @@ export class Funnel {
     return n;
   }
 
+  /**
+   * Kehadiran otomatis dari laporan peserta Zoom: peserta dicocokkan lewat surel pesanan (tanpa beda huruf besar/kecil),
+   * durasi beberapa kali masuk dijumlahkan, dan dianggap hadir bila paling sedikit `RT3.minAttendMinutes` menit.
+   */
+  importZoomAttendance(sessionId: string, rows: ZoomParticipant[], at: number) {
+    const s = sessionFor(sessionId.replace(/^RT3-/, ""));
+    if (!s || at < s.startsAt) throw new EngineError("Laporan Zoom diimpor setelah kelas dimulai");
+    const minutes = new Map<string, number>();
+    for (const r of rows) minutes.set(r.email, (minutes.get(r.email) ?? 0) + r.minutes);
+    const matched = new Set<string>();
+    const hadir: string[] = [];
+    const kurang: { orderId: string; minutes: number }[] = [];
+    for (const [orderId, b] of this.bookings) {
+      if (b.sessionId !== sessionId) continue;
+      const email = this.ebooks.orders.get(orderId)!.email.toLowerCase();
+      const m = minutes.get(email);
+      if (m === undefined) continue;
+      matched.add(email);
+      b.minutes = m;
+      if (m >= RT3.minAttendMinutes) {
+        b.attended = true;
+        hadir.push(orderId);
+      } else kurang.push({ orderId, minutes: m });
+    }
+    return { hadir, kurang, tidakTerdaftar: [...minutes.keys()].filter((e) => !matched.has(e)) };
+  }
+
   stage(orderId: string): FunnelStage {
     const o = this.ebooks.orders.get(orderId);
     if (!o || o.status !== "lunas") return "menunggu_bayar";
@@ -379,4 +408,52 @@ export class Funnel {
     if (b) return "kelas_dipilih";
     return this.assessments.has(orderId) ? "asesmen" : "lunas";
   }
+}
+
+export interface ZoomParticipant {
+  email: string;
+  minutes: number;
+}
+
+function csvCells(line: string): string[] {
+  const out: string[] = [];
+  let cur = "";
+  let q = false;
+  for (let i = 0; i < line.length; i++) {
+    const c = line[i];
+    if (q) {
+      if (c === '"' && line[i + 1] === '"') {
+        cur += '"';
+        i++;
+      } else if (c === '"') q = false;
+      else cur += c;
+    } else if (c === '"') q = true;
+    else if (c === ",") {
+      out.push(cur);
+      cur = "";
+    } else cur += c;
+  }
+  out.push(cur);
+  return out.map((x) => x.trim());
+}
+
+/**
+ * Membaca CSV laporan peserta Zoom (Reports → Usage → Participants). Baris judul dicari otomatis: kolom yang memuat
+ * "Email" dan kolom "Duration"/"Durasi". Baris tanpa surel diabaikan.
+ */
+export function parseZoomParticipants(csv: string): ZoomParticipant[] {
+  const lines = csv.replace(/^\uFEFF/, "").split(/\r?\n/).filter((l) => l.trim());
+  const hi = lines.findIndex((l) => /email/i.test(l) && /(duration|durasi)/i.test(l));
+  if (hi < 0) throw new EngineError("Kolom surel dan durasi tidak ditemukan di laporan Zoom");
+  const head = csvCells(lines[hi]).map((h) => h.toLowerCase());
+  const ei = head.findIndex((h) => h.includes("email"));
+  const di = head.findIndex((h) => h.includes("duration") || h.includes("durasi"));
+  const out: ZoomParticipant[] = [];
+  for (const l of lines.slice(hi + 1)) {
+    const c = csvCells(l);
+    const email = (c[ei] ?? "").toLowerCase();
+    const minutes = Number((c[di] ?? "").replace(",", "."));
+    if (email.includes("@") && Number.isFinite(minutes)) out.push({ email, minutes });
+  }
+  return out;
 }

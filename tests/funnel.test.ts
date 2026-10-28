@@ -229,3 +229,43 @@ describe("Pengingat WhatsApp", () => {
     );
   });
 });
+
+describe("Kehadiran otomatis dari laporan Zoom", () => {
+  const CSV = [
+    "Meeting ID,Topic,Start Time",
+    "123 456 789,Webinar RT3,01/05/2027 07:00:00 PM",
+    "",
+    'Name (Original Name),User Email,Join Time,Leave Time,Duration (Minutes),Guest',
+    'Peserta Satu,U1@contoh.test,01/05/2027 07:00:00 PM,01/05/2027 07:20:00 PM,20,Yes',
+    'Peserta Satu,u1@contoh.test,01/05/2027 07:25:00 PM,01/05/2027 08:00:00 PM,35,Yes',
+    '"Dua, Peserta",u2@contoh.test,01/05/2027 07:00:00 PM,01/05/2027 07:10:00 PM,10,Yes',
+    'Tamu,tamu@contoh.test,01/05/2027 07:00:00 PM,01/05/2027 08:00:00 PM,60,Yes',
+    'Tanpa Surel,,01/05/2027 07:00:00 PM,01/05/2027 08:00:00 PM,60,Yes',
+  ].join("\n");
+
+  it("membaca CSV Zoom: baris judul dicari otomatis, tanda kutip, baris tanpa surel diabaikan", async () => {
+    const { parseZoomParticipants } = await import("../src/engine/funnel");
+    expect(parseZoomParticipants(CSV)).toEqual([
+      { email: "u1@contoh.test", minutes: 20 },
+      { email: "u1@contoh.test", minutes: 35 },
+      { email: "u2@contoh.test", minutes: 10 },
+      { email: "tamu@contoh.test", minutes: 60 },
+    ]);
+    expect(() => parseZoomParticipants("a,b\n1,2")).toThrow(/tidak ditemukan/);
+  });
+
+  it("durasi dijumlahkan; hadir bila >= 30 menit; peserta di luar pesanan dilaporkan", async () => {
+    const { parseZoomParticipants } = await import("../src/engine/funnel");
+    const ids = ["u1", "u2"].map((u) => {
+      const id = buy(u, false);
+      funnel.submitAssessment(id, u, ANS, at("2027-01-04"));
+      funnel.chooseClass(id, u, "RT3-2027-01-05", at("2027-01-04"));
+      return id;
+    });
+    expect(() => funnel.importZoomAttendance("RT3-2027-01-05", [], at("2027-01-05", 12))).toThrow(/setelah kelas dimulai/);
+    const r = funnel.importZoomAttendance("RT3-2027-01-05", parseZoomParticipants(CSV), at("2027-01-05", 21));
+    expect(r).toEqual({ hadir: [ids[0]], kurang: [{ orderId: ids[1], minutes: 10 }], tidakTerdaftar: ["tamu@contoh.test"] });
+    expect(funnel.stage(ids[0])).toBe("hadir");
+    expect(funnel.stage(ids[1])).toBe("kelas_dipilih");
+  });
+});

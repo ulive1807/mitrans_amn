@@ -12,3 +12,4 @@ export * from './reminders';
 export * from './tax';
 export * from './ebook';
 export * from './funnel';
+export * from './quiz';

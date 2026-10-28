@@ -11,6 +11,10 @@ import {
   PayoutApprovals,
   EbookStore,
   Funnel,
+  parseZoomParticipants,
+  takeQuiz,
+  validateBankAccount,
+  coolingOffEnds,
   FUNNEL_LABEL,
   LEVEL_LABEL,
   upcomingSessions,
@@ -75,6 +79,8 @@ interface Route {
   need: Permission | "mitra" | "sesi";
   action: string;
   run: Handler;
+  /** Batas isi permintaan; bawaan 8 KB. */
+  maxBody?: number;
 }
 
 class HttpError extends Error {
@@ -597,9 +603,34 @@ export function createApp(opts: AppOptions) {
       access.record(session.userId, "Kehadiran RT3 dicatat", now(), `${params.sesi}: ${n} peserta`);
       return { hadir: n };
     }),
+    // Laporan peserta Zoom (CSV) untuk kehadiran otomatis; isi sampai 512 KB (± 1.000 peserta).
+    {
+      ...route("POST", "/api/admin/rt3/:sesi/zoom", "kelas.kelola", "Impor laporan Zoom", ({ session, params, body }) => {
+        const csv = ((body ?? {}) as { csv?: unknown }).csv;
+        if (typeof csv !== "string") throw new HttpError(400, "csv wajib berisi teks laporan peserta Zoom");
+        const r = guardEngine(() => funnel.importZoomAttendance(params.sesi, parseZoomParticipants(csv), now()));
+        access.record(session.userId, "Laporan Zoom diimpor", now(), `${params.sesi}: ${r.hadir.length} hadir, ${r.kurang.length} kurang dari batas, ${r.tidakTerdaftar.length} di luar pesanan`);
+        return { hadir: r.hadir.length, kurangDariBatas: r.kurang.length, diLuarPesanan: r.tidakTerdaftar.length };
+      }),
+      maxBody: 512 * 1024,
+    },
     route("GET", "/api/admin/whatsapp", "kelas.kelola", "Lihat antrean WhatsApp", () =>
       funnel.wa.messages.slice(-200).map((m) => ({ ...m, to: maskPhone(m.to) })),
     ),
+    // Kuis Kode Etik: lulus bila semua benar; tautan rujukan aktif. Dapat diulang tanpa biaya.
+    route("POST", "/api/mitra/kuis", "mitra", "Kuis Kode Etik", ({ session, body }) => {
+      const acc = ownMitra(session);
+      const r = takeQuiz(engine, acc.id, ((body ?? {}) as { jawaban?: Record<string, number> }).jawaban ?? {});
+      if (r.passed) access.record(session.userId, "Lulus kuis Kode Etik", now(), acc.id);
+      return { lulus: r.passed, salah: r.wrong, masaPertimbanganBerakhir: coolingOffEnds(acc.mitraSince ?? acc.joinedAt) };
+    }),
+    route("POST", "/api/mitra/rekening", "mitra", "Simpan rekening", ({ session, body }) => {
+      const acc = ownMitra(session);
+      const b = (body ?? {}) as Record<string, unknown>;
+      acc.bank = guardEngine(() => validateBankAccount(acc.name, { bank: String(b.bank ?? ""), number: String(b.nomor ?? ""), holder: String(b.pemilik ?? "") }, now()));
+      access.record(session.userId, "Rekening disimpan", now(), `${acc.id}: ${acc.bank.bank} ****${acc.bank.number.slice(-4)}`);
+      return { bank: acc.bank.bank, nomor: `****${acc.bank.number.slice(-4)}`, pemilik: acc.bank.holder };
+    }),
     // Aktivasi afiliasi (tombol di atlastrade.io membuka halaman ini dengan sesi Clerk yang sama).
     route("POST", "/api/aktivasi-afiliasi", "sesi", "Aktivasi afiliasi", ({ session, body }) => {
       const b = (body ?? {}) as { setuju?: unknown; nama?: unknown; nik?: unknown };
@@ -746,7 +777,7 @@ export function createApp(opts: AppOptions) {
         req,
         res,
         200,
-        await r.run({ session, params, query: url.searchParams, body: method === "POST" ? await readJson(req) : undefined }),
+        await r.run({ session, params, query: url.searchParams, body: method === "POST" ? await readJson(req, r.maxBody) : undefined }),
       );
     } catch (err) {
       if (err instanceof HttpError)
@@ -760,20 +791,20 @@ export function createApp(opts: AppOptions) {
 }
 
 /** Membaca isi permintaan apa adanya, paling besar 8 KB. */
-async function readBody(req: IncomingMessage): Promise<string> {
+async function readBody(req: IncomingMessage, limit = 8192): Promise<string> {
   const chunks: Buffer[] = [];
   let size = 0;
   for await (const c of req) {
     size += (c as Buffer).length;
-    if (size > 8192) throw new HttpError(413, "Isi permintaan terlalu besar");
+    if (size > limit) throw new HttpError(413, "Isi permintaan terlalu besar");
     chunks.push(c as Buffer);
   }
   return Buffer.concat(chunks).toString("utf8");
 }
 
 /** Membaca isi JSON permintaan, paling besar 8 KB. Isi kosong dibaca sebagai undefined. */
-async function readJson(req: IncomingMessage): Promise<unknown> {
-  const text = (await readBody(req)).trim();
+async function readJson(req: IncomingMessage, limit?: number): Promise<unknown> {
+  const text = (await readBody(req, limit)).trim();
   if (!text) return undefined;
   try {
     return JSON.parse(text);

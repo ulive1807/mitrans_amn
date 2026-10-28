@@ -33,6 +33,8 @@ export interface Account {
   frozenUntil?: number;
   /** Penerima tanpa NPWP (NIK tidak dapat dipakai sebagai NPWP): tarif PPh 21 20% lebih tinggi. */
   withoutNpwp?: boolean;
+  /** Rekening transfer bonus atas nama sendiri. */
+  bank?: { bank: string; number: string; holder: string; savedAt: number };
 }
 
 export interface BinaryNode {
