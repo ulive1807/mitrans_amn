@@ -25,10 +25,12 @@ import { Pemberitahuan, StatusBanner } from "./MitraPemberitahuan";
 import { Langganan, ReminderBanner } from "./MitraLangganan";
 import { Pajak } from "./MitraPajak";
 import { AgentMarketing } from "./MitraAgent";
+import { KuisRekening } from "./MitraKuis";
 
 type Tab =
   | "ringkasan"
   | "agent"
+  | "kuis"
   | "jaringan"
   | "bonus"
   | "peringkat"
@@ -40,6 +42,7 @@ type Tab =
 const TABS: { id: Tab; label: string }[] = [
   { id: "ringkasan", label: "Ringkasan" },
   { id: "agent", label: "Agent Marketing" },
+  { id: "kuis", label: "Kuis & rekening" },
   { id: "jaringan", label: "Jaringan biner" },
   { id: "bonus", label: "Komisi & bonus" },
   { id: "peringkat", label: "Peringkat & Royalti" },
@@ -148,6 +151,7 @@ export function KantorMaya() {
             />
           )}
           {tab === "agent" && <AgentMarketing accId={acc.id} />}
+          {tab === "kuis" && <KuisRekening accId={acc.id} />}
           {tab === "jaringan" && <Jaringan engine={engine} accId={acc.id} />}
           {tab === "bonus" && <BonusTable engine={engine} entries={entries} />}
           {tab === "peringkat" && <Peringkat engine={engine} accId={acc.id} />}
@@ -785,7 +789,7 @@ function Rujukan({ engine, accId }: { engine: MitransEngine; accId: string }) {
         ) : (
           <div className="callout warn">
             Tautan belum aktif. Selesaikan kuis singkat Kode Etik (gratis) di
-            Kelas Kemitraan atau secara daring.
+            menu Kuis &amp; rekening.
           </div>
         )}
       </Panel>

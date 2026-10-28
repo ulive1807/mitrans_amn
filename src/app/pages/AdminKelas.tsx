@@ -3,6 +3,7 @@ import {
   EngineError,
   FUNNEL_LABEL,
   maskPhone,
+  parseZoomParticipants,
   sessionFor,
   upcomingSessions,
   RT3,
@@ -66,6 +67,21 @@ export function KelasWhatsApp() {
     bump();
   };
 
+  // Kehadiran otomatis: unggah CSV laporan peserta Zoom (Reports → Usage → Participants).
+  const importZoom = async (f: File | undefined) => {
+    if (!f || !sel) return;
+    try {
+      const r = funnel.importZoomAttendance(sel.id, parseZoomParticipants(await f.text()), now);
+      access.record(staffId, "Laporan Zoom diimpor", now, `${sel.id}: ${r.hadir.length} hadir`);
+      setMsg(
+        `Laporan Zoom diimpor: ${r.hadir.length} hadir, ${r.kurang.length} di bawah ${RT3.minAttendMinutes} menit, ${r.tidakTerdaftar.length} surel tidak cocok dengan pesanan.`,
+      );
+    } catch (e) {
+      setMsg(e instanceof EngineError ? e.message : "Laporan Zoom tidak dapat dibaca");
+    }
+    bump();
+  };
+
   return (
     <>
       <div className="kpis">
@@ -109,7 +125,14 @@ export function KelasWhatsApp() {
                 </option>
               ))}
             </select>
+            <label className="btn-secondary" style={{ cursor: started ? "pointer" : "not-allowed", opacity: started ? 1 : 0.5 }} title={started ? "Unggah CSV laporan peserta Zoom" : "Laporan diimpor setelah kelas dimulai"}>
+              Impor laporan Zoom (CSV)
+              <input id="zoom-csv" type="file" accept=".csv,text/csv" hidden disabled={!started} onChange={(e) => void importZoom(e.target.files?.[0])} />
+            </label>
           </div>
+          <p className="muted" style={{ fontSize: 12.5, marginBottom: 10 }}>
+            Peserta dicocokkan lewat surel pesanan; dianggap hadir bila total waktu di Zoom paling sedikit {RT3.minAttendMinutes} menit. Tombol “Tandai hadir” tetap tersedia untuk koreksi.
+          </p>
           {msg && (
             <div
               className="callout warn"
@@ -138,6 +161,7 @@ export function KelasWhatsApp() {
                       <td>{ebooks.ebooks.get(o.ebookId)?.title}</td>
                       <td>{FUNNEL_LABEL[funnel.stage(orderId)]}</td>
                       <td>
+                        {b.minutes !== undefined && <span className="muted" style={{ fontSize: 12, marginRight: 6 }}>{b.minutes} menit</span>}
                         {b.attended ? (
                           <Badge tone="good">Hadir</Badge>
                         ) : (

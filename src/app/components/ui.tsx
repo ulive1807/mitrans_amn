@@ -56,6 +56,7 @@ export function TopBar() {
           </NavLink>
           <NavLink to="/aturan">Aturan</NavLink>
           <NavLink to="/daftar">Daftar Mitra PLS</NavLink>
+          <NavLink to="/ebook-saya">E-book saya</NavLink>
           <NavLink to="/mitra">Kantor Maya</NavLink>
           <NavLink to="/admin">Admin</NavLink>
           <AuthLink />

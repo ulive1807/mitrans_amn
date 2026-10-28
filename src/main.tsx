@@ -1,3 +1,4 @@
+import { EbookSaya } from "./app/pages/EbookSaya";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
@@ -22,6 +23,7 @@ createRoot(document.getElementById("root")!).render(
           <Route path="/aturan" element={<Aturan />} />
           <Route path="/daftar" element={<Daftar />} />
           <Route path="/masuk" element={<Masuk />} />
+          <Route path="/ebook-saya" element={<EbookSaya />} />
           <Route path="/mitra" element={<RequireAccess need="mitra"><KantorMaya /></RequireAccess>} />
           <Route path="/admin" element={<RequireAccess need="staf"><Admin /></RequireAccess>} />
           <Route path="*" element={<Navigate to="/" replace />} />
