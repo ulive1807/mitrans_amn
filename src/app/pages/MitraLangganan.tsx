@@ -166,7 +166,7 @@ export function Langganan({ accId }: { accId: string }) {
                   <li key={b}>{b}</li>
                 ))}
               </ul>
-              {!aheadTooFar && !acc.terminated && <div style={{ marginTop: 6 }}>Silakan bayar lewat kanal resmi Perusahaan.</div>}
+              {!aheadTooFar && !acc.terminated && <div style={{ marginTop: 6 }}>Silakan bayar di atlastrade.io, halaman pembayaran resmi Perusahaan.</div>}
             </div>
           ) : (
             <>
@@ -199,18 +199,18 @@ export function Langganan({ accId }: { accId: string }) {
           </p>
         </Panel>
         <Panel
-          title="Bayar lewat kanal resmi"
-          hint="Transfer atau kanal pembayaran Perusahaan"
+          title="Bayar di atlastrade.io"
+          hint="Halaman pembayaran atlastrade.io"
         >
           <p>
-            Bayar hanya ke rekening atau kanal resmi Perusahaan, tidak melalui
-            rekening pribadi siapa pun.
+            Bayar di atlastrade.io, halaman pembayaran resmi Perusahaan, dengan
+            akun yang sama. Jangan membayar melalui rekening pribadi siapa pun.
           </p>
           <button className="btn-secondary" disabled style={{ marginTop: 10 }}>
             Bayar {rp(price)}
           </button>
           <p className="muted" style={{ marginTop: 8, fontSize: 12.5 }}>
-            Prototipe: kanal pembayaran belum disambungkan.
+            Prototipe: atlastrade.io belum disambungkan; pembayaran dari sana dicatat lewat webhook.
           </p>
         </Panel>
       </div>
