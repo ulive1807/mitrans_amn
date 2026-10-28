@@ -138,6 +138,11 @@ export const FUNNEL_LABEL: Record<FunnelStage, string> = {
 // ---------------------------------------------------------------------------
 // Antrean WhatsApp
 
+/** Nomor WhatsApp tersamar untuk tampilan staf: 0812****890. */
+export function maskPhone(n: string): string {
+  return n.length <= 7 ? "****" : `${n.slice(0, 4)}****${n.slice(-3)}`;
+}
+
 export type WaKind =
   | "pembayaran_lunas"
   | "pengingat_kelas_h1"

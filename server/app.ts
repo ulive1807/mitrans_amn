@@ -14,7 +14,7 @@ import {
   FUNNEL_LABEL,
   LEVEL_LABEL,
   upcomingSessions,
-  maskNik as maskId,
+  maskPhone,
   EBOOK_STATUS_LABEL,
   reminderFor,
   maskNik,
@@ -598,7 +598,7 @@ export function createApp(opts: AppOptions) {
       return { hadir: n };
     }),
     route("GET", "/api/admin/whatsapp", "kelas.kelola", "Lihat antrean WhatsApp", () =>
-      funnel.wa.messages.slice(-200).map((m) => ({ ...m, to: maskId(m.to) })),
+      funnel.wa.messages.slice(-200).map((m) => ({ ...m, to: maskPhone(m.to) })),
     ),
     // Aktivasi afiliasi (tombol di atlastrade.io membuka halaman ini dengan sesi Clerk yang sama).
     route("POST", "/api/aktivasi-afiliasi", "sesi", "Aktivasi afiliasi", ({ session, body }) => {

@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { TinjauEbook } from "./AdminEbook";
+import { KelasWhatsApp } from "./AdminKelas";
 import { Link } from "react-router-dom";
 import {
   BONUS_LABEL,
@@ -44,7 +45,8 @@ type Tab =
   | "pengingat"
   | "pph"
   | "audit"
-  | "ebook";
+  | "ebook"
+  | "kelas";
 /** Setiap tab hanya tampil bagi peran yang memiliki izinnya. */
 const TABS: { id: Tab; label: string; perm: Permission }[] = [
   { id: "ikhtisar", label: "Ikhtisar", perm: "ikhtisar.lihat" },
@@ -56,6 +58,7 @@ const TABS: { id: Tab; label: string; perm: Permission }[] = [
   { id: "terkendali", label: "Akun terkendali", perm: "deteksi.lihat" },
   { id: "kasus", label: "Kasus & sanksi", perm: "kasus.lihat" },
   { id: "ebook", label: "Pemeriksaan e-book", perm: "konten.tinjau" },
+  { id: "kelas", label: "Kelas RT3 & WhatsApp", perm: "kelas.kelola" },
   { id: "pengingat", label: "Pengingat Langganan", perm: "mitra.lihat" },
   { id: "pph", label: "PPh 21 & bukti potong", perm: "pembayaran.lihat" },
   { id: "simulasi", label: "Simulasi engine", perm: "simulasi.jalankan" },
@@ -142,6 +145,7 @@ export function Admin() {
           {tab === "terkendali" && <AkunTerkendali />}
           {tab === "kasus" && <KasusSanksi />}
           {tab === "ebook" && <TinjauEbook />}
+          {tab === "kelas" && <KelasWhatsApp />}
           {tab === "simulasi" && <Simulasi />}
           {tab === "pengguna" && <PenggunaPeran />}
           {tab === "pengingat" && <PengingatLangganan />}

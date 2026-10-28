@@ -1,8 +1,11 @@
 import { useMemo, useState } from "react";
 import {
+  EBOOK_FILE_MAX_BYTES,
   EBOOK_PRICE,
   EBOOK_STATUS_LABEL,
   EngineError,
+  FUNNEL_LABEL,
+  isPdf,
   scanCompliance,
   type Ebook,
   type EbookInput,
@@ -81,9 +84,44 @@ export function LpPreview({ e }: { e: EbookInput }) {
   );
 }
 
+/** Unggah PDF: diperiksa di peramban (tanda awal %PDF-, ukuran) lalu sidik SHA-256 dicatat. */
+function PdfUpload({ ebook, accId }: { ebook: Ebook; accId: string }) {
+  const { ebooks, now, bump } = useDemo();
+  const [err, setErr] = useState<string | null>(null);
+  const locked = ebook.status === "diajukan" || ebook.status === "ditolak" || ebook.status === "ditarik";
+  const onFile = async (f: File | undefined) => {
+    if (!f) return;
+    try {
+      if (f.size > EBOOK_FILE_MAX_BYTES) throw new EngineError("Ukuran berkas paling besar 20 MB");
+      const buf = new Uint8Array(await f.arrayBuffer());
+      if (!isPdf(buf)) throw new EngineError("Berkas bukan PDF yang sah");
+      const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", buf));
+      const sha256 = Array.from(digest, (b) => b.toString(16).padStart(2, "0")).join("");
+      ebooks.attachFile(ebook.id, accId, { name: f.name, size: f.size, sha256 }, now);
+      setErr(null);
+    } catch (e) {
+      setErr(e instanceof EngineError ? e.message : "Berkas tidak dapat dibaca");
+    }
+    bump();
+  };
+  return (
+    <div className="field">
+      <label htmlFor="eb-file">Berkas e-book (PDF, paling besar 20 MB)</label>
+      {ebook.file && (
+        <div className="hint" style={{ marginBottom: 6 }}>
+          Terunggah: <b>{ebook.file.name}</b> · {ebook.file.size >= 1_048_576 ? `${(ebook.file.size / 1_048_576).toFixed(1)} MB` : `${Math.max(1, Math.round(ebook.file.size / 1024))} KB`} · {dateLabel(ebook.file.uploadedAt)}
+        </div>
+      )}
+      <input id="eb-file" type="file" accept="application/pdf,.pdf" disabled={locked} onChange={(e) => void onFile(e.target.files?.[0])} />
+      {err && <div className="err">{err}</div>}
+      {ebook.status === "disetujui" && <div className="hint">Mengganti berkas menurunkan halaman ini sampai disetujui lagi.</div>}
+    </div>
+  );
+}
+
 /** Dasbor Agent Marketing: e-book dan LP milik Mitra PLS, diajukan untuk diperiksa Perusahaan sebelum tayang. */
 export function AgentMarketing({ accId }: { accId: string }) {
-  const { engine, ebooks, now, version, bump } = useDemo();
+  const { engine, ebooks, funnel, now, version, bump } = useDemo();
   const acc = engine.accounts.get(accId)!;
   const list = useMemo(() => ebooks.forMitra(accId), [ebooks, accId, version]);
   const [sel, setSel] = useState<string | "baru">(list[0]?.id ?? "baru");
@@ -130,11 +168,18 @@ export function AgentMarketing({ accId }: { accId: string }) {
           : ebooks.create(accId, form, now),
       "Draf disimpan.",
     );
-  const submit = () =>
-    run(() => {
+  // Isi disimpan lebih dulu, sehingga draf tetap ada (dan berkas bisa diunggah) walaupun pengajuan ditolak.
+  const submit = () => {
+    try {
       const e = current ? ebooks.update(current.id, accId, form, now) : ebooks.create(accId, form, now);
-      return ebooks.submit(e.id, accId, now);
-    }, "Diajukan. Tim Kepatuhan akan memeriksa sebelum halaman penawaran tayang.");
+      setSel(e.id);
+      ebooks.submit(e.id, accId, now);
+      setMsg({ ok: true, text: "Diajukan. Tim Kepatuhan akan memeriksa sebelum halaman penawaran tayang." });
+    } catch (err) {
+      setMsg({ ok: false, text: err instanceof EngineError ? err.message : "Gagal mengajukan." });
+    }
+    bump();
+  };
 
   const live = list.filter((e) => e.status === "disetujui");
   const paid = [...ebooks.orders.values()].filter(
@@ -298,6 +343,15 @@ export function AgentMarketing({ accId }: { accId: string }) {
               <span>Tawarkan kelas webinar RT3 setelah pembelian</span>
             </label>
           </fieldset>
+          <div style={{ marginTop: 12 }}>
+            {current ? (
+              <PdfUpload ebook={current} accId={accId} />
+            ) : (
+              <p className="muted" style={{ fontSize: 13 }}>
+                Simpan draf terlebih dahulu, lalu unggah berkas PDF e-book. Pengajuan memerlukan berkas.
+              </p>
+            )}
+          </div>
           {flags.length > 0 && (
             <div className="callout warn" style={{ marginTop: 12 }}>
               <b>Kalimat yang akan diperiksa ketat:</b>
@@ -381,7 +435,8 @@ export function AgentMarketing({ accId }: { accId: string }) {
                 <tr>
                   <th>Pembeli</th>
                   <th>Dipesan</th>
-                  <th>Status</th>
+                  <th>Tahap</th>
+                  <th>Kelas RT3</th>
                   <th>WhatsApp</th>
                   <th>Sponsor</th>
                 </tr>
@@ -392,11 +447,12 @@ export function AgentMarketing({ accId }: { accId: string }) {
                     <td>{o.name}</td>
                     <td className="num">{dateLabel(o.createdAt)}</td>
                     <td>
-                      {o.status === "lunas" ? (
-                        <Badge tone="good">Lunas</Badge>
-                      ) : (
-                        <Badge tone="mute">Menunggu bayar</Badge>
-                      )}
+                      <Badge tone={o.status === "lunas" ? (funnel.stage(o.id) === "lunas" ? "warn" : "good") : "mute"}>
+                        {FUNNEL_LABEL[funnel.stage(o.id)]}
+                      </Badge>
+                    </td>
+                    <td className="num">
+                      {funnel.bookings.get(o.id) ? `${dateLabel(funnel.bookings.get(o.id)!.sessionId.replace("RT3-", ""))} · 19.00 WIB` : <span className="muted">–</span>}
                     </td>
                     <td>
                       {o.waConsent ? (
@@ -417,7 +473,7 @@ export function AgentMarketing({ accId }: { accId: string }) {
                 ))}
                 {ebooks.ordersFor(current.id).length === 0 && (
                   <tr>
-                    <td colSpan={5} className="muted">
+                    <td colSpan={6} className="muted">
                       Belum ada pesanan.
                     </td>
                   </tr>

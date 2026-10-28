@@ -764,6 +764,7 @@ function PlanB({
 }
 
 function Rujukan({ engine, accId }: { engine: MitransEngine; accId: string }) {
+  const { now } = useDemo();
   const acc = engine.accounts.get(accId)!;
   const customerSales = [...engine.sales.values()].filter(
     (s) => s.kind === "license" && s.sellerId === accId && s.toCustomer,
@@ -799,6 +800,7 @@ function Rujukan({ engine, accId }: { engine: MitransEngine; accId: string }) {
                 <th>Pelanggan</th>
                 <th>Pembelian</th>
                 <th>Orientasi</th>
+                <th>Batas aktivasi afiliasi</th>
               </tr>
             </thead>
             <tbody>
@@ -820,11 +822,20 @@ function Rujukan({ engine, accId }: { engine: MitransEngine; accId: string }) {
                       <span className="muted"> · dikonversi</span>
                     ) : null}
                   </td>
+                  <td className="num">
+                    {s.convertedAt || s.cancelled ? (
+                      <span className="muted">–</span>
+                    ) : s.at + PLAN.conversionWindowDays * 86_400_000 > now ? (
+                      dateLabel(s.at + PLAN.conversionWindowDays * 86_400_000)
+                    ) : (
+                      <span className="muted">Lewat</span>
+                    )}
+                  </td>
                 </tr>
               ))}
               {customerSales.length === 0 && (
                 <tr>
-                  <td colSpan={3} className="muted">
+                  <td colSpan={4} className="muted">
                     Belum ada penjualan kepada Pelanggan.
                   </td>
                 </tr>
