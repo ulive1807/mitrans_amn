@@ -416,3 +416,5 @@ Keputusan Coach (28 Oktober 2026): ketiga domain dikelola **PT Mitra Transformas
 - Engine mewajibkan NIK untuk setiap pembeli (satu identitas satu akun); karena itu NIK diminta sekali di checkout dan diteruskan lewat webhook. Pembagian data di dalam PT yang sama tetap harus dijelaskan di Kebijakan Privasi (UU PDP).
 
 **Dokumen (draf v1.4, perubahan terlacak 28 Oktober 2026):** S&K Pasal 1, 2, 5, 7, dan 11; Kode Etik Pasal 1 (definisi Halaman Pembayaran), 12, 15, dan 18 angka 15 (penomoran larangan tidak berubah); Rencana Pemasaran Bab 2 dan Bab 6; Catatan Konsultan Hukum butir 20 Bagian 1 dan A20. Nama PT diisi "PT Mitra Transformasi Inteligensi" dengan tanda ejaan sesuai akta ●.
+
+**Spesifikasi untuk tim atlastrade.io:** `docs/SPESIFIKASI_INTEGRASI_ATLASTRADE.md` (format tiket, webhook, kode jawaban, vektor uji yang diperiksa otomatis oleh `tests/integration-spec.test.ts`, dan daftar uji staging).
