@@ -102,7 +102,12 @@ export interface PayoutScheduleLine {
   tax: number;
   /** Potongan Langganan yang dibayar dari bonus. */
   deducted: number;
+  /** Kekurangan transfer Jumat sebelumnya yang minus, dipindah ke Jumat ini. */
+  carriedIn: number;
+  /** Nilai yang ditransfer, tidak pernah negatif. */
   net: number;
+  /** Bagian bonus pada Jumat ini yang masih dapat ditarik (penjualan belum lewat masa pembatalan). */
+  atRisk: number;
 }
 
 /** Status satu penarikan bonus: dipotong dari Jumat mana saja, dan sisa piutang. */

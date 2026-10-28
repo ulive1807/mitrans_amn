@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { MitransEngine } from "../src/engine/engine";
+import { PLAN } from "../src/engine/plan";
 import { syntheticNik } from "../src/engine/simulation";
 import { PPH21, dppOf, pph21BukanPegawai } from "../src/engine/tax";
 import { atWib } from "../src/engine/time";
@@ -146,5 +147,54 @@ describe("Piutang penarikan: dipotong dari hak lain, lalu dihapus setelah 12 bul
     expect(() => engine.recordOtherEntitlement({ id: "X", accountId: "A", kind: "lainnya", amount: 0, at: at("2027-02-15") })).toThrow(/positif/);
     engine.recordOtherEntitlement({ id: "X", accountId: "A", kind: "lainnya", amount: 1, at: at("2027-02-15") });
     expect(() => engine.recordOtherEntitlement({ id: "X", accountId: "A", kind: "lainnya", amount: 1, at: at("2027-02-15") })).toThrow(/sudah dipakai/);
+  });
+});
+
+describe("Pencegahan transfer minus", () => {
+  // Skenario sendiri: A menjual B pada 5 Januari (bonus lama) dan C pada 29 Januari (masih masa pembatalan).
+  beforeEach(() => {
+    engine = new MitransEngine(atWib("2027-01-01", 0, 1));
+    nik = 1;
+    mitra("A", "MITRANS-002", at("2027-01-02"));
+    mitra("B", "A", at("2027-01-05"));
+    mitra("C", "A", at("2027-01-29"));
+    engine.closeThrough("2027-01");
+  });
+
+  it("bonus dari penjualan yang masih dapat dibatalkan tidak dihitung sebagai saldo aman", () => {
+    const d = engine.bonusBalanceDetail("A");
+    expect(d.atRisk).toBeGreaterThan(0);
+    expect(d.available).toBe(d.pending - d.atRisk - d.outstanding - d.shortfall);
+  });
+
+  it("tombol bayar ditolak bila saldo aman kurang, walaupun total bonus belum ditransfer masih cukup", () => {
+    engine.paySubscriptionFromBonus({ saleId: "S1", accountId: "A", at: at("2027-02-01", 9) });
+    const d = engine.bonusBalanceDetail("A");
+    expect(d.pending).toBeGreaterThanOrEqual(PLAN.subscription.price);
+    expect(d.available).toBeLessThan(PLAN.subscription.price);
+    expect(() => engine.paySubscriptionFromBonus({ saleId: "S2", accountId: "A", at: at("2027-02-02", 9) })).toThrow(/tidak cukup/);
+  });
+
+  it("potongan Langganan tidak pernah membuat transfer minus akibat pembatalan penjualan baru", () => {
+    engine.paySubscriptionFromBonus({ saleId: "S1", accountId: "A", at: at("2027-02-01", 9) });
+    engine.refundSale("L-C", at("2027-02-02")); // penjualan dalam masa pembatalan
+    for (const l of engine.payoutSchedule("A")) expect(l.net).toBeGreaterThanOrEqual(0);
+    expect(engine.bonusBalanceDetail("A").shortfall).toBe(0);
+  });
+
+  it("bila tetap minus (mis. penarikan atas penjualan lama), kekurangan dipindah ke Jumat berikutnya", () => {
+    engine.paySubscriptionFromBonus({ saleId: "S1", accountId: "A", at: at("2027-02-01", 9) });
+    engine.refundSale("L-B", at("2027-02-02"));
+    engine.refundSale("L-C", at("2027-02-02"));
+    const feb5 = engine.payoutSchedule("A").find((l) => l.date === "2027-02-05")!;
+    expect(feb5.net).toBe(0);
+    const short = engine.bonusBalanceDetail("A").shortfall;
+    expect(short).toBe(-(feb5.gross - feb5.clawback - feb5.tax - feb5.deducted));
+    expect(engine.bonusBalance("A")).toBe(0);
+    expect(engine.payoutRuns().find((r) => r.date === "2027-02-05")!.transfer).toBeGreaterThanOrEqual(0);
+    mitra("E", "A", at("2027-02-12"));
+    engine.closeThrough("2027-02");
+    const next = engine.payoutSchedule("A").find((l) => l.date > "2027-02-05" && l.gross > 0)!;
+    expect(next.carriedIn).toBe(short);
   });
 });

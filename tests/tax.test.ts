@@ -54,7 +54,7 @@ describe("Saldo setelah PPh dan bayar dari bonus", () => {
     const rows = engine.pendingPayouts("A");
     for (const r of rows) expect(r.net).toBe(r.gross - r.tax - r.deducted);
     expect(rows.reduce((a, r) => a + r.tax, 0)).toBeGreaterThan(0);
-    expect(engine.bonusBalance("A")).toBe(rows.reduce((a, r) => a + r.net, 0));
+    expect(engine.bonusBalance("A")).toBe(rows.reduce((a, r) => a + Math.max(0, r.net - r.atRisk), 0));
     expect(engine.bonusBalance("A")).toBeLessThan(rows.reduce((a, r) => a + r.gross, 0));
   });
 

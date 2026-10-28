@@ -88,6 +88,12 @@ export const PLAN = {
   // Bab 13 / S&K Pasal 7: piutang penarikan bonus yang tidak terpotong (dari transfer bonus maupun hak lain)
   // dihapus setelah 12 bulan sejak tanggal penarikan. Keputusan Coach 28 Oktober 2026.
   clawbackWriteOffMonths: 12,
+  /**
+   * Bonus penjualan (Sponsor, Berkah, Level, Pasangan, Pembinaan) yang timbul kurang dari 14 hari lalu belum dihitung
+   * sebagai saldo yang aman dipakai membayar Langganan, karena pembeliannya masih dapat dibatalkan (masa pertimbangan
+   * 10 hari kerja ≈ 14 hari kalender). Mencegah transfer minus akibat penarikan sesudah potongan dijadwalkan.
+   */
+  bonusSafetyDays: 14,
 
   // Bab 12.1 Plafon
   planACapBp: 5000, // 50% omzet bersih Lisensi

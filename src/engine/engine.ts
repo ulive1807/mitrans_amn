@@ -40,6 +40,7 @@ function addMonthsToDate(date: string, n: number): string {
 import {
   PLAN_A_TYPES,
   PLAN_B_TYPES,
+  SALE_DRIVEN_TYPES,
   TEAM_TYPES,
   type Account,
   type BinaryNode,
@@ -787,6 +788,8 @@ export class MitransEngine {
   private computeSchedule(accountId: string): {
     lines: PayoutScheduleLine[];
     clawbacks: ClawbackStatus[];
+    /** Kekurangan transfer minus yang belum tertutup Jumat berikutnya. */
+    shortfall: number;
   } {
     const acc = this.mustAccount(accountId);
     const gross = this.grossByDate(accountId);
@@ -845,13 +848,27 @@ export class MitransEngine {
     const deducted = new Map<string, number>();
     for (const d of this.payoutDeductions)
       if (d.accountId === accountId && !d.cancelled) deducted.set(d.date, (deducted.get(d.date) ?? 0) + d.amount);
+    // Bonus penjualan yang belum lewat masa pembatalan: masih dapat ditarik, sehingga belum aman dipakai.
+    const riskFrom = Date.parse(`${this.currentDay}T00:00:00+07:00`) - PLAN.bonusSafetyDays * DAY_MS;
+    const atRisk = new Map<string, number>();
+    for (const e of this.entriesFor(accountId)) {
+      if (e.status !== "payable" || !e.payoutDate || e.amount <= 0) continue;
+      if (!SALE_DRIVEN_TYPES.includes(e.type) || e.accruedAt < riskFrom) continue;
+      if (e.advance && e.advanceDate) atRisk.set(e.advanceDate, (atRisk.get(e.advanceDate) ?? 0) + e.advance);
+      atRisk.set(e.payoutDate, (atRisk.get(e.payoutDate) ?? 0) + e.amount - (e.advance ?? 0));
+    }
+    // Transfer tidak pernah negatif: kekurangan dipindah ke Jumat berikutnya; sisanya menjadi kekurangan terbuka.
+    let carry = 0;
     const lines = withholdBySchedule(taxable, acc.withoutNpwp).map((l) => {
       const g = gross.get(l.date)!;
       const clawback = offsetByDate.get(l.date) ?? 0;
       const ded = deducted.get(l.date) ?? 0;
-      return { date: l.date, gross: g, clawback, taxable: l.gross, tax: l.tax, deducted: ded, net: g - clawback - l.tax - ded };
+      const carriedIn = carry;
+      const raw = g - clawback - l.tax - ded - carriedIn;
+      carry = raw < 0 ? -raw : 0;
+      return { date: l.date, gross: g, clawback, taxable: l.gross, tax: l.tax, deducted: ded, carriedIn, net: Math.max(0, raw), atRisk: atRisk.get(l.date) ?? 0 };
     });
-    return { lines, clawbacks };
+    return { lines, clawbacks, shortfall: carry };
   }
 
   /**
@@ -906,12 +923,23 @@ export class MitransEngine {
     return this.clawbackStatus(accountId).reduce((a, c) => a + c.outstanding, 0);
   }
 
-  /** Saldo bonus yang dapat dipakai membayar Langganan: transfer mendatang setelah penarikan, PPh, dan potongan, dikurangi piutang penarikan. */
-  bonusBalance(accountId: string): number {
-    const { lines, clawbacks } = this.computeSchedule(accountId);
-    const pending = lines.filter((r) => r.date > this.currentDay).reduce((a, r) => a + r.net, 0);
+  /**
+   * Rincian saldo bonus untuk bayar Langganan. `available` hanya memakai bagian yang aman per Jumat: transfer mendatang
+   * setelah penarikan, PPh, dan potongan, dikurangi bonus yang penjualannya masih dapat dibatalkan, dikurangi piutang
+   * penarikan dan kekurangan transfer minus.
+   */
+  bonusBalanceDetail(accountId: string): { pending: number; atRisk: number; outstanding: number; shortfall: number; available: number } {
+    const { lines, clawbacks, shortfall } = this.computeSchedule(accountId);
+    const future = lines.filter((r) => r.date > this.currentDay);
+    const pending = future.reduce((a, r) => a + r.net, 0);
+    const safe = future.reduce((a, r) => a + Math.max(0, r.net - r.atRisk), 0);
     const outstanding = clawbacks.reduce((a, c) => a + c.outstanding, 0);
-    return Math.max(0, pending - outstanding);
+    return { pending, atRisk: pending - safe, outstanding, shortfall, available: Math.max(0, safe - outstanding - shortfall) };
+  }
+
+  /** Saldo bonus yang aman dipakai membayar Langganan (lihat bonusBalanceDetail). */
+  bonusBalance(accountId: string): number {
+    return this.bonusBalanceDetail(accountId).available;
   }
 
   /**
@@ -971,7 +999,7 @@ export class MitransEngine {
     let left = price;
     for (const r of this.pendingPayouts(acc.id)) {
       if (left <= 0) break;
-      const take = Math.min(left, Math.max(0, r.net));
+      const take = Math.min(left, Math.max(0, r.net - r.atRisk));
       if (take <= 0) continue;
       this.payoutDeductions.push({ saleId: sale.id, accountId: acc.id, date: r.date, amount: take });
       left -= take;
@@ -987,6 +1015,8 @@ export class MitransEngine {
     byType: Record<BonusType, number>;
     /** Penarikan bonus (clawback) yang dipotong pada Jumat itu. */
     clawback: number;
+    /** Kekurangan transfer minus Jumat sebelumnya yang dipindah ke Jumat ini. */
+    carried: number;
     /** PPh 21 yang dipotong pada Jumat itu (atas bruto setelah penarikan). */
     tax: number;
     /** Potongan Langganan dari bonus pada Jumat itu. */
@@ -1002,6 +1032,7 @@ export class MitransEngine {
         count: number;
         byType: Record<BonusType, number>;
         clawback: number;
+        carried: number;
         tax: number;
         deducted: number;
         transfer: number;
@@ -1010,7 +1041,7 @@ export class MitransEngine {
     for (const e of this.ledger) {
       if (e.status !== "payable" || !e.payoutDate || e.amount === 0) continue;
       if (e.advance && e.advanceDate) {
-        const a = runs.get(e.advanceDate) ?? { date: e.advanceDate, total: 0, count: 0, byType: emptyByType(), clawback: 0, tax: 0, deducted: 0, transfer: 0 };
+        const a = runs.get(e.advanceDate) ?? { date: e.advanceDate, total: 0, count: 0, byType: emptyByType(), clawback: 0, carried: 0, tax: 0, deducted: 0, transfer: 0 };
         a.total += e.advance;
         a.count++;
         a.byType[e.type] += e.advance;
@@ -1023,6 +1054,7 @@ export class MitransEngine {
         count: 0,
         byType: emptyByType(),
         clawback: 0,
+        carried: 0,
         tax: 0,
         deducted: 0,
         transfer: 0,
@@ -1045,9 +1077,10 @@ export class MitransEngine {
         if (!r) continue;
         r.clawback += l.clawback;
         r.tax += l.tax;
+        r.carried += l.carriedIn;
+        r.transfer += l.net;
       }
     }
-    for (const r of runs.values()) r.transfer = r.total - r.clawback - r.tax - r.deducted;
     return [...runs.values()].sort((a, b) => a.date.localeCompare(b.date));
   }
 

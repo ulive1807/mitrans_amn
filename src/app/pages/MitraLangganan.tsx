@@ -52,13 +52,14 @@ export function Langganan({ accId }: { accId: string }) {
   const data = useMemo(() => {
     const until = engine.accessUntil(accId);
     const pending = engine.pendingPayouts(accId);
-    const balance = engine.bonusBalance(accId);
+    const detail = engine.bonusBalanceDetail(accId);
+    const balance = detail.available;
     // Pratinjau alokasi potongan: Jumat terdekat lebih dulu, sama dengan engine.
     let left = price;
     const plan: { date: string; amount: number }[] = [];
     for (const r of pending) {
       if (left <= 0) break;
-      const take = Math.min(left, Math.max(0, r.net));
+      const take = Math.min(left, Math.max(0, r.net - r.atRisk));
       if (take > 0) {
         plan.push({ date: r.date, amount: take });
         left -= take;
@@ -71,6 +72,7 @@ export function Langganan({ accId }: { accId: string }) {
       until,
       pending,
       balance,
+      detail,
       plan,
       history,
       reminder: reminderFor(engine, accId, now),
@@ -88,7 +90,18 @@ export function Langganan({ accId }: { accId: string }) {
   const aheadTooFar =
     data.until - now > PLAN.subscription.periodDays * 86_400_000;
   const enough = data.balance >= price;
-  const canPay = enough && !aheadTooFar && agree && !acc.terminated;
+  // Alasan tombol tidak aktif: dihitung sistem, tombol hanya berfungsi bila semuanya terpenuhi.
+  const blockers: string[] = [];
+  if (acc.terminated) blockers.push("Keanggotaan sudah diputus.");
+  if (aheadTooFar) blockers.push("Langganan periode berikutnya sudah dibayar (paling banyak satu periode di muka).");
+  if (!enough) {
+    blockers.push(`Saldo bonus yang aman dipakai ${rp(data.balance)}, kurang dari ${rp(price)}.`);
+    if (data.detail.atRisk > 0)
+      blockers.push(`${rp(data.detail.atRisk)} berasal dari penjualan yang masih dalam masa pembatalan ${PLAN.bonusSafetyDays} hari, sehingga belum dihitung.`);
+    if (data.detail.outstanding > 0) blockers.push(`Masih ada piutang penarikan bonus ${rp(data.detail.outstanding)}.`);
+    if (data.detail.shortfall > 0) blockers.push(`Masih ada kekurangan transfer sebelumnya ${rp(data.detail.shortfall)}.`);
+  }
+  const canPay = blockers.length === 0 && agree;
 
   const pay = () => {
     try {
@@ -134,9 +147,9 @@ export function Langganan({ accId }: { accId: string }) {
           sub={`Jatuh tempo ${dateLabel(data.until)} · 30 hari`}
         />
         <Kpi
-          label="Bonus belum ditransfer"
+          label="Bonus aman dipakai"
           value={rp(data.balance)}
-          sub="Setelah PPh 21, menunggu Jumat transfer"
+          sub={`Dari ${rp(data.detail.pending)} belum ditransfer, setelah PPh 21`}
         />
       </div>
 
@@ -145,56 +158,39 @@ export function Langganan({ accId }: { accId: string }) {
           title="Bayar dari bonus"
           hint="Dipotong dari transfer Jumat terdekat"
         >
-          {aheadTooFar ? (
-            <p>
-              Langganan periode berikutnya sudah dibayar. Pembayaran di muka
-              paling banyak satu periode.
-            </p>
-          ) : !enough ? (
-            <p>
-              Saldo bonus yang sudah ditetapkan dan belum ditransfer (
-              {rp(data.balance)}) belum cukup untuk {rp(price)}. Silakan bayar
-              lewat kanal resmi Perusahaan.
-            </p>
+          {blockers.length ? (
+            <div className="callout warn" role="status">
+              <b>Tombol tidak aktif.</b>
+              <ul style={{ margin: "6px 0 0 18px" }}>
+                {blockers.map((b) => (
+                  <li key={b}>{b}</li>
+                ))}
+              </ul>
+              {!aheadTooFar && !acc.terminated && <div style={{ marginTop: 6 }}>Silakan bayar lewat kanal resmi Perusahaan.</div>}
+            </div>
           ) : (
             <>
               <p>
                 {rp(price)} akan dipotong dari transfer{" "}
-                {data.plan
-                  .map((p) => `${dateLabel(p.date)} (${rp(p.amount)})`)
-                  .join(" dan ")}
-                . Akses diperpanjang 30 hari{" "}
+                {data.plan.map((p) => `${dateLabel(p.date)} (${rp(p.amount)})`).join(" dan ")}. Akses diperpanjang 30 hari{" "}
                 {active ? `sejak ${dateLabel(data.until)}` : "sejak hari ini"}.
               </p>
-              <label
-                style={{
-                  display: "flex",
-                  gap: 8,
-                  alignItems: "flex-start",
-                  marginTop: 10,
-                }}
-              >
-                <input
-                  type="checkbox"
-                  checked={agree}
-                  onChange={(e) => setAgree(e.target.checked)}
-                  style={{ marginTop: 3 }}
-                />
-                <span>
-                  Saya setuju {rp(price)} dipotong dari bonus saya yang belum
-                  ditransfer untuk membayar Langganan 30 hari.
-                </span>
+              <label style={{ display: "flex", gap: 8, alignItems: "flex-start", marginTop: 10 }}>
+                <input type="checkbox" checked={agree} onChange={(e) => setAgree(e.target.checked)} style={{ marginTop: 3 }} />
+                <span>Saya setuju {rp(price)} dipotong dari bonus saya yang belum ditransfer untuk membayar Langganan 30 hari.</span>
               </label>
-              <button
-                className="btn-primary"
-                style={{ marginTop: 12 }}
-                disabled={!canPay}
-                onClick={pay}
-              >
-                Bayar {rp(price)} dari bonus
-              </button>
             </>
           )}
+          <button
+            className="btn-primary"
+            style={{ marginTop: 12 }}
+            disabled={!canPay}
+            aria-disabled={!canPay}
+            title={blockers.length ? blockers.join(" ") : agree ? undefined : "Centang persetujuan terlebih dahulu"}
+            onClick={() => canPay && pay()}
+          >
+            Bayar {rp(price)} dari bonus
+          </button>
           <p className="muted" style={{ marginTop: 10, fontSize: 12.5 }}>
             Pilihan, bukan kewajiban. Dipotong dari bonus setelah PPh 21; bonus
             bruto dan PPh 21-nya tidak berubah, yang berkurang hanya nilai transfer. Plan B atas Langganan

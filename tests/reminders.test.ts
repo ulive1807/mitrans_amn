@@ -109,8 +109,9 @@ describe("Bayar Langganan dari bonus", () => {
       .pendingPayouts("A")
       .find((r) => r.date === "2027-02-05")!;
     expect(feb5.gross).toBeGreaterThanOrEqual(3 * PLAN.sponsorBonus);
+    // Hanya bagian yang aman: bonus penjualan 29 Januari masih dalam masa pembatalan 14 hari.
     expect(engine.bonusBalance("A")).toBe(
-      engine.pendingPayouts("A").reduce((a, r) => a + r.net, 0),
+      engine.pendingPayouts("A").reduce((a, r) => a + Math.max(0, r.net - r.atRisk), 0),
     );
   });
 

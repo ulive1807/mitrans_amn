@@ -373,7 +373,10 @@ Penarikan timbul bila pembelian dibatalkan sesudah bonusnya ditetapkan (S&K Pasa
 
 Pajak: penarikan yang dipotong dari transfer bonus mengurangi bruto kena pajak transfer itu. Penarikan yang ditutup dari hak lain, maupun piutang yang dihapus, tidak mengubah PPh yang sudah dipotong; perlakuannya perlu dinilai konsultan pajak (Catatan Hukum butir 19 dan A18).
 
-Yang belum ditangani: bila potongan Langganan sudah dijadwalkan lalu penarikan baru membuat transfer Jumat itu negatif, selisihnya perlu ditangani manual.
+**Pencegahan transfer minus** (keputusan Coach 28 Oktober 2026: tombol tidak aktif bila bonus tidak mencukupi):
+1. **Saldo aman** (`bonusBalanceDetail`) = bonus yang belum ditransfer setelah PPh dan potongan, **dikurangi bonus penjualan** (Sponsor, Berkah, Level, Pasangan, Pembinaan) **yang timbul kurang dari 14 hari lalu** (`PLAN.bonusSafetyDays`, karena pembeliannya masih dapat dibatalkan), dikurangi piutang penarikan, dan dikurangi kekurangan transfer sebelumnya. Potongan Langganan hanya dialokasikan dari bagian aman tiap Jumat.
+2. **Tombol "Bayar dari bonus" selalu tampil tetapi tidak aktif** bila saldo aman kurang dari Rp399.000, periode berikutnya sudah dibayar, atau keanggotaan diputus. Alasannya ditampilkan, termasuk berapa bonus yang tertahan masa pembatalan. Engine dan API menolak dengan aturan yang sama, sehingga tombol tidak dapat diakali.
+3. **Pengaman terakhir:** bila suatu Jumat tetap minus (mis. penarikan atas penjualan lama karena akun terkendali), nilai transfer Jumat itu menjadi Rp0 dan kekurangannya dipindah ke Jumat berikutnya (`carriedIn`). Kekurangan yang belum tertutup mengurangi saldo aman.
 
 Tampilan: Kantor Maya (tab Pajak & penarikan) menunjukkan sumber potongan (transfer atau hak lain) dan tanggal hapus. Admin (tab PPh 21 & bukti potong, panel Piutang penarikan & hak lain) menampilkan daftar piutang dan formulir pencatatan hak lain; hanya peran dengan izin `pembayaran.siapkan`, dan setiap pencatatan masuk log audit. API: `POST /api/admin/hak-lain`.
 

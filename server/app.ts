@@ -284,6 +284,9 @@ export function createApp(opts: AppOptions) {
         aksesSampai: until ?? null,
         hargaLangganan: PLAN.subscription.price,
         saldoBonusBelumDitransfer: engine.bonusBalance(acc.id),
+        // Saldo aman = belum ditransfer − bonus dalam masa pembatalan − piutang penarikan − kekurangan transfer.
+        rincianSaldo: engine.bonusBalanceDetail(acc.id),
+        bisaBayarDariBonus: engine.bonusBalance(acc.id) >= PLAN.subscription.price,
         jadwalTransfer: engine.pendingPayouts(acc.id),
         pengingat: r ? { tahap: r.stage, jatuhTempo: r.dueDate, pesan: r.message } : null,
       };

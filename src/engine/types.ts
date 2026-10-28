@@ -127,6 +127,8 @@ export const PLAN_B_TYPES: BonusType[] = [
   "ROYALTI_RO",
 ];
 export const TEAM_TYPES: BonusType[] = ["LEVEL", "PASANGAN", "PEMBINAAN"];
+/** Bonus yang timbul dari satu penjualan dan dapat ditarik bila penjualan itu dibatalkan. */
+export const SALE_DRIVEN_TYPES: BonusType[] = ["SPONSOR", "BERKAH", "LEVEL", "PASANGAN", "PEMBINAAN"];
 
 export const BONUS_LABEL: Record<BonusType, string> = {
   SPONSOR: "Bonus Sponsor",
