@@ -241,9 +241,28 @@ export function createApp(opts: AppOptions) {
           nominal: c.amount,
           dipotong: c.offsets,
           sisa: c.outstanding,
+          dihapusPada: c.writeOffDate,
+          sudahDihapus: c.writtenOff,
         })),
         piutangPenarikan: engine.clawbackOutstanding(acc.id),
       };
+    }),
+    // Pembayaran hak lain Mitra PLS: piutang penarikan dipotong lebih dulu, sisanya dibayarkan. Nilai dihitung server.
+    route("POST", "/api/admin/hak-lain", "pembayaran.siapkan", "Catat pembayaran hak lain", ({ session, body }) => {
+      const b = (body ?? {}) as { mitraId?: unknown; jenis?: unknown; nominal?: unknown };
+      const jenis = b.jenis;
+      if (typeof b.mitraId !== "string" || !findMitra(b.mitraId)) throw new HttpError(400, "mitraId tidak dikenal");
+      if (jenis !== "pembelian_kembali" && jenis !== "pengembalian_dana" && jenis !== "lainnya") throw new HttpError(400, "jenis hak tidak sah");
+      if (typeof b.nominal !== "number") throw new HttpError(400, "nominal harus angka");
+      const acc = findMitra(b.mitraId)!;
+      try {
+        const r = engine.recordOtherEntitlement({ id: `HAK-${engine.otherEntitlements.length + 1}`, accountId: acc.id, kind: jenis, amount: b.nominal, at: now() });
+        access.record(session.userId, "Pembayaran hak lain dicatat", now(), `${acc.id}: ${b.nominal} (piutang ${r.offset}, dibayar ${r.paid})`);
+        return { menutupPiutang: r.offset, dibayarkan: r.paid };
+      } catch (err) {
+        if (err instanceof EngineError) throw new HttpError(409, err.message);
+        throw err;
+      }
     }),
     // Rekap PPh 21 satu masa untuk Keuangan; NIK tersamar.
     route("GET", "/api/admin/pph/:masa", "pembayaran.lihat", "Lihat rekap PPh 21", ({ params }) => {

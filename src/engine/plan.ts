@@ -85,6 +85,10 @@ export const PLAN = {
   // Bab 5.5 Konversi Lisensi Pelanggan
   conversionWindowDays: 60,
 
+  // Bab 13 / S&K Pasal 7: piutang penarikan bonus yang tidak terpotong (dari transfer bonus maupun hak lain)
+  // dihapus setelah 12 bulan sejak tanggal penarikan. Keputusan Coach 28 Oktober 2026.
+  clawbackWriteOffMonths: 12,
+
   // Bab 12.1 Plafon
   planACapBp: 5000, // 50% omzet bersih Lisensi
   planBCapBp: 4000, // 40% omzet bersih Langganan

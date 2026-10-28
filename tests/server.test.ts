@@ -446,3 +446,17 @@ describe("PPh 21 dan penarikan lewat server", () => {
     expect((await call(`/api/admin/pph/${masa}`, { tok: cs })).status).toBe(403);
   });
 });
+
+describe("Hak lain lewat server", () => {
+  it("Keuangan mencatat hak lain; peran lain dan isi tidak sah ditolak", async () => {
+    const acc = [...engine.accounts.values()].find((a) => a.role === "mitra")!;
+    const keu = await token({ sub: "user_keu_hak", metadata: { roles: ["keuangan"] } });
+    const ok = await call("/api/admin/hak-lain", { tok: keu, method: "POST", body: JSON.stringify({ mitraId: acc.id, jenis: "pengembalian_dana", nominal: 250000 }) });
+    expect(ok.status).toBe(200);
+    expect(ok.body.menutupPiutang + ok.body.dibayarkan).toBe(250000);
+    expect((await call("/api/admin/hak-lain", { tok: keu, method: "POST", body: JSON.stringify({ mitraId: acc.id, jenis: "bonus", nominal: 1 }) })).status).toBe(400);
+    expect((await call("/api/admin/hak-lain", { tok: keu, method: "POST", body: JSON.stringify({ mitraId: acc.id, jenis: "lainnya", nominal: -5 }) })).status).toBe(409);
+    const kep = await token({ sub: "user_kep_hak", metadata: { roles: ["kepatuhan"] } });
+    expect((await call("/api/admin/hak-lain", { tok: kep, method: "POST", body: JSON.stringify({ mitraId: acc.id, jenis: "lainnya", nominal: 1 }) })).status).toBe(403);
+  });
+});

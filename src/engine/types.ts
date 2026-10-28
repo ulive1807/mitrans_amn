@@ -158,6 +158,25 @@ export type EntryStatus =
   /** Ditarik kembali karena pembelian dibatalkan/dikembalikan. */
   | "clawback";
 
+/** Hak Mitra PLS selain bonus yang dibayar Perusahaan, dan dapat dipakai menutup piutang penarikan bonus. */
+export type OtherEntitlementKind = "pembelian_kembali" | "pengembalian_dana" | "lainnya";
+
+export const OTHER_ENTITLEMENT_LABEL: Record<OtherEntitlementKind, string> = {
+  pembelian_kembali: "Pembelian kembali Lisensi",
+  pengembalian_dana: "Pengembalian dana",
+  lainnya: "Pembayaran lain dari Perusahaan",
+};
+
+export interface OtherEntitlement {
+  id: string;
+  accountId: string;
+  kind: OtherEntitlementKind;
+  /** Nominal hak sebelum dipotong piutang penarikan. */
+  amount: number;
+  at: number;
+  note?: string;
+}
+
 /**
  * Potongan transfer Jumat untuk membayar Langganan dari bonus.
  * Dicatat terpisah dari ledger: bonus bruto (dasar pajak) tidak berubah, yang berkurang hanya nilai transfer.

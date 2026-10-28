@@ -109,8 +109,14 @@ export interface PayoutScheduleLine {
 export interface ClawbackStatus {
   entry: import("./types").LedgerEntry;
   amount: number;
-  offsets: { date: string; amount: number }[];
+  /** Tempat penarikan dipotong: transfer bonus Jumat, atau hak lain (pembelian kembali, pengembalian dana, dll.). */
+  offsets: { date: string; amount: number; source: "transfer" | "hak_lain"; entitlementId?: string }[];
+  /** Sisa piutang yang masih dapat dipotong. */
   outstanding: number;
+  /** Tanggal sisa piutang dihapus (12 bulan sejak penarikan). */
+  writeOffDate: string;
+  /** Sisa yang sudah dihapus karena lewat 12 bulan. */
+  writtenOff: number;
 }
 
 /** Rincian pemotongan PPh 21 satu Mitra PLS untuk satu masa pajak (bahan bukti potong BP21 di Coretax). */

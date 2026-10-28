@@ -100,3 +100,51 @@ describe("Bukti potong PPh 21 per masa pajak", () => {
     );
   });
 });
+
+describe("Piutang penarikan: dipotong dari hak lain, lalu dihapus setelah 12 bulan", () => {
+  it("hak lain (pembelian kembali) menutup piutang lebih dulu; sisanya dibayarkan", () => {
+    engine.refundSale("L-B", at("2027-02-10"));
+    const out = engine.clawbackOutstanding("A");
+    const r = engine.recordOtherEntitlement({ id: "H1", accountId: "A", kind: "pembelian_kembali", amount: out + 500_000, at: at("2027-02-15") });
+    expect(r).toEqual({ offset: out, paid: 500_000 });
+    expect(engine.clawbackOutstanding("A")).toBe(0);
+    const offs = engine.clawbackStatus("A").flatMap((c) => c.offsets);
+    expect(offs.every((o) => o.source === "hak_lain" && o.entitlementId === "H1")).toBe(true);
+  });
+
+  it("hak yang lebih kecil dari piutang dipakai seluruhnya; sisa piutang tetap tercatat", () => {
+    engine.refundSale("L-B", at("2027-02-10"));
+    const out = engine.clawbackOutstanding("A");
+    expect(engine.recordOtherEntitlement({ id: "H2", accountId: "A", kind: "pengembalian_dana", amount: 300_000, at: at("2027-02-15") })).toEqual({ offset: 300_000, paid: 0 });
+    expect(engine.clawbackOutstanding("A")).toBe(out - 300_000);
+  });
+
+  it("hak yang dibayar sebelum penarikan tidak dipakai untuk penarikan itu", () => {
+    engine.recordOtherEntitlement({ id: "H3", accountId: "A", kind: "lainnya", amount: 5_000_000, at: at("2027-02-03") });
+    engine.refundSale("L-B", at("2027-02-10"));
+    expect(engine.otherEntitlementStatus("H3")).toEqual({ offset: 0, paid: 5_000_000 });
+    expect(engine.clawbackOutstanding("A")).toBeGreaterThan(0);
+  });
+
+  it("sisa piutang dihapus 12 bulan sejak penarikan dan tidak lagi mengurangi saldo atau bonus baru", () => {
+    engine.refundSale("L-B", at("2027-02-10"));
+    const out = engine.clawbackOutstanding("A");
+    const st = engine.clawbackStatus("A");
+    expect(st.every((c) => c.writeOffDate === "2028-02-10")).toBe(true);
+    engine.advance(at("2028-02-09"));
+    expect(engine.clawbackOutstanding("A")).toBe(out); // belum lewat
+    engine.advance(at("2028-02-10"));
+    expect(engine.clawbackOutstanding("A")).toBe(0);
+    expect(engine.clawbackStatus("A").reduce((a, c) => a + c.writtenOff, 0)).toBe(out);
+    // Bonus sesudah tanggal penghapusan tidak dipotong lagi.
+    mitra("F", "A", at("2028-02-11"));
+    engine.closeThrough("2028-02");
+    expect(engine.payoutSchedule("A").filter((l) => l.date > "2028-02-10").every((l) => l.clawback === 0)).toBe(true);
+  });
+
+  it("validasi: nominal positif, nomor unik, hanya Mitra PLS", () => {
+    expect(() => engine.recordOtherEntitlement({ id: "X", accountId: "A", kind: "lainnya", amount: 0, at: at("2027-02-15") })).toThrow(/positif/);
+    engine.recordOtherEntitlement({ id: "X", accountId: "A", kind: "lainnya", amount: 1, at: at("2027-02-15") });
+    expect(() => engine.recordOtherEntitlement({ id: "X", accountId: "A", kind: "lainnya", amount: 1, at: at("2027-02-15") })).toThrow(/sudah dipakai/);
+  });
+});

@@ -51,7 +51,7 @@ Prinsip implementasi:
 
 ## 3. Keputusan aturan yang tidak diatur dokumen
 
-Seluruh butir A1–A16 **diputuskan Coach pada 27 Oktober 2026**. Butir yang mengubah isi Rencana Pemasaran (terutama A1, A4, A10, A12) perlu dicantumkan di dokumen dan dikonfirmasi konsultan hukum sebelum diajukan.
+Seluruh butir A1–A18 **diputuskan Coach pada 27–28 Oktober 2026**. Butir yang mengubah isi Rencana Pemasaran (terutama A1, A4, A10, A12) perlu dicantumkan di dokumen dan dikonfirmasi konsultan hukum sebelum diajukan.
 
 | # | Hal | Keputusan | Kode |
 |---|---|---|---|
@@ -71,6 +71,8 @@ Seluruh butir A1–A16 **diputuskan Coach pada 27 Oktober 2026**. Butir yang men
 | A14 | Masa berlaku Lisensi | **Lisensi tanpa batas waktu (lifetime)**, Rp7.500.000 sekali bayar, tidak perlu dibeli ulang (v1.3: akses 3 bulan). Bila Langganan berhenti, Lisensi tetap dan Langganan dapat dilanjutkan kapan saja | `PLAN.license.lifetime` |
 | A15 | Awal dan periode Langganan (RO) | **30 hari pertama sejak aktivasi termasuk Lisensi; tagihan Langganan Rp399.000 pertama pada hari ke-30**, lalu setiap 30 hari. Bayar sebelum jatuh tempo menyambung dari akhir akses (paling banyak 1 periode di muka); bila sudah lewat, periode dimulai saat dibayar. Syarat Langganan bulanan (bonus tim, Plan B) = akses aktif pada akhir bulan (23.59 WIB) | `PLAN.license.accessDays`, `PLAN.subscription.periodDays`, `accessUntil`, `accessActiveAt` |
 | A16 | Rekening dana layanan Rp426.000 per Lisensi (Bab 12.2 butir 4) | **Dihapus**, karena biaya layanan sesudah 30 hari pertama sudah ditanggung Langganan | dihapus dari `PLAN` |
+| A17 | Bayar Langganan dari bonus | Atas persetujuan tegas per pembayaran, dari transfer setelah PPh, hanya Langganan milik sendiri | `paySubscriptionFromBonus`, S&K Pasal 21 angka 7 |
+| A18 | Piutang penarikan bonus yang tidak tertutup | **Dipotong dari hak lain** (pembelian kembali, pengembalian dana, pembayaran lain), **lalu dihapus 12 bulan** sejak tanggal penarikan | `recordOtherEntitlement`, `PLAN.clawbackWriteOffMonths`, `clawbackStatus` |
 
 ## 4. Temuan dari pengujian yang perlu dibahas
 
@@ -362,10 +364,18 @@ Antarmuka memanggil API dengan `getToken()` Clerk di header (`src/app/api.ts`). 
 Penarikan timbul bila pembelian dibatalkan sesudah bonusnya ditetapkan (S&K Pasal 7; keputusan A12). Prosesnya:
 1. Setiap penarikan dialokasikan, menurut urutan waktu, ke transfer Jumat berikutnya **sesudah** tanggal penarikan, sebanyak bonus bruto yang tersedia pada Jumat itu.
 2. Pada Jumat itu, **bruto kena pajak = bonus bruto − penarikan**, lalu PPh 21 dihitung dari sana. Penarikan mengoreksi pajak tanpa membuat PPh negatif.
-3. Bagian yang belum dapat dipotong (tidak ada transfer berikutnya) menjadi **piutang penarikan**. Piutang ini dikurangkan dari saldo bonus untuk bayar Langganan, dan otomatis dipotong saat bonus berikutnya timbul.
+3. Bagian yang belum dapat dipotong menjadi **piutang penarikan** (keputusan A18). Piutang dipotong menurut urutan waktu:
+   - dari transfer bonus berikutnya;
+   - dari **hak lain** Mitra PLS yang dibayar Perusahaan (pembelian kembali Lisensi, pengembalian dana, atau pembayaran lain), yang dicatat Keuangan lewat `recordOtherEntitlement`: piutang ditutup lebih dulu, sisanya dibayarkan. Hak yang dibayar sebelum penarikan tidak dipakai untuk penarikan itu.
+
+   Sisa yang belum terpotong **12 bulan sejak tanggal penarikan dihapus** (`PLAN.clawbackWriteOffMonths`). Sesudah itu sisa tersebut tidak mengurangi saldo dan tidak dipotong dari bonus atau hak berikutnya. Selama piutang ada, saldo bayar-Langganan-dari-bonus ikut berkurang.
 4. Nilai yang ditransfer = bruto − penarikan − PPh 21 − potongan Langganan. Semua dihitung ulang dari ledger, sehingga tidak ada saldo tersimpan yang bisa tidak sinkron.
 
-Yang belum ditangani: piutang yang tidak pernah tertutup (mis. Mitra PLS berhenti) memerlukan kebijakan penagihan atau penghapusan; bila potongan Langganan sudah dijadwalkan lalu penarikan baru membuat transfer Jumat itu negatif, selisihnya perlu ditangani manual.
+Pajak: penarikan yang dipotong dari transfer bonus mengurangi bruto kena pajak transfer itu. Penarikan yang ditutup dari hak lain, maupun piutang yang dihapus, tidak mengubah PPh yang sudah dipotong; perlakuannya perlu dinilai konsultan pajak (Catatan Hukum butir 19 dan A18).
+
+Yang belum ditangani: bila potongan Langganan sudah dijadwalkan lalu penarikan baru membuat transfer Jumat itu negatif, selisihnya perlu ditangani manual.
+
+Tampilan: Kantor Maya (tab Pajak & penarikan) menunjukkan sumber potongan (transfer atau hak lain) dan tanggal hapus. Admin (tab PPh 21 & bukti potong, panel Piutang penarikan & hak lain) menampilkan daftar piutang dan formulir pencatatan hak lain; hanya peran dengan izin `pembayaran.siapkan`, dan setiap pencatatan masuk log audit. API: `POST /api/admin/hak-lain`.
 
 ### 13.2 Rincian bukti potong PPh 21
 

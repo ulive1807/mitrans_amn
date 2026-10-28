@@ -100,8 +100,8 @@ export function Pajak({ accId }: { accId: string }) {
                   <th>Jenis</th>
                   <th>Keterangan</th>
                   <th className="r">Nominal</th>
-                  <th>Dipotong dari transfer</th>
-                  <th className="r">Sisa piutang</th>
+                  <th>Dipotong dari</th>
+                  <th>Status</th>
                 </tr>
               </thead>
               <tbody>
@@ -115,13 +115,18 @@ export function Pajak({ accId }: { accId: string }) {
                       {c.offsets.length
                         ? c.offsets
                             .map(
-                              (o) => `${dateLabel(o.date)} (${rp(o.amount)})`,
+                              (o) =>
+                                `${o.source === "hak_lain" ? "Hak lain" : "Transfer"} ${dateLabel(o.date)} (${rp(o.amount)})`,
                             )
                             .join(", ")
-                        : "Belum ada transfer"}
+                        : "Belum terpotong"}
                     </td>
-                    <td className="r num">
-                      {c.outstanding ? rp(c.outstanding) : "Lunas"}
+                    <td>
+                      {c.writtenOff
+                        ? `Sisa ${rp(c.writtenOff)} dihapus ${dateLabel(c.writeOffDate)}`
+                        : c.outstanding
+                          ? `Sisa ${rp(c.outstanding)}; dihapus ${dateLabel(c.writeOffDate)} bila belum terpotong`
+                          : "Lunas"}
                     </td>
                   </tr>
                 ))}
@@ -133,9 +138,12 @@ export function Pajak({ accId }: { accId: string }) {
         )}
         <p className="muted" style={{ marginTop: 10, fontSize: 12.5 }}>
           Penarikan dipotong dari transfer Jumat berikutnya dan mengurangi bruto
-          kena pajak transfer itu, sehingga PPh 21 ikut berkurang. Sisa yang
-          belum terpotong tetap menjadi piutang dan tidak dapat dipakai untuk
-          membayar Langganan dari bonus.
+          kena pajak transfer itu, sehingga PPh 21 ikut berkurang. Bila belum
+          cukup, sisanya dipotong dari hak lain Anda (pembelian kembali Lisensi,
+          pengembalian dana, atau pembayaran lain dari Perusahaan). Sisa yang
+          belum terpotong 12 bulan sejak penarikan dihapus dan tidak ditagih.
+          Selama masih ada, sisa itu tidak dapat dipakai membayar Langganan dari
+          bonus (S&amp;K Pasal 7).
         </p>
       </Panel>
     </>

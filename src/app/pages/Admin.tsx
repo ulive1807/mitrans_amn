@@ -16,6 +16,8 @@ import {
   REMINDER_LABEL,
   remindersDue,
   type ReminderStage,
+  OTHER_ENTITLEMENT_LABEL,
+  type OtherEntitlementKind,
   type Permission,
   type Role,
 } from "../../engine";
@@ -1440,6 +1442,138 @@ function RekapPph() {
           </Panel>
         ) : null;
       })()}
+      <PiutangPenarikan />
     </>
+  );
+}
+
+/**
+ * Piutang penarikan bonus: dipotong dari transfer bonus, lalu dari hak lain, lalu dihapus 12 bulan sejak penarikan.
+ * Keuangan mencatat pembayaran hak lain di sini; piutang dipotong lebih dulu, sisanya dibayarkan.
+ */
+function PiutangPenarikan() {
+  const { engine, access, staffId, now, version, bump } = useDemo();
+  const [form, setForm] = useState<{ accountId: string; kind: OtherEntitlementKind; amount: string }>({
+    accountId: "",
+    kind: "pembelian_kembali",
+    amount: "",
+  });
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const rows = useMemo(() => {
+    const out: { id: string; name: string; outstanding: number; writtenOff: number; nextWriteOff?: string }[] = [];
+    for (const acc of engine.accounts.values()) {
+      if (acc.role !== "mitra") continue;
+      const st = engine.clawbackStatus(acc.id);
+      if (!st.length) continue;
+      const outstanding = st.reduce((a, c) => a + c.outstanding, 0);
+      const writtenOff = st.reduce((a, c) => a + c.writtenOff, 0);
+      if (!outstanding && !writtenOff) continue;
+      const next = st.filter((c) => c.outstanding > 0).map((c) => c.writeOffDate).sort()[0];
+      out.push({ id: acc.id, name: acc.name, outstanding, writtenOff, nextWriteOff: next });
+    }
+    return out.sort((a, b) => b.outstanding - a.outstanding);
+  }, [engine, version]);
+  const canRecord = access.can(staffId, "pembayaran.siapkan");
+  const mitra = useMemo(
+    () => [...engine.accounts.values()].filter((a) => a.role === "mitra").sort((a, b) => a.name.localeCompare(b.name)),
+    [engine],
+  );
+
+  const submit = () => {
+    const amount = Number(form.amount.replace(/\D/g, ""));
+    try {
+      access.require(staffId, "pembayaran.siapkan", "Catat pembayaran hak lain", now, `${form.accountId}: ${amount}`);
+      const r = engine.recordOtherEntitlement({
+        id: `HAK-${engine.otherEntitlements.length + 1}`,
+        accountId: form.accountId,
+        kind: form.kind,
+        amount,
+        at: now,
+      });
+      setMsg({ ok: true, text: `${OTHER_ENTITLEMENT_LABEL[form.kind]} ${rp(amount)} dicatat: ${rp(r.offset)} menutup piutang penarikan, ${rp(r.paid)} dibayarkan.` });
+      setForm({ ...form, amount: "" });
+    } catch (err) {
+      setMsg({ ok: false, text: err instanceof Error ? err.message : "Gagal" });
+    }
+    bump();
+  };
+
+  return (
+    <Panel title="Piutang penarikan & hak lain" hint="Transfer bonus → hak lain → dihapus 12 bulan sejak penarikan">
+      {msg && (
+        <div className={`callout ${msg.ok ? "info" : "warn"}`} style={{ marginBottom: 12 }}>
+          {msg.text}
+        </div>
+      )}
+      {rows.length ? (
+        <div className="table-wrap">
+          <table className="t">
+            <thead>
+              <tr>
+                <th>Mitra PLS</th>
+                <th className="r">Piutang</th>
+                <th>Dihapus paling awal</th>
+                <th className="r">Sudah dihapus</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.slice(0, 100).map((r) => (
+                <tr key={r.id}>
+                  <td>{r.name}</td>
+                  <td className="r num">{r.outstanding ? rp(r.outstanding) : "–"}</td>
+                  <td>{r.nextWriteOff ? dateLabel(r.nextWriteOff) : "–"}</td>
+                  <td className="r num">{r.writtenOff ? rp(r.writtenOff) : "–"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <p className="muted">Tidak ada piutang penarikan bonus.</p>
+      )}
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "flex-end", marginTop: 14 }}>
+        <div className="field" style={{ minWidth: 220 }}>
+          <label>Mitra PLS</label>
+          <select value={form.accountId} onChange={(e) => setForm({ ...form, accountId: e.target.value })} aria-label="Mitra PLS penerima hak">
+            <option value="">Pilih…</option>
+            {rows.map((r) => (
+              <option key={`p-${r.id}`} value={r.id}>
+                {r.name} · piutang {rp(r.outstanding)}
+              </option>
+            ))}
+            {mitra
+              .filter((m) => !rows.some((r) => r.id === m.id))
+              .slice(0, 300)
+              .map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.name}
+                </option>
+              ))}
+          </select>
+        </div>
+        <div className="field">
+          <label>Jenis hak</label>
+          <select value={form.kind} onChange={(e) => setForm({ ...form, kind: e.target.value as OtherEntitlementKind })} aria-label="Jenis hak">
+            {(Object.keys(OTHER_ENTITLEMENT_LABEL) as OtherEntitlementKind[]).map((k) => (
+              <option key={k} value={k}>
+                {OTHER_ENTITLEMENT_LABEL[k]}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="field">
+          <label>Nominal (Rp)</label>
+          <input inputMode="numeric" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} aria-label="Nominal hak" />
+        </div>
+        <button className="btn-secondary" disabled={!canRecord || !form.accountId || !form.amount} onClick={submit}>
+          Catat pembayaran hak
+        </button>
+      </div>
+      <p className="muted" style={{ marginTop: 8, fontSize: 12.5 }}>
+        {canRecord ? "" : "Hanya peran Keuangan yang dapat mencatat pembayaran hak. "}
+        Hak lain bukan bonus, sehingga tidak dikenai PPh 21 bonus dan tidak masuk bukti potong. Penghapusan piutang tidak mengubah PPh
+        yang sudah dipotong.
+      </p>
+    </Panel>
   );
 }

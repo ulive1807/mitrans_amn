@@ -28,6 +28,15 @@ import {
 import { PPH21, dppOf, withholdBySchedule, type BuktiPotong, type ClawbackStatus, type PayoutScheduleLine } from "./tax";
 
 const DAY_MS = 86_400_000;
+/** Tanggal YYYY-MM-DD ditambah n bulan kalender (tanggal akhir bulan disesuaikan). */
+function addMonthsToDate(date: string, n: number): string {
+  const [y, m, d] = date.split("-").map(Number);
+  const idx = y * 12 + (m - 1) + n;
+  const ny = Math.floor(idx / 12);
+  const nm = (idx % 12) + 1;
+  const last = new Date(Date.UTC(ny, nm, 0)).getUTCDate();
+  return `${ny}-${String(nm).padStart(2, "0")}-${String(Math.min(d, last)).padStart(2, "0")}`;
+}
 import {
   PLAN_A_TYPES,
   PLAN_B_TYPES,
@@ -37,6 +46,8 @@ import {
   type BonusType,
   type LedgerEntry,
   type MonthReport,
+  type OtherEntitlement,
+  type OtherEntitlementKind,
   type PayoutDeduction,
   type PoolSources,
   type RankClaim,
@@ -126,6 +137,8 @@ export class MitransEngine {
   private subscriptionPeriods = new Map<string, Sale[]>();
   /** Potongan transfer Jumat untuk Langganan yang dibayar dari bonus. */
   readonly payoutDeductions: PayoutDeduction[] = [];
+  /** Hak lain Mitra PLS yang dibayar Perusahaan (bukan bonus). */
+  readonly otherEntitlements: OtherEntitlement[] = [];
   private customersWithPaidSubscription = new Set<string>();
   private licenseSalesByBuyer = new Map<string, string[]>();
   private entriesBySale = new Map<string, LedgerEntry[]>();
@@ -781,24 +794,51 @@ export class MitransEngine {
     const room = new Map(gross);
     const offsetByDate = new Map<string, number>();
     const clawbacks: ClawbackStatus[] = [];
+    // Sumber pemotongan menurut urutan waktu: transfer bonus Jumat dan hak lain (pembelian kembali, pengembalian dana, dll.).
+    const ents = this.otherEntitlements.filter((e) => e.accountId === accountId);
+    const entRoom = new Map(ents.map((e) => [e.id, e.amount]));
+    const sources = [
+      ...dates.map((d) => ({ date: d, entitlement: undefined as OtherEntitlement | undefined })),
+      ...ents.map((e) => ({ date: wibDate(e.at), entitlement: e as OtherEntitlement | undefined })),
+    ].sort((a, b) => a.date.localeCompare(b.date) || (a.entitlement ? 1 : 0) - (b.entitlement ? 1 : 0));
     const claws = this.entriesFor(accountId)
       .filter((e) => e.status === "clawback" && e.amount < 0)
       .sort((a, b) => a.accruedAt - b.accruedAt || a.id - b.id);
     for (const c of claws) {
       let left = -c.amount;
       const after = wibDate(c.accruedAt);
-      const offsets: { date: string; amount: number }[] = [];
-      for (const d of dates) {
+      const writeOffDate = addMonthsToDate(after, PLAN.clawbackWriteOffMonths);
+      const offsets: ClawbackStatus["offsets"] = [];
+      for (const src of sources) {
         if (left <= 0) break;
-        if (d <= after) continue;
-        const take = Math.min(left, Math.max(0, room.get(d)!));
-        if (take <= 0) continue;
-        room.set(d, room.get(d)! - take);
-        offsetByDate.set(d, (offsetByDate.get(d) ?? 0) + take);
-        offsets.push({ date: d, amount: take });
-        left -= take;
+        if (src.date >= writeOffDate) break;
+        if (src.entitlement) {
+          if (src.entitlement.at < c.accruedAt) continue;
+          const take = Math.min(left, entRoom.get(src.entitlement.id)!);
+          if (take <= 0) continue;
+          entRoom.set(src.entitlement.id, entRoom.get(src.entitlement.id)! - take);
+          offsets.push({ date: src.date, amount: take, source: "hak_lain", entitlementId: src.entitlement.id });
+          left -= take;
+        } else {
+          const d = src.date;
+          if (d <= after) continue;
+          const take = Math.min(left, Math.max(0, room.get(d)!));
+          if (take <= 0) continue;
+          room.set(d, room.get(d)! - take);
+          offsetByDate.set(d, (offsetByDate.get(d) ?? 0) + take);
+          offsets.push({ date: d, amount: take, source: "transfer" });
+          left -= take;
+        }
       }
-      clawbacks.push({ entry: c, amount: -c.amount, offsets, outstanding: left });
+      const expired = left > 0 && this.currentDay >= writeOffDate;
+      clawbacks.push({
+        entry: c,
+        amount: -c.amount,
+        offsets,
+        outstanding: expired ? 0 : left,
+        writeOffDate,
+        writtenOff: expired ? left : 0,
+      });
     }
     const taxable = new Map<string, number>();
     for (const d of dates) taxable.set(d, gross.get(d)! - (offsetByDate.get(d) ?? 0));
@@ -827,7 +867,36 @@ export class MitransEngine {
     return this.payoutSchedule(accountId).filter((r) => r.date > this.currentDay);
   }
 
-  /** Penarikan bonus satu akun: nominal, Jumat tempat dipotong, dan sisa yang masih menjadi piutang. */
+  /**
+   * Catat pembayaran hak lain kepada Mitra PLS (pembelian kembali Lisensi, pengembalian dana, atau pembayaran lain).
+   * Piutang penarikan bonus yang masih ada dipotong lebih dulu; sisanya dibayarkan. Hak ini bukan bonus, sehingga
+   * tidak dikenai PPh 21 bonus dan tidak masuk bukti potong.
+   */
+  recordOtherEntitlement(input: { id: string; accountId: string; kind: OtherEntitlementKind; amount: number; at: number; note?: string }): {
+    offset: number;
+    paid: number;
+  } {
+    this.advance(input.at);
+    const acc = this.mustAccount(input.accountId);
+    if (acc.role !== "mitra") throw new EngineError("Hak lain hanya dicatat untuk Mitra PLS");
+    if (!Number.isInteger(input.amount) || input.amount <= 0) throw new EngineError("Nominal hak harus bilangan bulat positif");
+    if (this.otherEntitlements.some((e) => e.id === input.id)) throw new EngineError("Nomor hak sudah dipakai");
+    this.otherEntitlements.push({ ...input });
+    return this.otherEntitlementStatus(input.id);
+  }
+
+  /** Berapa dari satu hak lain yang dipakai menutup piutang penarikan, dan berapa yang dibayarkan. */
+  otherEntitlementStatus(id: string): { offset: number; paid: number } {
+    const e = this.otherEntitlements.find((x) => x.id === id);
+    if (!e) throw new EngineError("Hak tidak ditemukan");
+    const offset = this.clawbackStatus(e.accountId)
+      .flatMap((c) => c.offsets)
+      .filter((o) => o.entitlementId === id)
+      .reduce((a, o) => a + o.amount, 0);
+    return { offset, paid: e.amount - offset };
+  }
+
+  /** Penarikan bonus satu akun: nominal, tempat dipotong, sisa piutang, dan penghapusan setelah 12 bulan. */
   clawbackStatus(accountId: string): ClawbackStatus[] {
     return this.computeSchedule(accountId).clawbacks;
   }
