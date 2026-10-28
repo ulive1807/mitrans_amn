@@ -10,6 +10,11 @@ import {
   PLAN,
   PayoutApprovals,
   EbookStore,
+  Funnel,
+  FUNNEL_LABEL,
+  LEVEL_LABEL,
+  upcomingSessions,
+  maskNik as maskId,
   EBOOK_STATUS_LABEL,
   reminderFor,
   maskNik,
@@ -48,6 +53,8 @@ export interface AppOptions {
   };
   /** E-book Mitra PLS (Agent Marketing). Bawaan: penyimpanan baru di memori. */
   ebooks?: EbookStore;
+  /** Asesmen, kelas RT3, dan antrean WhatsApp pembeli e-book. */
+  funnel?: Funnel;
   /** Kabar pembayaran e-book dari Xendit. Tanpa ini, rute kabar Xendit tidak aktif. */
   xendit?: { callbackToken: string };
 }
@@ -114,6 +121,7 @@ export function createApp(opts: AppOptions) {
   const processed = new Map<string, unknown>();
   const integ = opts.integration;
   const ebooks = opts.ebooks ?? new EbookStore(engine);
+  const funnel = opts.funnel ?? new Funnel(ebooks);
   const clock = integ?.clock ?? Date.now;
   const canSell = (acc: { role: string; quizPassed: boolean; terminated?: boolean; frozenUntil?: number }) =>
     acc.role === "mitra" && acc.quizPassed && !acc.terminated && !(acc.frozenUntil !== undefined && acc.frozenUntil > now());
@@ -251,6 +259,7 @@ export function createApp(opts: AppOptions) {
     try {
       const r = ebooks.markPaid(body.external_id, body.paid_amount, now(), { isExistingAccount: (u) => accountByUser.has(u) });
       if (r.newLock) audit("Sponsor dikunci dari pembelian e-book", `${r.order.userId} → ${r.lock!.sponsorId} (${r.order.id})`);
+      funnel.onPaid(r.order.id, now());
       return { pesanan: r.order.id, status: r.order.status, sponsorTerkunci: r.lock?.sponsorId ?? null, kunciBaru: r.newLock };
     } catch (err) {
       if (err instanceof EngineError) throw new HttpError(409, err.message);
@@ -280,6 +289,7 @@ export function createApp(opts: AppOptions) {
     tanda: e.flags,
     riwayat: e.history,
     tautan: e.status === "disetujui" ? `https://affiliatemarketing.network/e/${e.slug}` : null,
+    berkas: e.file ? { nama: e.file.name, ukuran: e.file.size } : null,
   });
   const guardEngine = <T,>(fn: () => T): T => {
     try {
@@ -537,6 +547,80 @@ export function createApp(opts: AppOptions) {
       );
       // Prototipe: invoice Xendit belum dibuat; di produksi external_id invoice = nomor pesanan ini.
       return { pesanan: o.id, harga: o.price, status: o.status };
+    }),
+    route("POST", "/api/mitra/ebook/:id/berkas", "mitra", "Unggah berkas e-book", ({ session, params, body }) => {
+      const acc = ownMitra(session);
+      const b = (body ?? {}) as Record<string, unknown>;
+      // Prototipe: hanya data berkas; berkasnya sendiri diunggah ke penyimpanan objek (belum disambungkan).
+      return ebookView(guardEngine(() => ebooks.attachFile(params.id, acc.id, { name: String(b.nama ?? ""), size: Number(b.ukuran), sha256: String(b.sha256 ?? "") }, now())));
+    }),
+    // Pembeli e-book: hanya pesanan miliknya sendiri (akun dari sesi).
+    route("GET", "/api/saya/ebook", "sesi", "Lihat e-book yang dibeli", ({ session }) =>
+      [...ebooks.orders.values()]
+        .filter((o) => o.userId === session.userId)
+        .map((o) => {
+          const a = funnel.assessments.get(o.id);
+          const b = funnel.bookings.get(o.id);
+          return {
+            pesanan: o.id,
+            judul: ebooks.ebooks.get(o.ebookId)?.title,
+            tahap: funnel.stage(o.id),
+            tahapLabel: FUNNEL_LABEL[funnel.stage(o.id)],
+            tingkatBelajar: a ? LEVEL_LABEL[a.level] : null,
+            kelas: b?.sessionId ?? null,
+            bisaUnduh: funnel.canDownload(o.id, session.userId).ok,
+          };
+        }),
+    ),
+    route("GET", "/api/rt3/kelas", "sesi", "Lihat jadwal kelas RT3", () =>
+      upcomingSessions(now()).map((s) => ({ ...s, terisi: funnel.seatsTaken(s.id) })),
+    ),
+    route("POST", "/api/saya/ebook/:order/asesmen", "sesi", "Isi asesmen", ({ session, params, body }) => {
+      const r = guardEngine(() => funnel.submitAssessment(params.order, session.userId, ((body ?? {}) as { jawaban?: Record<string, number> }).jawaban ?? {}, now()));
+      return { tingkatBelajar: LEVEL_LABEL[r.level], bisaUnduh: funnel.canDownload(params.order, session.userId).ok };
+    }),
+    route("POST", "/api/saya/ebook/:order/kelas", "sesi", "Pilih kelas RT3", ({ session, params, body }) => {
+      const r = guardEngine(() => funnel.chooseClass(params.order, session.userId, String(((body ?? {}) as { kelas?: unknown }).kelas ?? ""), now()));
+      return { kelas: r.session.id, hari: r.session.dayLabel, tanggal: r.session.date, mulai: r.session.startsAt };
+    }),
+    route("GET", "/api/saya/ebook/:order/unduh", "sesi", "Unduh e-book", ({ session, params }) => {
+      const c = funnel.canDownload(params.order, session.userId);
+      if (!c.ok) throw new HttpError(403, c.reason!);
+      const eb = ebooks.ebooks.get(ebooks.orders.get(params.order)!.ebookId)!;
+      // Prototipe: produksi mengembalikan tautan unduh bertanda tangan yang berlaku singkat.
+      return { berkas: eb.file!.name, ukuran: eb.file!.size, sha256: eb.file!.sha256 };
+    }),
+    route("POST", "/api/admin/rt3/:sesi/hadir", "kelas.kelola", "Catat kehadiran RT3", ({ session, params, body }) => {
+      const ids = ((body ?? {}) as { pesanan?: unknown }).pesanan;
+      if (!Array.isArray(ids) || ids.some((x) => typeof x !== "string")) throw new HttpError(400, "pesanan harus daftar nomor pesanan");
+      const n = guardEngine(() => funnel.markAttendance(params.sesi, ids as string[], now()));
+      access.record(session.userId, "Kehadiran RT3 dicatat", now(), `${params.sesi}: ${n} peserta`);
+      return { hadir: n };
+    }),
+    route("GET", "/api/admin/whatsapp", "kelas.kelola", "Lihat antrean WhatsApp", () =>
+      funnel.wa.messages.slice(-200).map((m) => ({ ...m, to: maskId(m.to) })),
+    ),
+    // Aktivasi afiliasi (tombol di atlastrade.io membuka halaman ini dengan sesi Clerk yang sama).
+    route("POST", "/api/aktivasi-afiliasi", "sesi", "Aktivasi afiliasi", ({ session, body }) => {
+      const b = (body ?? {}) as { setuju?: unknown; nama?: unknown; nik?: unknown };
+      if (b.setuju !== true) throw new HttpError(400, "Setujui Kode Etik dan Syarat dan Ketentuan Kemitraan: kirim {\"setuju\": true}");
+      const accId = accountByUser.get(session.userId);
+      const existing = accId ? engine.accounts.get(accId) : undefined;
+      if (existing?.role === "mitra") return { akun: existing.id, kode: existing.code, status: "sudah Mitra PLS" };
+      if (existing?.role === "pelanggan") {
+        // Pemegang Lisensi: konversi dalam 60 hari, posisi di bawah Sponsor yang sama, Bonus Sponsor tidak dibayar lagi.
+        const acc = guardEngine(() => engine.convertCustomer({ customerId: existing.id, at: now() }));
+        access.record(session.userId, "Aktivasi afiliasi (konversi)", now(), acc.id);
+        return { akun: acc.id, kode: acc.code, status: "dikonversi", langkahBerikutnya: ["Lulus kuis Kode Etik untuk mengaktifkan tautan", "Ikuti workshop 2 hari (tanpa biaya)", "Lengkapi data rekening di Kantor Maya"] };
+      }
+      // Belum punya akun: pendaftaran gratis tanpa membeli Lisensi. Sponsor dari pembelian e-book bila ada.
+      if (typeof b.nama !== "string" || !b.nama.trim() || typeof b.nik !== "string") throw new HttpError(422, "Pendaftaran baru: nama dan NIK wajib");
+      const lock = ebooks.sponsorLocks.get(session.userId);
+      const sponsor = lock && findMitra(lock.sponsorId) && canSell(findMitra(lock.sponsorId)!) ? lock.sponsorId : "MITRANS-001";
+      const acc = guardEngine(() => engine.registerMitra({ id: `U-${session.userId}`, name: b.nama as string, nik: b.nik as string, sponsorId: sponsor, at: now() }));
+      accountByUser.set(session.userId, acc.id);
+      access.record(session.userId, "Pendaftaran Mitra PLS gratis", now(), `${acc.id} (Sponsor ${sponsor})`);
+      return { akun: acc.id, kode: acc.code, status: "terdaftar", sponsor, langkahBerikutnya: ["Lulus kuis Kode Etik untuk mengaktifkan tautan", "Masa pertimbangan 10 hari kerja", "Ikuti workshop 2 hari (tanpa biaya)"] };
     }),
   ];
 

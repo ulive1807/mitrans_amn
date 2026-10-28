@@ -52,12 +52,30 @@ export interface EbookEvent {
   action:
     | "dibuat"
     | "diubah"
+    | "berkas"
     | "diajukan"
     | "disetujui"
     | "perlu_revisi"
     | "ditolak"
     | "ditarik";
   note?: string;
+}
+
+/** Berkas e-book (PDF). Prototipe menyimpan data berkas; penyimpanan berkasnya sendiri belum disambungkan. */
+export interface EbookFile {
+  name: string;
+  /** Ukuran dalam byte. */
+  size: number;
+  /** SHA-256 heksadesimal, untuk memastikan berkas yang diperiksa sama dengan yang diunduh pembeli. */
+  sha256: string;
+  uploadedAt: number;
+}
+
+export const EBOOK_FILE_MAX_BYTES = 20 * 1024 * 1024;
+
+/** Memeriksa tanda awal berkas PDF ("%PDF-"). */
+export function isPdf(bytes: Uint8Array): boolean {
+  return bytes.length >= 5 && String.fromCharCode(...bytes.slice(0, 5)) === "%PDF-";
 }
 
 export interface Ebook extends EbookInput {
@@ -70,6 +88,7 @@ export interface Ebook extends EbookInput {
   approvedVersion?: number;
   flags: ComplianceFlag[];
   history: EbookEvent[];
+  file?: EbookFile;
 }
 
 export interface EbookBuyer {
@@ -282,8 +301,28 @@ export class EbookStore {
     return eb;
   }
 
+  /**
+   * Mengunggah atau mengganti berkas PDF. Seperti mengubah isi: e-book yang sedang diperiksa tidak dapat diubah,
+   * dan e-book yang sudah tayang kembali ke draf sampai disetujui lagi.
+   */
+  attachFile(id: string, mitraId: string, file: { name: string; size: number; sha256: string }, at: number): Ebook {
+    const eb = this.own(id, mitraId);
+    if (eb.status === "diajukan") throw new EngineError("E-book sedang diperiksa; tunggu keputusan sebelum mengganti berkas");
+    if (eb.status === "ditolak" || eb.status === "ditarik") throw new EngineError("E-book ini sudah ditolak atau ditarik; buat e-book baru");
+    const name = (file.name ?? "").trim();
+    if (!/\.pdf$/i.test(name) || name.length > 160) throw new EngineError("Berkas harus PDF (.pdf)");
+    if (!Number.isInteger(file.size) || file.size <= 0 || file.size > EBOOK_FILE_MAX_BYTES) throw new EngineError("Ukuran berkas paling besar 20 MB");
+    if (!/^[0-9a-f]{64}$/.test(file.sha256 ?? "")) throw new EngineError("Sidik berkas (SHA-256) tidak sah");
+    eb.file = { name, size: file.size, sha256: file.sha256, uploadedAt: at };
+    eb.status = "draf";
+    eb.version += 1;
+    eb.history.push({ at, by: mitraId, action: "berkas", note: name });
+    return eb;
+  }
+
   submit(id: string, mitraId: string, at: number): Ebook {
     const eb = this.own(id, mitraId);
+    if (!eb.file) throw new EngineError("Unggah berkas PDF e-book sebelum mengajukan");
     if (eb.status !== "draf" && eb.status !== "perlu_revisi")
       throw new EngineError(
         "Hanya draf atau e-book yang perlu revisi yang dapat diajukan",

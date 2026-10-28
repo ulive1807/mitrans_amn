@@ -32,6 +32,12 @@ function mitra(id: string, sponsorId: string, t: number, quiz = true) {
   if (quiz) engine.passQuiz(id);
 }
 
+const PDF = { name: "ebook.pdf", size: 1_200_000, sha256: "a".repeat(64) };
+function mk(mitraId: string, inp: EbookInput, t: number) {
+  const e = store.create(mitraId, inp, t);
+  return store.attachFile(e.id, mitraId, PDF, t);
+}
+
 beforeEach(() => {
   engine = new MitransEngine(atWib("2027-01-01", 0, 1));
   n = 1;
@@ -42,7 +48,7 @@ beforeEach(() => {
 
 describe("Pengajuan dan persetujuan e-book", () => {
   it("alur draf → diajukan → disetujui; mengubah e-book yang tayang mengembalikannya ke draf", () => {
-    const e = store.create("A", input, at("2027-01-03"));
+    const e = mk("A", input, at("2027-01-03"));
     expect(e.status).toBe("draf");
     expect(store.live(e.slug, at("2027-01-03"))).toBeUndefined();
     store.submit(e.id, "A", at("2027-01-03"));
@@ -57,7 +63,7 @@ describe("Pengajuan dan persetujuan e-book", () => {
   });
 
   it("revisi dan penolakan wajib beralasan; pembuat tidak memeriksa sendiri; Mitra tanpa kuis tidak dapat mengajukan", () => {
-    const e = store.create("A", input, at("2027-01-03"));
+    const e = mk("A", input, at("2027-01-03"));
     store.submit(e.id, "A", at("2027-01-03"));
     expect(() =>
       store.review(e.id, "u-rina", "revisi", " ", at("2027-01-04")),
@@ -77,20 +83,20 @@ describe("Pengajuan dan persetujuan e-book", () => {
       action: "perlu_revisi",
       note: "Hapus kalimat 'pasti untung'.",
     });
-    const b = store.create("B", input, at("2027-01-03"));
+    const b = mk("B", input, at("2027-01-03"));
     expect(() => store.submit(b.id, "B", at("2027-01-03"))).toThrow(/kuis/);
   });
 
   it("harga Rp25.000–Rp150.000 kelipatan Rp1.000", () => {
     for (const price of [24_000, 151_000, 49_500])
       expect(() =>
-        store.create("A", { ...input, price }, at("2027-01-03")),
+        mk("A", { ...input, price }, at("2027-01-03")),
       ).toThrow(/Harga/);
     expect(
-      store.create("A", { ...input, price: 25_000 }, at("2027-01-03")).price,
+      mk("A", { ...input, price: 25_000 }, at("2027-01-03")).price,
     ).toBe(25_000);
     expect(
-      store.create("A", { ...input, price: 150_000 }, at("2027-01-03")).price,
+      mk("A", { ...input, price: 150_000 }, at("2027-01-03")).price,
     ).toBe(150_000);
   });
 
@@ -110,7 +116,7 @@ describe("Pengajuan dan persetujuan e-book", () => {
   });
 
   it("LP turun bila pemilik dibekukan, diputus, atau e-book ditarik", () => {
-    const e = store.create("A", input, at("2027-01-03"));
+    const e = mk("A", input, at("2027-01-03"));
     store.submit(e.id, "A", at("2027-01-03"));
     store.review(e.id, "u-rina", "setujui", undefined, at("2027-01-03"));
     engine.freezeAccount("A", at("2027-01-10"));
@@ -132,7 +138,7 @@ describe("Pesanan e-book dan kunci Sponsor", () => {
   };
   let slug = "";
   beforeEach(() => {
-    const e = store.create("A", input, at("2027-01-03"));
+    const e = mk("A", input, at("2027-01-03"));
     store.submit(e.id, "A", at("2027-01-03"));
     store.review(e.id, "u-rina", "setujui", undefined, at("2027-01-03"));
     slug = e.slug;

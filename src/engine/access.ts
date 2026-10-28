@@ -40,7 +40,8 @@ export type Permission =
   | "simulasi.jalankan"
   | "pengguna.kelola"
   | "audit.lihat"
-  | "konten.tinjau";
+  | "konten.tinjau"
+  | "kelas.kelola";
 
 export const ROLE_LABEL: Record<Role, string> = {
   admin_sistem: "Admin Sistem",
@@ -71,6 +72,7 @@ export const PERMISSION_LABEL: Record<Permission, string> = {
   "pengguna.kelola": "Kelola pengguna dan peran",
   "audit.lihat": "Lihat log audit",
   "konten.tinjau": "Periksa dan setujui e-book Mitra PLS",
+  "kelas.kelola": "Catat kehadiran kelas RT3 dan lihat antrean WhatsApp",
 };
 
 export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
@@ -91,6 +93,7 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     "kasus.catat_penjelasan",
     "audit.lihat",
     "konten.tinjau",
+    "kelas.kelola",
   ],
   direksi: [
     "ikhtisar.lihat",
@@ -116,7 +119,7 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     "mitra.lihat",
     "mitra.lihat_identitas",
   ],
-  layanan_pelanggan: ["mitra.lihat", "kasus.lihat"],
+  layanan_pelanggan: ["mitra.lihat", "kasus.lihat", "kelas.kelola"],
 };
 
 /** Pasangan peran yang tidak boleh dirangkap satu orang. */
