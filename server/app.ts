@@ -9,6 +9,8 @@ import {
   EngineError,
   PLAN,
   PayoutApprovals,
+  EbookStore,
+  EBOOK_STATUS_LABEL,
   reminderFor,
   maskNik,
   atWib,
@@ -17,7 +19,7 @@ import {
   type MitransEngine,
   type Permission,
 } from "../src/engine";
-import { randomUUID } from "node:crypto";
+import { randomUUID, timingSafeEqual } from "node:crypto";
 import type { Authenticator, Session } from "./session";
 import {
   TICKET_TTL_MS,
@@ -44,6 +46,10 @@ export interface AppOptions {
     /** Jam dinding (milidetik) untuk masa berlaku tiket dan tanda tangan; bawaan Date.now. */
     clock?: () => number;
   };
+  /** E-book Mitra PLS (Agent Marketing). Bawaan: penyimpanan baru di memori. */
+  ebooks?: EbookStore;
+  /** Kabar pembayaran e-book dari Xendit. Tanpa ini, rute kabar Xendit tidak aktif. */
+  xendit?: { callbackToken: string };
 }
 
 type Handler = (ctx: Ctx) => unknown;
@@ -107,6 +113,7 @@ export function createApp(opts: AppOptions) {
   // Peristiwa webhook yang sudah diproses: nomor peristiwa → hasil (idempoten).
   const processed = new Map<string, unknown>();
   const integ = opts.integration;
+  const ebooks = opts.ebooks ?? new EbookStore(engine);
   const clock = integ?.clock ?? Date.now;
   const canSell = (acc: { role: string; quizPassed: boolean; terminated?: boolean; frozenUntil?: number }) =>
     acc.role === "mitra" && acc.quizPassed && !acc.terminated && !(acc.frozenUntil !== undefined && acc.frozenUntil > now());
@@ -151,14 +158,22 @@ export function createApp(opts: AppOptions) {
         const d = ev.data;
         const at = d.paidAt ?? now();
         let accId = accountByUser.get(d.userId);
-        let rujukan: "akun" | "tiket" | "langsung" = "akun";
+        let rujukan: "akun" | "ebook" | "tiket" | "langsung" = "akun";
         let alasanTiket: string | undefined;
         if (!accId) {
           if (!d.name || !d.nik) throw new HttpError(422, "Pembeli baru: name dan nik wajib dikirim dari checkout");
           // Sponsor dikunci saat akun pertama dibuat. Tanpa tiket sah, penjualan dicatat sebagai penjualan langsung Perusahaan.
           let seller = "MITRANS-001";
           rujukan = "langsung";
-          if (d.ticket) {
+          // Urutan: Sponsor yang terkunci dari pembelian e-book, lalu tiket rujukan, lalu penjualan langsung Perusahaan.
+          const lock = ebooks.sponsorLocks.get(d.userId);
+          const locked = lock ? findMitra(lock.sponsorId) : undefined;
+          if (lock) {
+            if (locked && canSell(locked)) {
+              seller = locked.id;
+              rujukan = "ebook";
+            } else alasanTiket = "sponsor-ebook-tidak-aktif";
+          } else if (d.ticket) {
             const t = verifyTicket(d.ticket, integ!.ticketSecret, clock());
             const sponsor = t.ok ? findMitra(t.ticket.sponsor) : undefined;
             if (!t.ok) alasanTiket = t.reason;
@@ -213,6 +228,62 @@ export function createApp(opts: AppOptions) {
       processed.set(ev.id, result);
       audit(`Webhook ${ev.type}`, `${ev.id}: ${JSON.stringify(result)}`);
       return result;
+    } catch (err) {
+      if (err instanceof EngineError) throw new HttpError(409, err.message);
+      throw err;
+    }
+  };
+
+  /** Kabar Xendit untuk pesanan e-book. Diverifikasi dengan token callback (header x-callback-token). */
+  const xenditEbook = async (req: IncomingMessage) => {
+    if (!opts.xendit) throw new HttpError(404, "Tidak ditemukan");
+    const tok = req.headers["x-callback-token"];
+    const a = Buffer.from(typeof tok === "string" ? tok : "");
+    const b = Buffer.from(opts.xendit.callbackToken);
+    if (a.length !== b.length || !timingSafeEqual(a, b)) {
+      audit("Kabar Xendit ditolak", "token callback salah", false);
+      throw new HttpError(401, "Token callback tidak sah");
+    }
+    const body = (await readJson(req)) as { external_id?: unknown; status?: unknown; paid_amount?: unknown } | undefined;
+    if (!body || typeof body.external_id !== "string") throw new HttpError(400, "external_id wajib");
+    if (body.status !== "PAID" && body.status !== "SETTLED") return { pesanan: body.external_id, diabaikan: true, status: body.status };
+    if (typeof body.paid_amount !== "number") throw new HttpError(400, "paid_amount wajib");
+    try {
+      const r = ebooks.markPaid(body.external_id, body.paid_amount, now(), { isExistingAccount: (u) => accountByUser.has(u) });
+      if (r.newLock) audit("Sponsor dikunci dari pembelian e-book", `${r.order.userId} → ${r.lock!.sponsorId} (${r.order.id})`);
+      return { pesanan: r.order.id, status: r.order.status, sponsorTerkunci: r.lock?.sponsorId ?? null, kunciBaru: r.newLock };
+    } catch (err) {
+      if (err instanceof EngineError) throw new HttpError(409, err.message);
+      throw err;
+    }
+  };
+
+  const ebookInput = (body: unknown) => {
+    const b = (body ?? {}) as Record<string, unknown>;
+    return {
+      title: String(b.judul ?? ""),
+      summary: String(b.ringkasan ?? ""),
+      price: typeof b.harga === "number" ? b.harga : NaN,
+      lpHeadline: String(b.judulHalaman ?? ""),
+      lpBody: String(b.isiHalaman ?? ""),
+      webinarOffer: b.tawaranWebinar === true,
+    };
+  };
+  const ebookView = (e: ReturnType<EbookStore["forMitra"]>[number]) => ({
+    id: e.id,
+    slug: e.slug,
+    judul: e.title,
+    harga: e.price,
+    status: e.status,
+    statusLabel: EBOOK_STATUS_LABEL[e.status],
+    versi: e.version,
+    tanda: e.flags,
+    riwayat: e.history,
+    tautan: e.status === "disetujui" ? `https://affiliatemarketing.network/e/${e.slug}` : null,
+  });
+  const guardEngine = <T,>(fn: () => T): T => {
+    try {
+      return fn();
     } catch (err) {
       if (err instanceof EngineError) throw new HttpError(409, err.message);
       throw err;
@@ -422,6 +493,51 @@ export function createApp(opts: AppOptions) {
         throw err;
       }
     }),
+    // Agent Marketing: e-book milik Mitra PLS. Akun selalu dari sesi.
+    route("GET", "/api/mitra/ebook", "mitra", "Lihat e-book sendiri", ({ session }) => {
+      const acc = ownMitra(session);
+      return {
+        ebook: ebooks.forMitra(acc.id).map(ebookView),
+        calonPengguna: ebooks.lockedProspects(acc.id).length,
+      };
+    }),
+    route("POST", "/api/mitra/ebook", "mitra", "Buat e-book", ({ session, body }) => {
+      const acc = ownMitra(session);
+      return ebookView(guardEngine(() => ebooks.create(acc.id, ebookInput(body), now())));
+    }),
+    route("POST", "/api/mitra/ebook/:id", "mitra", "Ubah e-book", ({ session, params, body }) => {
+      const acc = ownMitra(session);
+      return ebookView(guardEngine(() => ebooks.update(params.id, acc.id, ebookInput(body), now())));
+    }),
+    route("POST", "/api/mitra/ebook/:id/ajukan", "mitra", "Ajukan e-book", ({ session, params }) => {
+      const acc = ownMitra(session);
+      return ebookView(guardEngine(() => ebooks.submit(params.id, acc.id, now())));
+    }),
+    route("GET", "/api/admin/ebook", "konten.tinjau", "Lihat antrean e-book", () =>
+      ebooks.queue().map((e) => ({ ...ebookView(e), mitra: e.mitraId, ringkasan: e.summary, judulHalaman: e.lpHeadline, isiHalaman: e.lpBody })),
+    ),
+    route("POST", "/api/admin/ebook/:id/putuskan", "konten.tinjau", "Putuskan e-book", ({ session, params, body }) => {
+      const b = (body ?? {}) as { keputusan?: unknown; catatan?: unknown };
+      if (b.keputusan !== "setujui" && b.keputusan !== "revisi" && b.keputusan !== "tolak" && b.keputusan !== "tarik")
+        throw new HttpError(400, "keputusan harus setujui, revisi, tolak, atau tarik");
+      const note = typeof b.catatan === "string" ? b.catatan : undefined;
+      const e = guardEngine(() =>
+        b.keputusan === "tarik"
+          ? ebooks.withdraw(params.id, session.userId, note ?? "", now())
+          : ebooks.review(params.id, session.userId, b.keputusan as "setujui" | "revisi" | "tolak", note, now()),
+      );
+      access.record(session.userId, `E-book ${b.keputusan}`, now(), `${e.id} (${e.mitraId})${note ? `: ${note}` : ""}`);
+      return ebookView(e);
+    }),
+    // CUB memesan e-book dari LP setelah masuk dengan OTP; akun pembeli selalu dari sesi.
+    route("POST", "/api/ebook/:slug/pesan", "sesi", "Pesan e-book", ({ session, params, body }) => {
+      const b = (body ?? {}) as Record<string, unknown>;
+      const o = guardEngine(() =>
+        ebooks.order(params.slug, { userId: session.userId, name: String(b.nama ?? ""), email: String(b.surel ?? ""), whatsapp: String(b.whatsapp ?? ""), waConsent: b.setujuWhatsapp === true }, now()),
+      );
+      // Prototipe: invoice Xendit belum dibuat; di produksi external_id invoice = nomor pesanan ini.
+      return { pesanan: o.id, harga: o.price, status: o.status };
+    }),
   ];
 
   const send = (
@@ -476,6 +592,16 @@ export function createApp(opts: AppOptions) {
           return;
         }
         return send(req, res, r.status, r.body);
+      }
+      const lp = /^\/e\/([a-z0-9-]{1,64})$/.exec(url.pathname);
+      if (lp && method === "GET") {
+        const e = ebooks.live(lp[1], now());
+        if (!e) return send(req, res, 404, { galat: "Halaman penawaran tidak tersedia" });
+        return send(req, res, 200, { slug: e.slug, judul: e.title, ringkasan: e.summary, harga: e.price, judulHalaman: e.lpHeadline, isiHalaman: e.lpBody, tawaranWebinar: e.webinarOffer, penjual: findMitra(e.mitraId)?.code });
+      }
+      if (url.pathname === "/api/integrasi/xendit/ebook") {
+        if (method !== "POST") return send(req, res, 405, { galat: "Metode tidak diizinkan" });
+        return send(req, res, 200, await xenditEbook(req));
       }
       if (url.pathname === "/api/integrasi/atlastrade") {
         if (method !== "POST") return send(req, res, 405, { galat: "Metode tidak diizinkan" });

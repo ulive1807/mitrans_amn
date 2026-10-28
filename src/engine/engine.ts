@@ -937,6 +937,33 @@ export class MitransEngine {
     return { pending, atRisk: pending - safe, outstanding, shortfall, available: Math.max(0, safe - outstanding - shortfall) };
   }
 
+  /**
+   * Tahap pembayaran satu entri untuk tampilan Kantor Maya: bonus tercatat seketika, tetapi baru ditransfer pada Jumat
+   * jadwalnya (setelah PPh 21), dan bonus penjualan masih dapat ditarik bila pembelian dibatalkan dalam masa pembatalan.
+   */
+  entryStage(e: LedgerEntry): {
+    stage: "tercatat" | "sebagian" | "ditransfer" | "ditarik" | "tidak_dibayar";
+    transferDate?: string;
+    cancellableUntil?: string;
+    /** Untuk bonus yang belum ditetapkan: menunggu tutup bulan, atau menunggu syarat (Bonus Layanan Berkah). */
+    awaiting?: "tutup_bulan" | "syarat";
+  } {
+    if (e.status === "clawback") return { stage: "ditarik", transferDate: e.payoutDate };
+    const sale = e.saleId ? this.sales.get(e.saleId) : undefined;
+    const until = sale && SALE_DRIVEN_TYPES.includes(e.type) && !sale.cancelled
+      ? wibDate(sale.at + PLAN.bonusSafetyDays * DAY_MS)
+      : undefined;
+    const cancellableUntil = until && until > this.currentDay ? until : undefined;
+    // Belum ditetapkan: ditetapkan saat tutup bulan; Bonus Layanan Berkah juga menunggu 30 hari dan konfirmasi orientasi.
+    if (e.status === "pending")
+      return { stage: "tercatat", awaiting: e.type === "BERKAH" ? "syarat" : "tutup_bulan", cancellableUntil };
+    if (e.status !== "payable" || !e.payoutDate) return { stage: "tidak_dibayar" };
+    if (e.payoutDate <= this.currentDay) return { stage: "ditransfer", transferDate: e.payoutDate };
+    if (e.advance && e.advanceDate && e.advanceDate <= this.currentDay)
+      return { stage: "sebagian", transferDate: e.payoutDate, cancellableUntil };
+    return { stage: "tercatat", transferDate: e.advance && e.advanceDate ? e.advanceDate : e.payoutDate, cancellableUntil };
+  }
+
   /** Saldo bonus yang aman dipakai membayar Langganan (lihat bonusBalanceDetail). */
   bonusBalance(accountId: string): number {
     return this.bonusBalanceDetail(accountId).available;

@@ -39,7 +39,8 @@ export type Permission =
   | "kasus.putus_keberatan"
   | "simulasi.jalankan"
   | "pengguna.kelola"
-  | "audit.lihat";
+  | "audit.lihat"
+  | "konten.tinjau";
 
 export const ROLE_LABEL: Record<Role, string> = {
   admin_sistem: "Admin Sistem",
@@ -69,6 +70,7 @@ export const PERMISSION_LABEL: Record<Permission, string> = {
   "simulasi.jalankan": "Jalankan simulasi",
   "pengguna.kelola": "Kelola pengguna dan peran",
   "audit.lihat": "Lihat log audit",
+  "konten.tinjau": "Periksa dan setujui e-book Mitra PLS",
 };
 
 export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
@@ -88,6 +90,7 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     "kasus.buka",
     "kasus.catat_penjelasan",
     "audit.lihat",
+    "konten.tinjau",
   ],
   direksi: [
     "ikhtisar.lihat",

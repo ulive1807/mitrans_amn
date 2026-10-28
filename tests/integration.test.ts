@@ -13,21 +13,21 @@ import { atWib } from "../src/engine/time";
 const TICKET = "tiket-uji-0123456789-0123456789-abcdef";
 const HOOK = "webhook-uji-0123456789-0123456789-abcdef";
 const CHECKOUT = "https://www.atlastrade.io/checkout";
+const XTOKEN = "xendit-uji-0123456789-0123456789-abcdef";
 const at = (date: string, h = 10) => atWib(date, h);
 
 // Autentikasi tiruan: "Bearer <userId>|<mitraId>". Verifikasi Clerk sungguhan diuji di server.test.ts.
 const authenticate: Authenticator = async (headers) => {
-  const m = /^Bearer (\S+?)\|(\S*)$/.exec(headers.authorization ?? "");
+  const m = /^Bearer ([^|\s]+)\|([^|\s]*)(?:\|(\S+))?$/.exec(headers.authorization ?? "");
   if (!m) return { ok: false, status: 401, reason: "tanpa-token" };
+  const roles = (m[3] ? m[3].split(",") : []) as any;
   return {
     ok: true,
-    session: {
-      userId: m[1],
-      claims: { roles: [], mitraId: m[2] || undefined, problems: [] },
-      roleSource: "token",
-    },
+    session: { userId: m[1], claims: { roles, mitraId: m[2] || undefined, problems: [] }, roleSource: "token" },
   };
 };
+
+const activated = (id: string, data: Record<string, unknown>) => ({ id, type: "license.activated", data: { saleId: "L-X1", userId: "user_x", name: "Pembeli X", paidAt: at("2027-01-05"), ...data } });
 
 let server: Server | undefined;
 afterEach(
@@ -71,6 +71,7 @@ async function setup(withIntegration = true) {
           clock: () => clock.now,
         }
       : undefined,
+    xendit: { callbackToken: XTOKEN },
   });
   server = createServer((req, res) => void app(req, res));
   await new Promise<void>((r) => server!.listen(0, "127.0.0.1", r));
@@ -80,6 +81,14 @@ async function setup(withIntegration = true) {
       redirect: "manual",
       headers: auth ? { authorization: `Bearer ${auth}` } : {},
     });
+  const post = async (path: string, body: unknown, auth?: string, extra: Record<string, string> = {}) => {
+    const res = await fetch(base + path, {
+      method: "POST",
+      headers: { "content-type": "application/json", ...(auth ? { authorization: `Bearer ${auth}` } : {}), ...extra },
+      body: JSON.stringify(body),
+    });
+    return { status: res.status, body: (await res.json()) as any };
+  };
   const hook = async (
     event: unknown,
     opts: { secret?: string; t?: number; tamper?: boolean } = {},
@@ -101,7 +110,7 @@ async function setup(withIntegration = true) {
     const res = await get(`/r/${code}`);
     return new URL(res.headers.get("location")!).searchParams.get("t")!;
   };
-  return { engine, clock, get, hook, ticketFor, nik: () => syntheticNik(n++) };
+  return { engine, clock, get, post, hook, ticketFor, nik: () => syntheticNik(n++) };
 }
 
 describe("Tautan rujukan affiliatemarketing.network/r/KODE", () => {
@@ -160,17 +169,6 @@ describe("Tautan rujukan affiliatemarketing.network/r/KODE", () => {
 });
 
 describe("Webhook atlastrade.io", () => {
-  const activated = (id: string, data: Record<string, unknown>) => ({
-    id,
-    type: "license.activated",
-    data: {
-      saleId: "L-X1",
-      userId: "user_x",
-      name: "Pembeli X",
-      paidAt: at("2027-01-05"),
-      ...data,
-    },
-  });
 
   it("pembeli baru lewat tiket: akun Pelanggan dibuat dengan sponsor dari tiket, Bonus Sponsor timbul", async () => {
     const s = await setup();
@@ -379,5 +377,71 @@ describe("Konfigurasi integrasi", () => {
         ATLAS_CHECKOUT_URL: CHECKOUT,
       }),
     ).toMatchObject({ errors: [], integration: { checkoutUrl: CHECKOUT } });
+  });
+});
+
+describe("E-book Mitra PLS: pengajuan, persetujuan, dan Sponsor terkunci dari pembelian e-book", () => {
+  const draft = { judul: "Mengenal Saham Syariah untuk Keluarga", ringkasan: "Panduan dasar membaca laporan keuangan emiten syariah.", harga: 49_000, judulHalaman: "Belajar saham syariah dari nol", isiHalaman: "Isi e-book: istilah dasar, risiko, dan cara belajar bertahap.", tawaranWebinar: true };
+
+  async function approvedEbook(s: Awaited<ReturnType<typeof setup>>) {
+    const made = await s.post("/api/mitra/ebook", draft, "user_a|A");
+    expect(made.status).toBe(200);
+    expect((await s.post(`/api/mitra/ebook/${made.body.id}/ajukan`, {}, "user_a|A")).body.status).toBe("diajukan");
+    const ok = await s.post(`/api/admin/ebook/${made.body.id}/putuskan`, { keputusan: "setujui" }, "user_k||kepatuhan");
+    expect(ok.body).toMatchObject({ status: "disetujui", tautan: `https://affiliatemarketing.network/e/${made.body.slug}` });
+    return made.body.slug as string;
+  }
+
+  it("hanya peran Kepatuhan yang memutuskan; LP tayang hanya setelah disetujui", async () => {
+    const s = await setup();
+    const made = await s.post("/api/mitra/ebook", draft, "user_a|A");
+    expect((await s.get(`/e/${made.body.slug}`)).status).toBe(404);
+    await s.post(`/api/mitra/ebook/${made.body.id}/ajukan`, {}, "user_a|A");
+    expect((await s.post(`/api/admin/ebook/${made.body.id}/putuskan`, { keputusan: "setujui" }, "user_x||keuangan")).status).toBe(403);
+    expect((await s.post(`/api/admin/ebook/${made.body.id}/putuskan`, { keputusan: "tolak" }, "user_k||kepatuhan")).status).toBe(409); // tanpa alasan
+    await s.post(`/api/admin/ebook/${made.body.id}/putuskan`, { keputusan: "setujui" }, "user_k||kepatuhan");
+    const lp = await s.get(`/e/${made.body.slug}`);
+    expect(lp.status).toBe(200);
+    expect(await lp.json()).toMatchObject({ harga: 49_000, penjual: "MTR-A", tawaranWebinar: true });
+  });
+
+  it("harga di luar Rp25.000–Rp150.000 ditolak", async () => {
+    const s = await setup();
+    expect((await s.post("/api/mitra/ebook", { ...draft, harga: 20_000 }, "user_a|A")).status).toBe(409);
+    expect((await s.post("/api/mitra/ebook", { ...draft, harga: 151_000 }, "user_a|A")).status).toBe(409);
+  });
+
+  it("pembelian e-book mengunci Sponsor; Lisensi beberapa hari kemudian tanpa tiket tetap jatuh ke pemilik e-book", async () => {
+    const s = await setup();
+    const slug = await approvedEbook(s);
+    const order = await s.post(`/api/ebook/${slug}/pesan`, { nama: "Siti Contoh", surel: "siti@contoh.test", whatsapp: "081234567890", setujuWhatsapp: true }, "user_cub|");
+    expect(order.body).toMatchObject({ harga: 49_000, status: "menunggu" });
+    expect((await s.post("/api/integrasi/xendit/ebook", { external_id: order.body.pesanan, status: "PAID", paid_amount: 49_000 }, undefined, { "x-callback-token": "salah" })).status).toBe(401);
+    expect((await s.post("/api/integrasi/xendit/ebook", { external_id: order.body.pesanan, status: "PAID", paid_amount: 1_000 }, undefined, { "x-callback-token": XTOKEN })).status).toBe(409);
+    const paid = await s.post("/api/integrasi/xendit/ebook", { external_id: order.body.pesanan, status: "PAID", paid_amount: 49_000 }, undefined, { "x-callback-token": XTOKEN });
+    expect(paid.body).toMatchObject({ status: "lunas", sponsorTerkunci: "A", kunciBaru: true });
+    // E-book tidak menimbulkan bonus apa pun.
+    expect(s.engine.entriesFor("A").some((e) => e.accruedAt >= at("2027-01-04"))).toBe(false);
+
+    s.clock.now += 5 * 24 * 3600_000; // webinar beberapa hari kemudian; tiket 72 jam sudah tidak relevan
+    const r = await s.hook(activated("evt_1", { userId: "user_cub", nik: s.nik(), paidAt: at("2027-01-08") }));
+    expect(r.body).toMatchObject({ penjual: "A", rujukan: "ebook" });
+  });
+
+  it("kunci pertama tetap: e-book Mitra PLS lain dan tiket lain tidak mengubah Sponsor", async () => {
+    const s = await setup();
+    const slug = await approvedEbook(s);
+    s.engine.passQuiz("C");
+    const other = await s.post("/api/mitra/ebook", { ...draft, judul: "E-book milik Mitra C" }, "user_c|C");
+    await s.post(`/api/mitra/ebook/${other.body.id}/ajukan`, {}, "user_c|C");
+    await s.post(`/api/admin/ebook/${other.body.id}/putuskan`, { keputusan: "setujui" }, "user_k||kepatuhan");
+    const buy = async (sl: string) => {
+      const o = await s.post(`/api/ebook/${sl}/pesan`, { nama: "Budi", surel: "budi@contoh.test", whatsapp: "081234567891" }, "user_cub|");
+      return s.post("/api/integrasi/xendit/ebook", { external_id: o.body.pesanan, status: "PAID", paid_amount: 49_000 }, undefined, { "x-callback-token": XTOKEN });
+    };
+    expect((await buy(slug)).body).toMatchObject({ sponsorTerkunci: "A", kunciBaru: true });
+    expect((await buy(other.body.slug)).body).toMatchObject({ sponsorTerkunci: "A", kunciBaru: false });
+    const r = await s.hook(activated("evt_1", { userId: "user_cub", nik: s.nik(), ticket: await s.ticketFor("MTR-C") }));
+    expect(r.body).toMatchObject({ penjual: "A", rujukan: "ebook" });
   });
 });

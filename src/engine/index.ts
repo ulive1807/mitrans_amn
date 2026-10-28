@@ -10,3 +10,4 @@ export * from './access';
 export * from './claims';
 export * from './reminders';
 export * from './tax';
+export * from './ebook';

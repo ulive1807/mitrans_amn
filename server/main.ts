@@ -10,6 +10,8 @@
  *   RUJUKAN_TICKET_SECRET    rahasia tiket rujukan, paling sedikit 32 karakter, sama dengan di atlastrade.io
  *   ATLAS_WEBHOOK_SECRET     rahasia tanda tangan webhook, paling sedikit 32 karakter, berbeda dari rahasia tiket
  *   ATLAS_CHECKOUT_URL       alamat checkout Lisensi, mis. https://www.atlastrade.io/checkout
+ * Kabar pembayaran e-book dari Xendit (opsional):
+ *   XENDIT_CALLBACK_TOKEN    token verifikasi callback dari dasbor Xendit, paling sedikit 32 karakter
  * Server menolak berjalan bila konfigurasi tidak aman (fail-closed).
  */
 import { createServer } from "node:http";
@@ -61,9 +63,12 @@ export function readConfig(env: NodeJS.ProcessEnv) {
       integration = { ticketSecret, webhookSecret, checkoutUrl };
     }
   }
+  const callbackToken = env.XENDIT_CALLBACK_TOKEN?.trim() || undefined;
+  if (callbackToken && callbackToken.length < 32) errors.push("XENDIT_CALLBACK_TOKEN minimal 32 karakter.");
   return {
     errors,
     integration,
+    xendit: callbackToken ? { callbackToken } : undefined,
     jwtKey,
     secretKey,
     authorizedParties,
@@ -79,7 +84,7 @@ async function main() {
     process.exit(1);
   }
   const authenticate = await clerkAuthenticator(cfg);
-  const app = createApp({ authenticate, corsOrigins: cfg.authorizedParties, integration: cfg.integration });
+  const app = createApp({ authenticate, corsOrigins: cfg.authorizedParties, integration: cfg.integration, xendit: cfg.xendit });
   createServer((req, res) => void app(req, res)).listen(
     cfg.port,
     cfg.host,
