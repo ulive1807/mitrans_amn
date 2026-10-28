@@ -11,7 +11,7 @@ Untuk: tim pengembang atlastrade.io. Acuan kode: `server/integration.ts`, `serve
 | atlastrade.io | Checkout, pembayaran, pembatalan, pengembalian dana, akses aplikasi |
 | mitrans.id | Akun, Kantor Maya, dokumen resmi |
 
-Ketiganya memakai **satu instance Clerk** (domain satelit), jadi `userId` Clerk sama di semua domain. Pengguna hanya mendaftar dan memasukkan OTP sekali.
+Ketiganya memakai **satu instance Clerk** (domain satelit), jadi `userId` Clerk sama di semua domain. Pengguna hanya mendaftar dan memasukkan OTP sekali. Kebanyakan pembeli Lisensi sudah punya akun sejak membeli e-book Mitra PLS, dan Sponsor-nya sudah terkunci saat itu; tiket rujukan tetap dipakai untuk pembeli yang datang langsung dari tautan `/r/KODE`.
 
 **Alur:** prospek klik `affiliatemarketing.network/r/MTR-000123` → diarahkan (302) ke `https://www.atlastrade.io/checkout?t=<tiket>` → login Clerk, isi nama dan NIK sekali → bayar → atlastrade.io mengirim webhook ke sistem Mitra PLS → komisi dihitung.
 
@@ -101,7 +101,7 @@ Aturan isi:
 | 5xx / jaringan | Gangguan sementara | Kirim ulang dengan jeda bertambah (mis. 1, 5, 30 menit, 2 jam), sampai 24 jam, lalu beri tanda peringatan |
 
 Contoh jawaban 200 untuk `license.activated`:
-`{"peristiwa":"evt_…","jenis":"license.activated","akun":"…","penjualan":"ATL-ORD-100045","penjual":"…","rujukan":"tiket"}`. Nilai `rujukan`: `tiket`, `akun` (pengguna lama; sponsor tidak berubah), atau `langsung` (bila tiket ditolak, alasannya ada di `tiketDitolak`).
+`{"peristiwa":"evt_…","jenis":"license.activated","akun":"…","penjualan":"ATL-ORD-100045","penjual":"…","rujukan":"tiket"}`. Nilai `rujukan`: `ebook` (Sponsor terkunci sejak pembeli membeli e-book Mitra PLS; diutamakan di atas tiket), `tiket`, `akun` (pengguna lama; sponsor tidak berubah), atau `langsung` (bila tiket ditolak, alasannya ada di `tiketDitolak`).
 
 ## 6. Contoh uji (vektor tetap)
 

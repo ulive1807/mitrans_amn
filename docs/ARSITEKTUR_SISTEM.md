@@ -75,6 +75,9 @@ Seluruh butir A1–A19 **diputuskan Coach pada 27–28 Oktober 2026**. Butir yan
 | A18 | Piutang penarikan bonus yang tidak tertutup | **Dipotong dari hak lain** (pembelian kembali, pengembalian dana, pembayaran lain), **lalu dihapus 12 bulan** sejak tanggal penarikan | `recordOtherEntitlement`, `PLAN.clawbackWriteOffMonths`, `clawbackStatus` |
 | A19 | Hari libur dalam perhitungan sistem | **Tidak memakai kalender hari libur**; semua batas waktu sistem (saldo aman 14 hari, Langganan 30 hari, penghapusan piutang 12 bulan, pengingat) memakai hari kalender, karena bisnis tetap berjalan pada hari libur. Hak Mitra PLS dan Pelanggan yang di dokumen tertulis "hari kerja" tidak diubah | `PLAN.bonusSafetyDays` (hari kalender) |
 | A20 | Tiga domain, satu akun | **Satu badan hukum (PT Mitra Transformasi Inteligensi), satu instance Clerk dengan domain satelit.** affiliatemarketing.network memegang tautan rujukan dan halaman penawaran; mitrans.id memegang akun, Kantor Maya, dan dokumen resmi; atlastrade.io memegang checkout, pembayaran, pengembalian dana, dan akses Lisensi. Sponsor dibawa lewat tiket bertanda tangan dan dikunci saat akun pertama dibuat; pembayaran dan pengembalian dana dikirim lewat webhook bertanda tangan. Pembelian tanpa tiket sah = penjualan langsung Perusahaan | `server/integration.ts`, Bab 14 |
+| A21 | Lokasi akun dan Kantor Maya | **affiliatemarketing.network**: akun, pendaftaran Mitra PLS (gratis, tanpa kewajiban membeli Lisensi), Kantor Maya, Agent Marketing, tautan rujukan, halaman penawaran. **mitrans.id**: profil Perusahaan dan dokumen resmi saja | Bab 15 |
+| A22 | E-book buatan Mitra PLS | Dibuat di Agent Marketing (gratis), **wajib disetujui Kepatuhan sebelum tayang**, harga Rp25.000–Rp150.000, hasil penjualan ke rekening Mitra PLS, **tanpa PV, komisi, atau bonus** | `src/engine/ebook.ts`, izin `konten.tinjau` |
+| A23 | Sponsor dari e-book; tampilan bonus | **Sponsor dikunci saat pembelian e-book pertama lunas** dan tidak berubah; dipakai saat Lisensi dibeli (diutamakan di atas tiket). Kantor Maya menampilkan bonus sebagai tercatat, ditetapkan saat tutup bulan, ditransfer Jumat, dan dapat ditarik selama masa pembatalan 14 hari | `EbookStore.markPaid`, `engine.entryStage` |
 
 ## 4. Temuan dari pengujian yang perlu dibahas
 
@@ -418,3 +421,18 @@ Keputusan Coach (28 Oktober 2026): ketiga domain dikelola **PT Mitra Transformas
 **Dokumen (draf v1.4, perubahan terlacak 28 Oktober 2026):** S&K Pasal 1, 2, 5, 7, dan 11; Kode Etik Pasal 1 (definisi Halaman Pembayaran), 12, 15, dan 18 angka 15 (penomoran larangan tidak berubah); Rencana Pemasaran Bab 2 dan Bab 6; Catatan Konsultan Hukum butir 20 Bagian 1 dan A20. Nama PT diisi "PT Mitra Transformasi Inteligensi" dengan tanda ejaan sesuai akta ●.
 
 **Spesifikasi untuk tim atlastrade.io:** `docs/SPESIFIKASI_INTEGRASI_ATLASTRADE.md` (format tiket, webhook, kode jawaban, vektor uji yang diperiksa otomatis oleh `tests/integration-spec.test.ts`, dan daftar uji staging).
+
+## 15. Agent Marketing, e-book Mitra PLS, dan alur flywheel (keputusan A21–A23)
+
+Keputusan Coach (28 Oktober 2026), berdasarkan alur: konten media sosial → pembelian e-book di halaman penawaran Mitra PLS → notifikasi WhatsApp, asesmen, unduh e-book, pilih kelas webinar RT3 (Selasa/Rabu/Kamis 19.00 WIB) → penawaran Lisensi di webinar → bayar di atlastrade.io → bonus tercatat di Kantor Maya → aktivasi afiliasi dan workshop 2 hari → Mitra PLS baru membuat e-book.
+
+| Bagian | Yang dibangun (prototipe) | Kode |
+|---|---|---|
+| Pengajuan e-book | Mitra PLS membuat e-book dan LP (judul, ringkasan, harga, isi LP, tawaran webinar RT3). Kata berisiko ditandai saat mengetik (janji untung, imbal hasil per periode, sinyal beli/jual, klaim izin OJK/MUI/BEI, Lisensi gratis). Status: draf → diajukan → disetujui / perlu revisi / ditolak; yang tayang dapat ditarik. Mengubah e-book yang tayang mengembalikannya ke draf | `EbookStore.create/update/submit`, `scanCompliance`, Kantor Maya → Agent Marketing |
+| Persetujuan | Peran Kepatuhan (izin `konten.tinjau`): antrean, pratinjau LP dengan kata berisiko ditandai, keputusan dengan catatan wajib untuk revisi/tolak/tarik; pembuat tidak dapat memeriksa e-book sendiri; setiap keputusan masuk log audit | `EbookStore.review/withdraw`, Admin → Pemeriksaan e-book, `POST /api/admin/ebook/:id/putuskan` |
+| LP dan pesanan | `GET /e/:slug` hanya untuk e-book yang disetujui (versi yang disetujui) dan pemilik yang masih boleh menjual. CUB masuk dengan OTP, mengisi nama, surel, WhatsApp, dan persetujuan WhatsApp | `EbookStore.live/order`, `POST /api/ebook/:slug/pesan` |
+| Pembayaran e-book | Kabar Xendit `POST /api/integrasi/xendit/ebook`, diverifikasi token callback (`XENDIT_CALLBACK_TOKEN`, ≥ 32 karakter, dibandingkan waktu-konstan). Nominal harus sama dengan harga. Lunas → Sponsor dikunci bila pembeli belum punya kunci dan belum punya akun | `EbookStore.markPaid` |
+| Lisensi | `license.activated` dari atlastrade.io: Sponsor dari kunci e-book → tiket → penjualan langsung Perusahaan | `server/app.ts` |
+| Tampilan bonus | Kolom tahap di Komisi & bonus: "Tercatat · ditetapkan saat tutup bulan", "Tercatat · ditransfer <Jumat>", "Ditransfer <Jumat>", dan "Dapat ditarik bila pembelian dibatalkan s.d. <tanggal>" | `engine.entryStage` |
+
+**Belum dibangun:** invoice Xendit dan penerusan dana ke rekening Mitra PLS (mis. sub-akun xenPlatform; perlu dipastikan dengan Xendit dan konsultan pajak), unggah berkas e-book dan penyimpanannya, asesmen dan jadwal kelas RT3, pengiriman WhatsApp, fitur aktivasi afiliasi di atlastrade.io (konversi Pelanggan → Mitra PLS dalam 60 hari), penyimpanan permanen (data e-book dan kunci Sponsor masih di memori). Penilaian hukum: Catatan Konsultan Hukum butir 21.
