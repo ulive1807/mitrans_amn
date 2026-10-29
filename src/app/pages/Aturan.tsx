@@ -150,6 +150,7 @@ export function Aturan() {
                   Generasi sponsor 1–3:{" "}
                   {pct(PLAN.pembinaanRatesBp[0] / 10_000, 0)}; 4–6:{" "}
                   {pct(PLAN.pembinaanRatesBp[3] / 10_000, 0)} dari Bonus Pasangan
+                  yang benar-benar dibayar
                 </td>
                 <td>
                   Hanya Mitra PLS pemegang Lisensi; paling banyak{" "}

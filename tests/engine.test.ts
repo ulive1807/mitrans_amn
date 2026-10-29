@@ -147,10 +147,13 @@ describe("Plan A: Sponsor dan Pasangan (Bab 8.1)", () => {
     expect(entries("MITRANS-002", "PEMBINAAN")[0].status).toBe("company");
   });
 
-  it("Bonus Pembinaan generasi 1 = 25% dari Bonus Pasangan Mitra PLS yang disponsori", () => {
+  it("Bonus Pembinaan generasi 1 = 25% dari Bonus Pasangan Mitra PLS yang disponsori, setelah pasangan itu dibayar", () => {
     mitra("D", "B", jan(7), { leg: "L" });
     mitra("E", "B", jan(7), { leg: "R" });
     engine.advance(jan(8));
+    // Pembinaan baru timbul saat Bonus Pasangan B dibayar pada tutup bulan.
+    expect(entries("A", "PEMBINAAN")).toHaveLength(0);
+    engine.closeThrough("2027-01");
     const pairB = entries("B", "PASANGAN").reduce((a, e) => a + e.gross, 0);
     expect(pairB).toBe(150_000);
     const pemb = entries("A", "PEMBINAAN").filter((e) => e.ref === 1);
@@ -379,5 +382,23 @@ describe("Waktu", () => {
   it("menolak peristiwa mundur", () => {
     engine.advance(jan(20));
     expect(() => customer("P", "A", jan(10))).toThrow(/mundur/);
+  });
+});
+
+describe("Bonus Pembinaan hanya dari Bonus Pasangan yang dibayar (keputusan Coach 29 Oktober 2026)", () => {
+  it("pasangan Mitra binaan yang hangus karena tidak aktif tidak memberi Pembinaan", () => {
+    // B (disponsori A) punya C di kaki kiri dan G di kaki kanan. Pada Mei, sesudah 90 hari pertamanya, B tidak
+    // menjual sendiri sehingga tidak aktif; volume dari penjualan C dan G memberi B pasangan yang ditahan lalu hangus.
+    mitra("B", "A", jan(3));
+    mitra("C", "B", jan(4), { leg: "L" });
+    mitra("G", "B", jan(4), { leg: "R" });
+    mitra("D", "C", at("2027-05-03"));
+    mitra("H", "G", at("2027-05-04"));
+    engine.closeThrough("2027-08");
+    const pairB = entries("B", "PASANGAN").filter((e) => e.month === "2027-05");
+    expect(pairB.length).toBeGreaterThan(0);
+    expect(pairB.every((e) => e.status === "forfeited" || e.status === "held")).toBe(true);
+    const pembFromMay = entries("A", "PEMBINAAN").filter((e) => e.accruedAt >= at("2027-05-01"));
+    expect(pembFromMay).toHaveLength(0);
   });
 });

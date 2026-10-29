@@ -46,7 +46,7 @@ Kolom **Kode** menunjukkan tempat aturan dijalankan engine (`src/engine/`).
 | Pendamping | Rp100.000 sekali per Mitra binaan | Mitra binaan menjual Lisensi pertamanya dalam 90 hari pertamanya | Sponsor | `purchaseLicense` |
 | Layanan Berkah | Rp50.000 per Lisensi kepada Pelanggan | Konfirmasi orientasi + 30 hari; tanpa konfirmasi 60 hari → Pool | Penjual | `closeMonth` langkah 1 |
 | Pasangan | Rp150.000 per pasangan | 10 level; 20 pasangan/hari; sisa unit dibawa | Pemegang posisi | `pairDay`, `endOfDay` |
-| Pembinaan | Gen 1–3: 25%, gen 4–6: 5% dari Bonus Pasangan | 6 generasi sponsor; paling banyak Rp500 jt per orang per bulan, kelebihan → Pool | Sponsor pemegang Lisensi | `accruePembinaan` |
+| Pembinaan | Gen 1–3: 25%, gen 4–6: 5% dari Bonus Pasangan yang benar-benar dibayar (pada tutup bulan) | 6 generasi sponsor; paling banyak Rp500 jt per orang per bulan, kelebihan → Pool | Sponsor pemegang Lisensi | `accruePembinaan` |
 | Prestasi Peringkat | 12 peringkat bulanan, Rp150.000 (Builder) sampai Rp50.000.000 (Royal Crown) | Setelah 3 bulan terverifikasi; dana 4,5%; antrean; >6 bulan → dana cadangan | Yang mencapai | `evaluateRanks`, `closeMonth` langkah 5 |
 | Leadership | Dana 5%, dibagi menurut bobot (Director 1 … Royal Crown 8) | Mitra aktif yang memelihara peringkat; Rp100 jt/orang/bulan | Pemegang peringkat | `allocateWeightedWithCap` |
 | Pool Aktif | Sebanding penjualan baru pribadi, paling banyak Rp500.000 per penjualan | Sumber hangus + pengisian sampai 55% omzet bersih Lisensi; sisa kembali ke perusahaan | Semua Mitra PLS aktif | `distributePool` |

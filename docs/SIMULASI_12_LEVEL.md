@@ -21,14 +21,14 @@ Skenario:
 | Omzet bersih Lisensi | Rp55,55 M | Rp123,20 M | Rp32,03 M |
 | Omzet bersih Atlas Membership | Rp5,88 M | Rp120,8 jt | Rp41,0 jt |
 | **Omzet bersih total** | **Rp61,43 M** | **Rp123,32 M** | **Rp32,07 M** |
-| Bonus Plan A dibayar | Rp20,12 M (36,2%) | Rp43,51 M (35,3%) | Rp11,82 M (36,9%) |
+| Bonus Plan A dibayar | Rp19,65 M (35,4%) | Rp42,65 M (34,6%) | Rp11,68 M (36,5%) |
 | Bonus Plan B dibayar | Rp2,65 M (45,0%) | Rp21,7 jt (18,0%) | Rp10,2 jt (24,8%) |
-| **Rasio Mitra** (bonus ÷ omzet bersih) | **37,1%** | **35,3%** | **36,9%** |
-| Bulan Plan A tertinggi | 57,9% | 57,9% | 37,3% |
+| **Rasio Mitra** (bonus ÷ omzet bersih) | **36,3%** | **34,6%** | **36,5%** |
+| Bulan Plan A tertinggi | 36,2% | 35,7% | 37,0% |
 | Biaya layanan platform | Rp5,83 M | Rp27,98 M | Rp7,25 M |
 | Biaya workshop | Rp6,93 M | Rp13,84 M | Rp3,60 M |
-| Laba sebelum biaya kantor dan pajak | Rp25,90 M | Rp37,96 M | Rp9,38 M |
-| **Rasio perusahaan** (laba ÷ omzet bersih) | **42,2%** | **30,8%** | **29,3%** |
+| Laba sebelum biaya kantor dan pajak | Rp26,37 M | Rp38,83 M | Rp9,52 M |
+| **Rasio perusahaan** (laba ÷ omzet bersih) | **42,9%** | **31,5%** | **29,7%** |
 | Bonus masih ditahan di akhir | Rp0,0 jt | Rp0,0 jt | Rp0,0 jt |
 | Plafon 60% / 50% terjaga | ✓ Ya | ✓ Ya | ✓ Ya |
 
@@ -36,28 +36,28 @@ Skenario:
 
 | | A | B | C |
 |---|---:|---:|---:|
-| 90 hari pertama | Rp18.025.000 | Rp20.845.000 | Rp45.475.000 |
-| Bulan tertinggi | Rp206.417.779 | Rp378.740.000 | Rp82.655.000 |
-| Total 16 bulan | Rp760.039.526 | Rp860.745.249 | Rp245.682.500 |
+| 90 hari pertama | Rp18.025.000 | Rp18.775.000 | Rp45.475.000 |
+| Bulan tertinggi | Rp68.512.472 | Rp65.600.000 | Rp40.355.000 |
+| Total 16 bulan | Rp286.609.526 | Rp204.216.825 | Rp173.232.500 |
 | – Bonus Sponsor | Rp24.000.000 | Rp22.500.000 | Rp34.500.000 |
 | – Bonus Layanan Berkah | Rp1.400.000 | Rp1.400.000 | Rp1.400.000 |
 | – Bonus Fast Start | Rp8.000.000 | Rp6.000.000 | Rp18.000.000 |
 | – Bonus Pasangan | Rp153.450.000 | Rp153.450.000 | Rp9.300.000 |
 | – Pool Aktif | Rp16.000.000 | Rp15.000.000 | Rp21.000.000 |
 | – Bonus Pendamping | Rp200.000 | Rp200.000 | Rp400.000 |
-| – Bonus Pembinaan | Rp474.795.000 | Rp658.373.424 | Rp158.445.000 |
+| – Bonus Pembinaan | Rp1.365.000 | Rp1.845.000 | Rp85.995.000 |
 | – Bonus Prestasi Peringkat | Rp150.000 | Rp150.000 | Rp450.000 |
 | – Komisi Langganan | Rp1.680.000 | Rp560.000 | Rp1.260.000 |
 | – Pasangan Langganan (RO) | Rp71.435.000 | Rp2.905.000 | Rp927.500 |
 | – Royalti Langganan (RO) | Rp8.929.526 | Rp206.825 | Rp0 |
-| **Pembanding: total 16 bulan bila M1 berhenti menjual** | **Rp86.894.526** | **Rp200.000** | **Rp35.062.500** |
+| **Pembanding: total 16 bulan bila M1 berhenti menjual** | **Rp86.894.526** | **Rp200.000** | **Rp34.837.500** |
 | Median seluruh Mitra PLS | Rp0 | Rp0 | Rp0 |
 | Mitra PLS tanpa komisi/bonus | 50,0% | 75,0% | 87,8% |
 
 ## 3. Kesimpulan otomatis
 
-- ✓ **A. Lisensi Atlas Rp7,5 jt: pohon penuh 12 level**: rasio Mitra 37,1%, rasio perusahaan 42,2%, M1 Rp760.039.526 selama 16 bulan.
-- ✓ **B. Lisensi Atlas Family Rp25 jt: pohon penuh 12 level**: rasio Mitra 35,3%, rasio perusahaan 30,8%, M1 Rp860.745.249 selama 16 bulan.
-- ✓ **C. Pola Family resmi: ayah menjual 2 paket/bulan selama 2 bulan**: rasio Mitra 36,9%, rasio perusahaan 29,3%, M1 Rp245.682.500 selama 16 bulan.
+- ✓ **A. Lisensi Atlas Rp7,5 jt: pohon penuh 12 level**: rasio Mitra 36,3%, rasio perusahaan 42,9%, M1 Rp286.609.526 selama 16 bulan.
+- ✓ **B. Lisensi Atlas Family Rp25 jt: pohon penuh 12 level**: rasio Mitra 34,6%, rasio perusahaan 31,5%, M1 Rp204.216.825 selama 16 bulan.
+- ✓ **C. Pola Family resmi: ayah menjual 2 paket/bulan selama 2 bulan**: rasio Mitra 36,5%, rasio perusahaan 29,7%, M1 Rp173.232.500 selama 16 bulan.
 
 Model biaya sama dengan `docs/AUDIT_KOMPENSASI_V2.md`: layanan platform Rp142.000 per akun per bulan (dicadangkan untuk seluruh masa akses saat penjualan), workshop Rp800.000 per kursi + Rp1.300.000 per event 30 peserta. Belum termasuk biaya kantor, gaji, pemasaran perusahaan, dan PPh badan.

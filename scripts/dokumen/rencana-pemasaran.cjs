@@ -519,7 +519,7 @@ const blocks = [
       ],
       [
         "Bonus Pembinaan",
-        "Persentase Bonus Pasangan Mitra PLS yang disponsori: generasi 1–3 masing-masing 25%, generasi 4–6 masing-masing 5%",
+        "Persentase Bonus Pasangan yang benar-benar dibayar kepada Mitra PLS yang disponsori: generasi 1–3 masing-masing 25%, generasi 4–6 masing-masing 5%. Bonus Pasangan yang ditahan atau hangus tidak menimbulkan Bonus Pembinaan",
         "6 generasi sponsor; paling banyak Rp500.000.000 per orang per bulan",
         "Mitra PLS sponsor pemegang Lisensi",
       ],
@@ -1024,11 +1024,11 @@ const blocks = [
       ["Bonus Sponsor", "4 paket × Rp3.000.000", "Rp12.000.000"],
       ["Bonus Fast Start", "12 kursi × Rp1.000.000", "Rp12.000.000"],
       ["Bonus Pasangan", "Sesuai jaringan yang terbentuk dalam 90 hari", "Rp1.800.000"],
-      ["Bonus Pembinaan", "25% × Bonus Pasangan generasi 1–3", "Rp525.000"],
+      ["Bonus Pembinaan", "25% × Bonus Pasangan generasi 1–3 yang sudah dibayar", "Rp300.000"],
       ["Bonus Pendamping", "2 kursi utama binaan membuat penjualan Fast Start pertamanya dalam 90 hari Mitra PLS Contoh", "Rp200.000"],
-      ["**Jumlah tanpa Pool Aktif**", "", "**Rp26.525.000**"],
+      ["**Jumlah tanpa Pool Aktif**", "", "**Rp26.300.000**"],
       ["Pool Aktif", "12 penjualan × paling banyak Rp500.000 (tidak tetap)", "Rp6.000.000"],
-      ["**Jumlah bruto 90 hari**", "", "**Rp32.525.000**"],
+      ["**Jumlah bruto 90 hari**", "", "**Rp32.300.000**"],
     ],
     [2, 3.4, 1.6],
   ],
@@ -1454,7 +1454,7 @@ const blocks = [
   ],
   [
     "p",
-    "Bonus Pembinaan hanya dibayar bila Mitra PLS penerima aktif pada bulan itu. Bila tidak, bonus ditahan sesuai bagian 9.3.",
+    "Bonus Pembinaan timbul pada tutup bulan saat Bonus Pasangan generasi itu benar-benar dibayar; Bonus Pasangan yang ditahan memberi Pembinaan saat dilepas, dan yang hangus tidak memberi Pembinaan. Bonus Pembinaan hanya dibayar bila Mitra PLS penerima aktif pada bulan itu; bila tidak, bonus ditahan sesuai bagian 9.3.",
   ],
   ["h2", "B.3 Bonus Leadership"],
   [

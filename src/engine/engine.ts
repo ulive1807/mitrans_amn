@@ -1321,8 +1321,8 @@ export class MitransEngine {
       node.todayIn = { L: 0, R: 0 };
       if (r.pairs > 0) {
         const amount = r.pairs * PLAN.pairBonus;
+        // Bonus Pembinaan dihitung saat Bonus Pasangan ini benar-benar dibayar (tutup bulan).
         this.accrue(node.accountId, "PASANGAN", amount, at, { ref: r.pairs });
-        this.accruePembinaan(node.accountId, amount, at);
       }
     }
     this.touchedToday.clear();
@@ -1335,25 +1335,24 @@ export class MitransEngine {
     earnerId: string,
     pairAmount: number,
     at: number,
-  ): void {
+    month: string,
+  ): LedgerEntry[] {
+    const out: LedgerEntry[] = [];
     let cur = this.accounts.get(earnerId)!;
     for (let gen = 1; gen <= PLAN.pembinaanRatesBp.length; gen++) {
-      if (!cur.sponsorId) return;
+      if (!cur.sponsorId) return out;
       const sponsor = this.accounts.get(cur.sponsorId)!;
       const amount = applyBp(pairAmount, pembinaanRateBp(gen));
-      if (sponsor.role === "struktural" || sponsor.nodeId) {
-        this.accrue(sponsor.id, "PEMBINAAN", amount, at, { ref: gen });
-      } else {
+      const e = this.accrue(sponsor.id, "PEMBINAAN", amount, at, { ref: gen, deferred: true, month });
+      if (e.status === "pending" && sponsor.role !== "struktural" && !sponsor.nodeId) {
         // Mitra PLS tanpa Lisensi tidak memperoleh Bonus Pembinaan (Bab 5.4).
-        const e = this.accrue(sponsor.id, "PEMBINAAN", amount, at, {
-          ref: gen,
-          deferred: true,
-        });
         e.status = "ineligible";
         e.note = "Belum memegang Lisensi (Bab 5.4)";
       }
+      out.push(e);
       cur = sponsor;
     }
+    return out;
   }
 
   // ---------------------------------------------------------------------------
@@ -1534,6 +1533,7 @@ export class MitransEngine {
         currentTotal > 0 ? Math.max(0, budgetLeft) / currentTotal : 1;
     for (const e of teamClaims) {
       const pay = teamFactor >= 1 ? e.gross : Math.floor(e.gross * teamFactor);
+      budgetLeft -= pay;
       const becameActive = ms.becameActiveAt.get(e.accountId) ?? e.accruedAt;
       const weekly = payoutFriday(Math.max(e.accruedAt, becameActive));
       settle(
@@ -1543,6 +1543,35 @@ export class MitransEngine {
       );
       if (pay < e.gross) {
         e.note = `Faktor plafon ${(teamFactor * 100).toFixed(2)}%`;
+        this.teamCarry.push(this.carryEntry(e, e.gross - pay, month));
+      }
+    }
+    // 4b. Bonus Pembinaan hanya dari Bonus Pasangan yang benar-benar dibayar bulan ini (keputusan Coach
+    //     29 Oktober 2026). Pasangan yang ditahan memberi Pembinaan saat dilepas dan dibayar; yang hangus tidak.
+    const pembClaims: { e: LedgerEntry; payoutDate: string }[] = [];
+    for (const pair of [...carryIn, ...teamClaims]) {
+      if (pair.type !== "PASANGAN" || pair.amount <= 0) continue;
+      for (const e of this.accruePembinaan(pair.accountId, pair.amount, pair.accruedAt, month)) {
+        if (e.status !== "pending") continue;
+        if (isActive(e.accountId) && this.subscriptionConditionMet(e.accountId, month))
+          pembClaims.push({ e, payoutDate: pair.payoutDate ?? closeFriday });
+        else {
+          if (isActive(e.accountId)) heldNoSubscription += e.gross;
+          hold(
+            e,
+            isActive(e.accountId) ? "Langganan tidak aktif (bulan ke-4+)" : "Tidak aktif pada bulan bonus",
+          );
+        }
+      }
+    }
+    const pembTotal = pembClaims.reduce((a, c) => a + c.e.gross, 0);
+    const pembFactor = pembTotal > budgetLeft ? Math.max(0, budgetLeft) / pembTotal : 1;
+    for (const { e, payoutDate } of pembClaims) {
+      const pay = pembFactor >= 1 ? e.gross : Math.floor(e.gross * pembFactor);
+      budgetLeft -= pay;
+      settle(e, pay, pembFactor >= 1 ? payoutDate : closeFriday);
+      if (pay < e.gross) {
+        e.note = `Faktor plafon ${(pembFactor * 100).toFixed(2)}%`;
         this.teamCarry.push(this.carryEntry(e, e.gross - pay, month));
       }
     }

@@ -149,6 +149,7 @@ describe("Setiap kursi Family adalah hak usaha tersendiri", () => {
     const earned = e.ledger
       .filter((x) => x.accountId === "F1" && x.status === "payable" && x.accruedAt < end && x.type !== "POOL_AKTIF")
       .reduce((a, x) => a + x.amount, 0);
-    expect(earned).toBe(26_525_000);
+    // Pembinaan hanya dari Bonus Pasangan binaan yang dibayar (keputusan Coach 29 Oktober 2026).
+    expect(earned).toBe(26_300_000);
   });
 });
