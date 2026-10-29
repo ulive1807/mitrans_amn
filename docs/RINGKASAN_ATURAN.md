@@ -13,7 +13,7 @@ Kolom **Kode** menunjukkan tempat aturan dijalankan engine (`src/engine/`).
 | Lisensi Atlas Family (3 kursi dewasa, akses 12 bulan; bonus per kursi) | Rp25.000.000 | Rp22.522.523 | 225 | `PLAN.family`, `purchaseFamily` |
 | Atlas Membership (per bulan, mulai bulan ke-4) | Rp399.000 | Rp359.459 | 3,5 | `PLAN.subscription` |
 
-- Family: ayah posisi utama di bawah penjual; anak di kaki kiri, ibu di kaki kanan ayah (disponsori ayah). Setiap kursi dewasa = hak usaha tersendiri. Model Hybrid: bonus kursi ayah untuk penjual; bonus kursi ibu dan anak (2 × Rp1.750.000) untuk ayah; volume ibu dan anak dihitung untuk ayah. Membership wajib mulai bulan ke-13.
+- Family: ayah posisi utama di bawah penjual; anak di kaki kiri, ibu di kaki kanan ayah (disponsori ayah). Setiap kursi dewasa = hak usaha tersendiri. Penjual (Sponsor ayah): Bonus Sponsor Rp2.500.000 per paket + Fast Start Rp1.000.000 per kursi (90 hari pertama penjual); ayah tidak menerima Sponsor/Fast Start dari keluarganya; volume ibu dan anak dihitung untuk ayah. Membership wajib mulai bulan ke-13.
 - Harga sama untuk Mitra PLS dan Pelanggan. Tidak ada opsi tahunan. Langganan tanpa Lisensi belum tersedia.
 - 1 PV = Rp100.000 omzet bersih, hanya untuk menghitung bonus.
 - Produk adalah alat analisis dan edukasi: tanpa sinyal beli/jual, tanpa transaksi otomatis, tanpa pengelolaan dana.

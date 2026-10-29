@@ -29,6 +29,8 @@ export const PLAN = {
     pvTenths: 2250, // 225 PV
     seats: 3,
     accessMonths: 12,
+    /** Bonus Sponsor per paket untuk Sponsor ayah (keputusan Coach 29 Oktober 2026), dibagi rata per kursi. */
+    sponsorBonus: 2_500_000,
   },
   subscription: {
     /** Nama dagang Langganan bulanan (keputusan Coach 29 Oktober 2026). */

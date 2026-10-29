@@ -31,7 +31,7 @@ describe("Paket Family Rp25 jt, 12 bulan, 3 kursi (keputusan Coach 29 Oktober 20
   it("ayah posisi utama di bawah penjual; anak di kaki kiri ayah, ibu di kaki kanan ayah", () => {
     const sales = w.engine.purchaseFamily(FAM);
     expect(sales.map((s) => s.buyerId)).toEqual(["AYAH", "ANAK", "IBU"]);
-    expect(sales.map((s) => s.sellerId)).toEqual(["A", "AYAH", "AYAH"]);
+    expect(sales.map((s) => s.sellerId)).toEqual(["A", "A", "A"]);
     expect(sales.reduce((a, s) => a + s.net!, 0)).toBe(PLAN.family.netPrice);
     const node = (id: string) => w.engine.nodes.get(w.engine.accounts.get(id)!.nodeId!)!;
     expect(node("AYAH").left).toBe(node("ANAK").id);
@@ -40,17 +40,16 @@ describe("Paket Family Rp25 jt, 12 bulan, 3 kursi (keputusan Coach 29 Oktober 20
     for (const id of ["AYAH", "IBU", "ANAK"]) expect(w.engine.accounts.get(id)!.accessMonths).toBe(12);
   });
 
-  it("Hybrid: penjual mendapat bonus kursi ayah; ayah mendapat bonus kursi ibu dan anak", () => {
+  it("penjual: Bonus Sponsor Rp2.500.000 per paket + Fast Start 3 x Rp1.000.000; ayah tidak menerima Sponsor/Fast Start", () => {
     w.engine.purchaseFamily(FAM);
-    const gross = (id: string, t: "SPONSOR" | "FAST_START" | "PENDAMPING") =>
-      w.entries(id, t).reduce((a, e) => a + e.gross, 0);
-    expect(gross("A", "SPONSOR")).toBe(750_000);
-    expect(gross("A", "FAST_START")).toBe(1_000_000);
-    expect(gross("A", "PENDAMPING")).toBe(100_000);
-    expect(gross("AYAH", "SPONSOR")).toBe(1_500_000);
-    expect(gross("AYAH", "FAST_START")).toBe(2_000_000);
-    expect(w.engine.personalSales("2027-01").get("A")).toBe(1);
-    expect(w.engine.personalSales("2027-01").get("AYAH")).toBe(2);
+    const gross = (id: string, t: "SPONSOR" | "FAST_START") => w.entries(id, t).reduce((a, e) => a + e.gross, 0);
+    expect(PLAN.family.sponsorBonus).toBe(2_500_000);
+    expect(gross("A", "SPONSOR")).toBe(2_500_000);
+    expect(gross("A", "FAST_START")).toBe(3_000_000);
+    expect(gross("AYAH", "SPONSOR")).toBe(0);
+    expect(gross("AYAH", "FAST_START")).toBe(0);
+    expect(w.engine.personalSales("2027-01").get("A")).toBe(3);
+    expect(w.engine.personalSales("2027-01").get("AYAH")).toBe(0);
   });
 
   it("volume ibu dan anak dihitung untuk ayah", () => {
@@ -84,8 +83,8 @@ describe("Paket Family Rp25 jt, 12 bulan, 3 kursi (keputusan Coach 29 Oktober 20
   });
 
   it("batas atas biaya bonus per paket Family di bawah 60%", () => {
-    // Konservatif: Pendamping dihitung per kursi.
-    expect(perLicenseUpperBounds().family * 100).toBeCloseTo(53.12, 1);
+    // Sponsor Rp2,5 jt per paket + Fast Start, Pendamping, dan bonus tim per kursi.
+    expect(perLicenseUpperBounds().family * 100).toBeCloseTo(54.23, 1);
     expect(perLicenseUpperBounds().family).toBeLessThan(0.6);
   });
 });

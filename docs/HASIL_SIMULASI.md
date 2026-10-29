@@ -48,9 +48,9 @@ Persentase Plan A terhadap omzet bersih Lisensi; Plan B terhadap omzet bersih La
 | Skenario | Prestasi dari dana cadangan | Sisa Pool Aktif akhir | Bonus masih ditahan akhir | Waktu jalan |
 |---|---:|---:|---:|---:|
 | ideal-12 | Rp0 | Rp3.815.040.000 | Rp0 | 0.5 detik |
-| flat-5y | Rp0 | Rp0 | Rp424.932.500 | 14.1 detik |
-| risefall-5y | Rp0 | Rp0 | Rp79.202.500 | 22.5 detik |
-| flat-5y-30 | Rp0 | Rp0 | Rp383.930.000 | 17.9 detik |
+| flat-5y | Rp0 | Rp0 | Rp424.932.500 | 13.1 detik |
+| risefall-5y | Rp0 | Rp0 | Rp79.202.500 | 20.5 detik |
+| flat-5y-30 | Rp0 | Rp0 | Rp383.930.000 | 17.8 detik |
 
 ## Batas atas biaya per Lisensi (dihitung ulang dari parameter, spesifikasi 10.2)
 

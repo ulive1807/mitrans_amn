@@ -271,13 +271,13 @@ export class MitransEngine {
     at: number;
     legPreference?: Side;
     /** Internal: kursi paket Family (penjual = Sponsor ayah). */
-    family?: { bundleId: string; net: number };
+    family?: { bundleId: string; net: number; sellerId: string; sponsorBonus: number };
   }): Sale {
     this.advance(input.at);
     const buyer = this.mustAccount(input.buyerId);
     if (buyer.role === "struktural")
       throw new EngineError("Akun struktural tidak membeli");
-    const seller = this.mustAccount(buyer.sponsorId!);
+    const seller = this.mustAccount(input.family?.sellerId ?? buyer.sponsorId!);
     this.assertSellerCanSell(seller);
     if (this.sales.has(input.saleId))
       throw new EngineError(`Penjualan ${input.saleId} sudah ada`);
@@ -307,7 +307,7 @@ export class MitransEngine {
     this.countPersonalSale(seller.id, input.at);
 
     // Bonus Sponsor (8.1): kepada Mitra PLS penjual.
-    this.accrue(seller.id, "SPONSOR", PLAN.sponsorBonus, input.at, {
+    this.accrue(seller.id, "SPONSOR", input.family?.sponsorBonus ?? PLAN.sponsorBonus, input.at, {
       saleId: sale.id,
     });
     // Bonus Layanan Berkah: hanya Lisensi kepada Pelanggan, cair setelah 30 hari dan konfirmasi orientasi.
@@ -356,8 +356,9 @@ export class MitransEngine {
   /**
    * Paket Family (keputusan Coach 29 Oktober 2026): 1 pembayaran untuk ayah (posisi utama) dan sampai 2
    * anggota keluarga dewasa yang disponsori langsung oleh ayah: satu di kaki kiri ayah, satu di kaki kanan.
-   * Model Hybrid: kursi ayah dijual oleh Sponsor ayah; kursi ibu dan anak dijual oleh ayah (Sponsor
-   * mereka), sehingga Bonus Sponsor dan Fast Start kursi itu untuk ayah. Volume dihitung biasa. Akses 12 bulan.
+   * Semua kursi dijual oleh Sponsor ayah: Bonus Sponsor Rp2.500.000 per paket (dibagi rata per kursi) dan
+   * Fast Start per kursi untuknya; ayah tidak menerima Bonus Sponsor/Fast Start dari keluarganya. Volume
+   * ibu dan anak dihitung untuk ayah seperti volume biasa. Akses 12 bulan.
    */
   purchaseFamily(input: {
     saleId: string;
@@ -379,7 +380,11 @@ export class MitransEngine {
     if (this.sales.has(`${input.saleId}-1`)) throw new EngineError(`Penjualan ${input.saleId} sudah ada`);
     const base = Math.floor(PLAN.family.netPrice / PLAN.family.seats);
     const net = (i: number) => (i === 0 ? PLAN.family.netPrice - base * (PLAN.family.seats - 1) : base);
-    const family = (i: number) => ({ bundleId: input.saleId, net: net(i) });
+    const sellerId = head.sponsorId!;
+    const sponsorBase = Math.floor(PLAN.family.sponsorBonus / PLAN.family.seats);
+    const sponsorBonus = (i: number) =>
+      i === 0 ? PLAN.family.sponsorBonus - sponsorBase * (PLAN.family.seats - 1) : sponsorBase;
+    const family = (i: number) => ({ bundleId: input.saleId, net: net(i), sellerId, sponsorBonus: sponsorBonus(i) });
     const sales = [
       this.purchaseLicense({ saleId: `${input.saleId}-1`, buyerId: head.id, at: input.at, family: family(0) }),
     ];

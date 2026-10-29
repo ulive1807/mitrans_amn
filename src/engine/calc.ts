@@ -247,9 +247,11 @@ export function perLicenseUpperBounds() {
   const toMitra = (direct + PLAN.pendampingBonus + team) / net + fundsShare;
   const toCustomer = (direct + team + PLAN.berkahBonus) / net + fundsShare;
   const converted = toCustomer;
-  // Family: bonus per kursi seperti Lisensi Atlas, dana dari omzet bersih Family.
+  // Family: Bonus Sponsor per paket; Fast Start, Pendamping, dan bonus tim per kursi.
   const family =
-    (PLAN.family.seats * (direct + PLAN.pendampingBonus + team)) / PLAN.family.netPrice +
+    (PLAN.family.sponsorBonus +
+      PLAN.family.seats * (PLAN.fastStartBonus + PLAN.pendampingBonus + team)) /
+      PLAN.family.netPrice +
     fundsShare;
   const subscription =
     PLAN.subscriptionCommission / PLAN.subscription.netPrice +
