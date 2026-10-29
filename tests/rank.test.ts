@@ -155,3 +155,23 @@ describe("Dana leadership 5% (spesifikasi 7)", () => {
     expect(w.engine.report("2027-02")!.leadershipFund).toBe(0);
   });
 });
+
+describe("Perbaikan tinjauan akhir: verifikasi per peringkat", () => {
+  it("Mitra yang naik ke Executive tetap memperoleh Builder setelah 3 bulan Builder terpelihara", () => {
+    builderJanuary();
+    // Februari: B dan C menjadi Builder, A memenuhi Executive.
+    for (const id of ["B", "C"]) {
+      w.mitra(`${id}1`, id, at("2027-02-05"), { leg: "L" });
+      w.mitra(`${id}2`, id, at("2027-02-05"), { leg: "R" });
+    }
+    w.mitra("D", "A", at("2027-02-05"));
+    for (const id of ["B1", "B2", "C1", "C2"]) sellCustomers(id, 2, "2027-02-10");
+    sellCustomers("D", 1, "2027-02-10");
+    sellCustomers("A", 1, "2027-02-10");
+    w.engine.closeThrough("2027-02");
+    expect(w.engine.paidAsRank("A", "2027-02")).toBe("Executive");
+    maintain("2027-03"); // 2:2 paket: Builder terpelihara, Executive tidak
+    w.engine.closeThrough("2027-03");
+    expect(w.entries("A", "PRESTASI").map((e) => e.note)).toEqual(["Builder"]);
+  });
+});

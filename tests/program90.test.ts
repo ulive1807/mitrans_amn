@@ -144,3 +144,45 @@ describe("Syarat aktif dan masa tunggu program 90 hari (spesifikasi 5.3)", () =>
     expect(febPair.status).toBe("forfeited");
   });
 });
+
+describe("Perbaikan tinjauan akhir: pembatalan dan jendela 90 hari", () => {
+  it("Balik Modal dapat diperoleh lagi bila penjualan pemicu dibatalkan sesudah tutup bulan", () => {
+    headline();
+    w.engine.closeThrough("2027-02");
+    w.engine.refundSale("L-E1", at("2027-03-02"));
+    expect(w.engine.program90Progress("A").achieved).toBe(false);
+    w.mitra("E2", "E", at("2027-03-03"));
+    const fresh = w.entries("A", "BALIK_MODAL").filter((e) => e.saleId === "L-E2");
+    expect(fresh).toHaveLength(1);
+    expect(w.engine.program90Progress("A").achieved).toBe(true);
+  });
+
+  it("pembatalan sebelum Jumat pembayaran membatalkan bonus, bukan membuat entri negatif", () => {
+    w.mitra("B", "A", at("2027-01-29"));
+    w.engine.closeThrough("2027-01");
+    const fs = w.entries("A", "FAST_START")[0];
+    expect(fs.payoutDate).toBe("2027-02-12");
+    w.engine.refundSale("L-B", at("2027-02-02"));
+    expect(fs.status).toBe("clawback");
+    expect(fs.amount).toBe(0);
+    expect(w.entries("A", "FAST_START").filter((e) => e.amount < 0)).toHaveLength(0);
+  });
+
+  it("pembatalan Lisensi tidak mengulang jendela 90 hari", () => {
+    w.mitra("B", "A", at("2027-01-02"));
+    const end = w.engine.program90End("B")!;
+    w.engine.refundSale("L-B", at("2027-03-25"));
+    w.buyAgain("B", at("2027-03-26"));
+    expect(w.engine.program90End("B")).toBe(end);
+    w.mitra("C", "B", at("2027-04-05"));
+    expect(w.entries("B", "FAST_START")).toHaveLength(0);
+  });
+
+  it("pembatalan penjualan lain yang menurunkan hitungan di bawah syarat menarik Balik Modal", () => {
+    headline();
+    const bm = w.entries("A", "BALIK_MODAL")[0];
+    w.engine.refundSale("L-B1", at("2027-02-12"));
+    expect(bm.status).toBe("clawback");
+    expect(w.engine.program90Progress("A").achieved).toBe(false);
+  });
+});

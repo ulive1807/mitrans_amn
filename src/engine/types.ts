@@ -19,6 +19,8 @@ export interface Account {
   mitraSince?: number;
   /** Lulus kuis Kode Etik sehingga tautan rujukan aktif (Bab 6 butir 7). */
   quizPassed: boolean;
+  /** Awal program 90 hari: aktivasi Lisensi pertama; tidak berubah walau Lisensi dibatalkan lalu dibeli lagi. */
+  program90StartAt?: number;
   /** Aktivasi Lisensi pertama milik akun ini (untuk syarat Langganan bulan ke-4 dan masa akses). */
   licenseActivatedAt?: number;
   /** Id node jaringan biner. Hanya Mitra PLS pemegang Lisensi. */
@@ -27,6 +29,8 @@ export interface Account {
   everActive: boolean;
   /** Verifikasi peringkat yang sedang berjalan (spesifikasi 6): perlu 3 bulan berturut-turut. */
   rankVerify?: { rank: RankName; since: string; months: number };
+  /** Hitungan bulan berturut-turut per peringkat yang belum dicapai (verifikasi per peringkat). */
+  rankStreaks?: Partial<Record<RankName, { since: string; months: number }>>;
   /** Peringkat yang sudah tercapai dan terverifikasi (sekali per identitas), urut dari rendah. */
   ranksAchieved: { rank: RankName; at: number; claimed: boolean }[];
   terminated?: boolean;
@@ -176,6 +180,8 @@ export interface LedgerEntry {
   /** Untuk Bonus Pembinaan: generasi. Untuk Bonus Pasangan: jumlah pasangan. */
   ref?: number;
   note?: string;
+  /** Id entri negatif yang menarik kembali entri ini setelah dibayar. */
+  reversedBy?: number;
   /** Bulan terakhir masa tunggu untuk bonus yang ditahan. */
   holdUntil?: string;
 }

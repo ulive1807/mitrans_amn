@@ -40,18 +40,18 @@ Persentase Plan A terhadap omzet bersih Lisensi; Plan B terhadap omzet bersih La
 | Skenario | Median total diterima per Mitra PLS | Persentil 90 | Tertinggi | Porsi Mitra PLS tanpa bonus | Rata-rata porsi Mitra PLS aktif per bulan |
 |---|---:|---:|---:|---:|---:|
 | ideal-12 | Rp0 | Rp8.067.932 | Rp50.152.558 | 50,0% | 19,3% |
-| flat-5y | Rp0 | Rp17.083.554 | Rp473.760.353 | 61,3% | 4,3% |
-| risefall-5y | Rp0 | Rp16.801.566 | Rp602.947.980 | 61,6% | 4,9% |
-| flat-5y-30 | Rp0 | Rp28.407.542 | Rp1.494.803.874 | 52,0% | 7,8% |
+| flat-5y | Rp0 | Rp17.083.554 | Rp473.755.249 | 61,3% | 4,3% |
+| risefall-5y | Rp0 | Rp16.801.566 | Rp602.939.488 | 61,6% | 4,9% |
+| flat-5y-30 | Rp0 | Rp28.407.542 | Rp1.494.793.956 | 52,0% | 7,8% |
 
 ## Kesehatan dana
 
 | Skenario | Prestasi dari dana cadangan | Sisa Pool Aktif akhir | Bonus masih ditahan akhir | Waktu jalan |
 |---|---:|---:|---:|---:|
 | ideal-12 | Rp0 | Rp3.815.040.000 | Rp0 | 0.5 detik |
-| flat-5y | Rp0 | Rp0 | Rp448.550.000 | 17.5 detik |
-| risefall-5y | Rp0 | Rp0 | Rp73.002.500 | 22.2 detik |
-| flat-5y-30 | Rp0 | Rp0 | Rp380.362.500 | 17.0 detik |
+| flat-5y | Rp0 | Rp0 | Rp448.550.000 | 18.5 detik |
+| risefall-5y | Rp0 | Rp0 | Rp73.002.500 | 20.7 detik |
+| flat-5y-30 | Rp0 | Rp0 | Rp380.362.500 | 18.4 detik |
 
 ## Batas atas biaya per Lisensi (dihitung ulang dari parameter, spesifikasi 10.2)
 

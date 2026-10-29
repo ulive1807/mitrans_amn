@@ -329,6 +329,7 @@ export class MitransEngine {
     }
 
     if (!buyer.licenseActivatedAt) buyer.licenseActivatedAt = input.at;
+    if (buyer.program90StartAt === undefined) buyer.program90StartAt = input.at;
 
     if (buyer.role === "mitra") {
       if (!buyer.nodeId) {
@@ -470,30 +471,12 @@ export class MitransEngine {
     let clawedBack = 0;
     for (const e of [...(this.entriesBySale.get(saleId) ?? [])]) {
       if (e.gross <= 0) continue;
-      if (e.status === "pending" || e.status === "held") {
-        e.status = "clawback";
-        e.amount = 0;
-        e.note = "Dibatalkan sebelum dibayar";
-      } else if (e.status === "payable" && e.amount > 0) {
-        clawedBack += e.amount;
-        this.pushEntry({
-          accountId: e.accountId,
-          nik: e.nik,
-          type: e.type,
-          gross: -e.amount,
-          amount: -e.amount,
-          status: "clawback",
-          month: wibMonth(at),
-          accruedAt: at,
-          saleId,
-          note: `Penarikan ${e.type} atas pembatalan ${saleId}`,
-        });
-      }
+      clawedBack += this.reverseEntry(e, at, saleId);
     }
     this.pendingBerkah = this.pendingBerkah.filter((e) => e.saleId !== saleId);
-    for (const c of this.program90Sales.values()) {
-      c.personal.delete(saleId);
-      c.team.delete(saleId);
+    const program90Affected: string[] = [];
+    for (const [id, c] of this.program90Sales) {
+      if (c.personal.delete(saleId) || c.team.delete(saleId)) program90Affected.push(id);
     }
     for (const [sellerId, sid] of this.pendampingBySeller)
       if (sid === saleId) this.pendampingBySeller.delete(sellerId);
@@ -516,7 +499,63 @@ export class MitransEngine {
         else needsReview = true; // unit sudah dipasangkan
       });
     }
+    // Penjualan yang dibatalkan tidak dihitung: Balik Modal ditarik bila syaratnya tidak lagi terpenuhi.
+    for (const id of program90Affected) {
+      const acc = this.accounts.get(id)!;
+      const bm = this.balikModalByNik.get(acc.nik);
+      if (bm && bm.accountId === id && this.isLive(bm) && !this.meetsBalikModal(id))
+        clawedBack += this.reverseEntry(bm, at, saleId);
+    }
     return { clawedBack, needsReview };
+  }
+
+  /**
+   * Tarik satu entri karena pembatalan. Belum dibayar (tertunda, ditahan, atau Jumat pembayarannya
+   * belum tiba): entri dibatalkan. Sudah dibayar: entri negatif. Mengembalikan nominal yang ditarik.
+   */
+  private reverseEntry(e: LedgerEntry, at: number, saleId: string): number {
+    if (e.status === "pending" || e.status === "held") {
+      e.status = "clawback";
+      e.amount = 0;
+      e.note = "Dibatalkan sebelum dibayar";
+      return 0;
+    }
+    if (e.status !== "payable" || e.amount <= 0 || e.reversedBy !== undefined) return 0;
+    if (e.payoutDate && e.payoutDate > wibDate(at)) {
+      e.status = "clawback";
+      e.amount = 0;
+      e.note = `Dibatalkan sebelum Jumat pembayaran (${saleId})`;
+      return 0;
+    }
+    const neg = this.pushEntry({
+      accountId: e.accountId,
+      nik: e.nik,
+      type: e.type,
+      gross: -e.amount,
+      amount: -e.amount,
+      status: "clawback",
+      month: wibMonth(at),
+      accruedAt: at,
+      saleId,
+      note: `Penarikan ${e.type} atas pembatalan ${saleId}`,
+    });
+    e.reversedBy = neg.id;
+    return e.amount;
+  }
+
+  /** Entri masih berlaku: belum dibatalkan dan belum ditarik kembali. */
+  private isLive(e: LedgerEntry): boolean {
+    return e.status !== "clawback" && e.reversedBy === undefined;
+  }
+
+  private meetsBalikModal(accountId: string): boolean {
+    const p = this.program90Progress(accountId);
+    return (
+      p.personal >= PLAN.balikModalPersonal &&
+      p.team >= PLAN.balikModalTeam &&
+      p.legs.L &&
+      p.legs.R
+    );
   }
 
   // ---------------------------------------------------------------------------
@@ -568,14 +607,16 @@ export class MitransEngine {
   /** Akhir jendela 90 hari (eksklusif) sejak aktivasi Lisensi pertama; undefined bila belum memegang Lisensi. */
   program90End(accountId: string): number | undefined {
     const acc = this.mustAccount(accountId);
-    if (acc.role !== "mitra" || !acc.licenseActivatedAt) return undefined;
-    return addDays(acc.licenseActivatedAt, PLAN.program90Days);
+    if (acc.role !== "mitra" || acc.program90StartAt === undefined) return undefined;
+    return addDays(acc.program90StartAt, PLAN.program90Days);
   }
 
+  /** Dalam jendela 90 hari dan saat ini memegang Lisensi. */
   inProgram90(accountId: string, t: number): boolean {
     const end = this.program90End(accountId);
-    if (end === undefined) return false;
-    return t >= this.mustAccount(accountId).licenseActivatedAt! && t < end;
+    const acc = this.mustAccount(accountId);
+    if (end === undefined || acc.licenseActivatedAt === undefined) return false;
+    return t >= acc.program90StartAt! && t < end;
   }
 
   program90Progress(accountId: string): {
@@ -593,7 +634,7 @@ export class MitransEngine {
       personal: c?.personal.size ?? 0,
       team: c?.team.size ?? 0,
       legs: { L: (node?.cumLicenses.L ?? 0) > 0, R: (node?.cumLicenses.R ?? 0) > 0 },
-      achieved: !!bm && bm.status !== "clawback",
+      achieved: !!bm && this.isLive(bm),
       endsAt: this.program90End(accountId),
     };
   }
@@ -881,14 +922,8 @@ export class MitransEngine {
     }
     for (const acc of touched) {
       const existing = this.balikModalByNik.get(acc.nik);
-      if (existing && existing.status !== "clawback") continue;
-      const p = this.program90Progress(acc.id);
-      if (
-        p.personal >= PLAN.balikModalPersonal &&
-        p.team >= PLAN.balikModalTeam &&
-        p.legs.L &&
-        p.legs.R
-      ) {
+      if (existing && this.isLive(existing)) continue;
+      if (this.meetsBalikModal(acc.id)) {
         this.balikModalByNik.set(
           acc.nik,
           this.accrue(acc.id, "BALIK_MODAL", PLAN.balikModalBonus, sale.at, { saleId: sale.id }),
@@ -1109,7 +1144,7 @@ export class MitransEngine {
       if (this.inProgram90(e.accountId, e.accruedAt)) {
         // Spesifikasi 5.3: bonus yang ditahan dalam 90 hari pertama belum hangus sampai hari ke-150.
         const day150 = wibMonth(
-          addDays(this.accounts.get(e.accountId)!.licenseActivatedAt!, PLAN.program90HoldUntilDay),
+          addDays(this.accounts.get(e.accountId)!.program90StartAt!, PLAN.program90HoldUntilDay),
         );
         if (monthIndex(day150) > monthIndex(e.holdUntil)) e.holdUntil = day150;
         e.note = `${note} · masa tunggu program 90 hari`;
@@ -1553,26 +1588,31 @@ export class MitransEngine {
           if (rankIndex(r.rank) > rankIndex(pa) && maintainsRank(r.rank, input.legPaket)) pa = r.rank;
       paidAs.set(acc.id, pa);
 
-      // Verifikasi 3 bulan berturut-turut.
-      const v = acc.rankVerify;
-      if (v) {
-        if (isAct && maintainsRank(v.rank, input.legPaket)) v.months++;
-        else acc.rankVerify = undefined;
-      }
+      // Verifikasi 3 bulan berturut-turut, dihitung terpisah untuk setiap peringkat yang belum dicapai:
+      // dimulai saat memenuhi syarat, berlanjut selama memenuhi syarat atau terpelihara.
+      const streaks = (acc.rankStreaks ??= {});
       const highestAchieved = acc.ranksAchieved.reduce((m, r) => Math.max(m, rankIndex(r.rank)), 0);
-      if (
-        rankIndex(q) > highestAchieved &&
-        rankIndex(q) > (acc.rankVerify ? rankIndex(acc.rankVerify.rank) : 0)
-      )
-        acc.rankVerify = { rank: q, since: month, months: 1 };
-      if (acc.rankVerify && acc.rankVerify.months >= PLAN.rankVerifyMonths) {
-        for (let i = 1; i <= rankIndex(acc.rankVerify.rank); i++) {
+      let verified = 0;
+      for (let i = highestAchieved + 1; i < names.length; i++) {
+        const name = names[i];
+        const s = streaks[name];
+        const keeps = isAct && (rankIndex(q) >= i || maintainsRank(name, input.legPaket));
+        if (s && keeps) s.months++;
+        else if (s) delete streaks[name];
+        else if (isAct && rankIndex(q) >= i) streaks[name] = { since: month, months: 1 };
+        if ((streaks[name]?.months ?? 0) >= PLAN.rankVerifyMonths) verified = i;
+      }
+      if (verified > 0) {
+        for (let i = 1; i <= verified; i++) {
           if (!acc.ranksAchieved.some((r) => r.rank === names[i]))
             acc.ranksAchieved.push({ rank: names[i], at: closeAt - 1, claimed: false });
+          delete streaks[names[i]];
         }
         acc.ranksAchieved.sort((x, y) => rankIndex(x.rank) - rankIndex(y.rank));
-        acc.rankVerify = undefined;
       }
+      let top: RankName | undefined;
+      for (const name of names) if (streaks[name]) top = name;
+      acc.rankVerify = top ? { rank: top, ...streaks[top]! } : undefined;
 
       // Teruskan peringkat bayar ke upline sebagai pemimpin di kaki yang sesuai.
       const idx = rankIndex(pa);
