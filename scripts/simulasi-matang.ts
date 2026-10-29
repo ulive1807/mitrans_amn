@@ -335,7 +335,7 @@ out.push(
   "- Penjualan baru per bulan naik secepat mungkin (setiap penjual membuat 2 penjualan Lisensi atau 1 paket Family agar aktif), lalu **stabil** pada angka di nama skenario.",
 );
 out.push(
-  "- Penjual dipilih acak tanpa pengulangan: "acak" dari seluruh Mitra PLS pemegang Lisensi, "tim 10 level" hanya dari Mitra dalam 10 level di bawah M1 (bila kapasitas penuh, seluruh tim aktif). Porsi Pelanggan membeli Lisensi Atlas dan volumenya tercatat di posisi penjual; M1 menjual sendiri sejumlah yang disebut (2 = syarat aktif; 20 = syarat transaksi pribadi Royal Crown).",
+  "- Penjual dipilih acak tanpa pengulangan: «acak» dari seluruh Mitra PLS pemegang Lisensi, «tim 10 level» hanya dari Mitra dalam 10 level di bawah M1 (bila kapasitas penuh, seluruh tim aktif). Porsi Pelanggan membeli Lisensi Atlas dan volumenya tercatat di posisi penjual; M1 menjual sendiri sejumlah yang disebut (2 = syarat aktif; 20 = syarat transaksi pribadi Royal Crown).",
 );
 out.push(
   `- Atlas Membership dimulai setelah masa akses; retensi ${pct(RETENTION)} per bulan (M1 selalu berlangganan); semua menjalankan 1 kegiatan pembinaan per bulan.`,

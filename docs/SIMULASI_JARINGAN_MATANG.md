@@ -6,7 +6,7 @@ Dibuat oleh `npx tsx scripts/simulasi-matang.ts` · parameter v2.0-draf · 36 bu
 
 Asumsi:
 - Penjualan baru per bulan naik secepat mungkin (setiap penjual membuat 2 penjualan Lisensi atau 1 paket Family agar aktif), lalu **stabil** pada angka di nama skenario.
-- Penjual dipilih acak dari seluruh pemegang Lisensi; M1 menjual sendiri sejumlah yang disebut (2 = syarat aktif; 20 = syarat transaksi pribadi Royal Crown).
+- Penjual dipilih acak tanpa pengulangan: «acak» dari seluruh Mitra PLS pemegang Lisensi, «tim 10 level» hanya dari Mitra dalam 10 level di bawah M1 (bila kapasitas penuh, seluruh tim aktif). Porsi Pelanggan membeli Lisensi Atlas dan volumenya tercatat di posisi penjual; M1 menjual sendiri sejumlah yang disebut (2 = syarat aktif; 20 = syarat transaksi pribadi Royal Crown).
 - Atlas Membership dimulai setelah masa akses; retensi 85,0% per bulan (M1 selalu berlangganan); semua menjalankan 1 kegiatan pembinaan per bulan.
 - Model biaya sama dengan audit: layanan Rp142.000 per akun per bulan, workshop Rp800.000 per kursi + Rp1.300.000 per 30 peserta. Laba sebelum biaya kantor dan pajak.
 
