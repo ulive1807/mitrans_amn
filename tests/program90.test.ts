@@ -149,3 +149,13 @@ describe("Perbaikan tinjauan akhir: pembatalan dan jendela 90 hari", () => {
   });
 
 });
+
+describe("Akses aplikasi (audit 29 Oktober 2026)", () => {
+  it("akses tidak aktif untuk bulan sebelum Lisensi dibeli", () => {
+    w.mitra("B", "A", at("2027-03-05"));
+    expect(w.engine.accessActive("B", "2027-02")).toBe(false);
+    expect(w.engine.accessActive("B", "2027-03")).toBe(true);
+    expect(w.engine.accessActive("B", "2027-05")).toBe(true);
+    expect(w.engine.accessActive("B", "2027-06")).toBe(false);
+  });
+});

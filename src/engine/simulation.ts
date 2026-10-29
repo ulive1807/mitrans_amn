@@ -99,6 +99,8 @@ export interface ScenarioParams {
   refundRate: number;
   /** Jumlah pemimpin pertama di bawah Mitrans 002 dan 003. */
   seedLeaders: number;
+  /** Peluang penjualan kepada Mitra PLS baru berupa paket Family 3 kursi (ayah + kiri + kanan). */
+  familyShare?: number;
   options?: Partial<EngineOptions>;
   keepPairLog?: boolean;
 }
@@ -152,7 +154,7 @@ export function runScenario(p: ScenarioParams): SimulationResult {
   let saleCounter = 0;
   const sellers: string[] = [];
   const sellerWeight = new Map<string, number>();
-  const holders: { id: string; activationMonth: number }[] = [];
+  const holders: { id: string; activationMonth: number; access: number }[] = [];
   const mitraHolders: string[] = [];
   const startIdx = monthIndex(p.startMonth);
 
@@ -200,9 +202,29 @@ export function runScenario(p: ScenarioParams): SimulationResult {
     const w = u < 0.15 ? 12 : u < 0.45 ? 3 : 0.4; // sebagian kecil Mitra PLS menjual jauh lebih banyak
     sellers.push(id);
     sellerWeight.set(id, w);
-    holders.push({ id, activationMonth: monthIndex(monthOf(at)) });
+    holders.push({ id, activationMonth: monthIndex(monthOf(at)), access: PLAN.license.accessMonths });
     mitraHolders.push(id);
     return id;
+  };
+
+  /** Paket Family: ayah (disponsori penjual) + anak di kiri + ibu di kanan (disponsori ayah). */
+  const newFamily = (sponsorId: string, at: number) => {
+    const ids: string[] = [];
+    for (let k = 0; k < PLAN.family.seats; k++) {
+      const i = ++counter;
+      const id = `M${i}`;
+      engine.registerMitra({ id, name: syntheticName(i), nik: syntheticNik(i), sponsorId: k === 0 ? sponsorId : ids[0], at });
+      engine.passQuiz(id);
+      ids.push(id);
+    }
+    engine.purchaseFamily({ saleId: `F${++saleCounter}`, headId: ids[0], leftId: ids[1], rightId: ids[2], at });
+    for (const id of ids) {
+      const u = rnd();
+      sellers.push(id);
+      sellerWeight.set(id, u < 0.15 ? 12 : u < 0.45 ? 3 : 0.4);
+      holders.push({ id, activationMonth: monthIndex(monthOf(at)), access: PLAN.family.accessMonths });
+      mitraHolders.push(id);
+    }
   };
 
   // Pemimpin pertama di bawah akun struktural.
@@ -217,7 +239,7 @@ export function runScenario(p: ScenarioParams): SimulationResult {
     // Langganan bulan ke-4 dan seterusnya, dibayar di awal bulan.
     for (const h of holders) {
       const n = startIdx + m - h.activationMonth + 1;
-      if (n < PLAN.subscriptionRequiredFromMonth) continue;
+      if (n <= h.access) continue;
       if (rnd() >= p.subscriptionRetention) continue;
       const at = atWib(
         `${month}-${String(1 + Math.floor(rnd() * 5)).padStart(2, "0")}`,
@@ -275,9 +297,10 @@ export function runScenario(p: ScenarioParams): SimulationResult {
       );
       const seller = pickSeller();
       if (rnd() < p.mitraShare) {
+        const family = rnd() < (p.familyShare ?? 0);
         schedule(
           at,
-          safe(() => void newMitra(seller, at)),
+          safe(() => void (family ? newFamily(seller, at) : newMitra(seller, at))),
         );
       } else {
         schedule(
@@ -297,6 +320,7 @@ export function runScenario(p: ScenarioParams): SimulationResult {
             const holder = {
               id: cid,
               activationMonth: monthIndex(monthOf(at)),
+              access: PLAN.license.accessMonths,
             };
             holders.push(holder);
             if (rnd() < p.orientationRate) {

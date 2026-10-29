@@ -93,3 +93,26 @@ describe("Headline resmi: 2 per bulan selama 2 bulan, lalu bina (keputusan Coach
     expect(h.summary.share90Above7_5).toBe(1);
   });
 });
+
+describe("Simulasi organik dengan paket Family (audit 29 Oktober 2026)", () => {
+  const res = runScenario({ ...standardScenarios(0.15)[0], months: 18, familyShare: 0.3 });
+  it("sebagian penjualan Mitra baru berupa Family 3 kursi", () => {
+    const fam = [...res.engine.sales.values()].filter((s) => s.product === "family");
+    expect(fam.length).toBeGreaterThan(0);
+    expect(fam.length % 3).toBe(0);
+  });
+  it("pemegang Family baru membayar Membership mulai bulan ke-13", () => {
+    const early = [...res.engine.sales.values()].filter((s) => {
+      if (s.kind !== "subscription") return false;
+      const acc = res.engine.accounts.get(s.buyerId)!;
+      return acc.accessMonths === 12 && res.engine.licenseMonthNumber(acc.id, s.forMonth!)! <= 12;
+    });
+    expect(early).toHaveLength(0);
+  });
+  it("plafon Plan A dan Plan B tetap terjaga", () => {
+    for (const r of res.reports) {
+      expect(r.planAPaid - r.rankPaidFromReserve).toBeLessThanOrEqual(r.planACap);
+      expect(r.planBPaid).toBeLessThanOrEqual(r.planBCap);
+    }
+  });
+});

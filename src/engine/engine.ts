@@ -708,7 +708,7 @@ export class MitransEngine {
 
   accessActive(accountId: string, month: string): boolean {
     const n = this.licenseMonthNumber(accountId, month);
-    if (n === undefined) return false;
+    if (n === undefined || n < 1) return false;
     if (this.hasPaidSubscription(accountId, month)) return true;
     return (
       !this.options.planBRequiresPaidSubscription &&

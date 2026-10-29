@@ -11,6 +11,7 @@ npm install
 npm run dev        # http://localhost:5173
 npm test           # uji engine (vitest)
 npm run simulate   # skenario Bab 12.3 + headline v2.0 → docs/HASIL_SIMULASI.md (±1 menit)
+npm run audit      # audit keuangan v2.0: 11 skenario pertumbuhan → docs/AUDIT_KOMPENSASI_V2.md (±1 menit)
 npm run build      # typecheck + bundle produksi
 ```
 
@@ -31,3 +32,4 @@ npm run build      # typecheck + bundle produksi
 - `docs/RINGKASAN_ATURAN.md`: aturan dan lokasinya di kode
 - `docs/ARSITEKTUR_SISTEM.md`: rancangan sistem, asumsi kerja yang perlu diputuskan, rancangan produksi
 - `docs/HASIL_SIMULASI.md`: hasil simulasi engine (bukan proyeksi penjualan)
+- `docs/AUDIT_KOMPENSASI_V2.md`: audit keuangan perusahaan v2.0 di berbagai skenario pertumbuhan
