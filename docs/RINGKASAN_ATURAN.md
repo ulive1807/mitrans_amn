@@ -43,7 +43,7 @@ Kolom **Kode** menunjukkan tempat aturan dijalankan engine (`src/engine/`).
 | Balik Modal | Rp1.500.000 sekali per NIK | Dalam 90 hari: ≥4 Lisensi pribadi (≥1 Mitra baru pribadi di kaki kiri dan kanan), ≥4 Lisensi tim | Mitra itu | `recordProgram90` |
 | Layanan Berkah | Rp50.000 per Lisensi kepada Pelanggan | Konfirmasi orientasi + 30 hari; tanpa konfirmasi 60 hari → Pool | Penjual | `closeMonth` langkah 1 |
 | Pasangan | Rp150.000 per pasangan | 10 level; 20 pasangan/hari; sisa unit dibawa | Pemegang posisi | `pairDay`, `endOfDay` |
-| Pembinaan | Gen 1–3: 25%, gen 4–6: 5% dari Bonus Pasangan | 6 generasi sponsor | Sponsor pemegang Lisensi | `accruePembinaan` |
+| Pembinaan | Gen 1–3: 25%, gen 4–6: 5% dari Bonus Pasangan | 6 generasi sponsor; paling banyak Rp500 jt per orang per bulan, kelebihan → Pool | Sponsor pemegang Lisensi | `accruePembinaan` |
 | Prestasi Peringkat | 12 peringkat bulanan, Rp150.000 (Builder) sampai Rp50.000.000 (Royal Crown) | Setelah 3 bulan terverifikasi; dana 4,5%; antrean; >6 bulan → dana cadangan | Yang mencapai | `evaluateRanks`, `closeMonth` langkah 5 |
 | Leadership | Dana 5%, dibagi menurut bobot (Director 1 … Royal Crown 8) | Mitra aktif yang memelihara peringkat; Rp100 jt/orang/bulan | Pemegang peringkat | `allocateWeightedWithCap` |
 | Pool Aktif | Sebanding penjualan baru pribadi, paling banyak Rp500.000 per penjualan | Sumber hangus + pengisian sampai 55% omzet bersih Lisensi; sisa kembali ke perusahaan | Semua Mitra PLS aktif | `distributePool` |
@@ -52,12 +52,12 @@ Bonus Level dan Royalti Plan A v1.2 dihapus.
 
 Peringkat bulanan (volume per kaki dalam 10 level, paket setara = omzet bersih Lisensi dan Langganan ÷ Rp6.756.757): lihat `PLAN.monthlyRanks` atau halaman `/aturan`. Syarat: transaksi pribadi, volume kiri:kanan, Mitra langsung aktif, 2 pemimpin yang disponsori langsung di kaki berbeda; pemeliharaan 70% (Builder–Manager) atau 80% (Director ke atas).
 
-## 4. Plan B — dari Langganan (tidak berubah)
+## 4. Plan B — dari Langganan
 
 | Bonus | Nominal | Kode |
 |---|---|---|
 | Komisi Langganan | Rp70.000 per Langganan per bulan, kepada penjual Pelanggan atau Sponsor langsung Mitra PLS | `closeMonth` langkah 9 |
-| Pasangan RO | 3% × PV Langganan kaki kecil × Rp100.000; 10 level; tanpa akumulasi | `roPairAmount` |
+| Pasangan RO | 5% × PV Langganan kaki kecil × Rp100.000; 10 level; tanpa akumulasi | `roPairAmount` |
 | Royalti RO | Dana 3% omzet bersih Langganan: tingkat 1 (100:100) 1,5%, tingkat 2 (400:400) 1,5%; Rp100 jt/orang | `allocateEqualWithCap` |
 
 Syarat Plan B: Langganan sendiri aktif, pernah aktif, dan ≥1 kegiatan pembinaan terkonfirmasi bulan itu.
@@ -75,7 +75,7 @@ Syarat Plan B: Langganan sendiri aktif, pernah aktif, dan ≥1 kegiatan pembinaa
 |---|---|---|
 | Plafon Plan A | 60% omzet bersih Lisensi per bulan (PP 29/2021 Pasal 49; Permendag 70/2019 masih 40%) | `options.planACapBp` |
 | Pengisian Pool Aktif | Sampai 55% omzet bersih Lisensi, paling banyak Rp500.000 per penjualan; sisa tidak dibawa | `PLAN.poolTargetBp`, `PLAN.poolMaxPerSale` |
-| Plafon Plan B | 40% omzet bersih Langganan per bulan | `options.planBCapBp` |
+| Plafon Plan B | 50% omzet bersih Langganan per bulan | `options.planBCapBp` |
 | Anggaran bonus tim | Plafon A − bonus langsung − dana peringkat 4,5% − dana leadership 5% | `closeMonth` langkah 4 |
 | Faktor plafon | Semua klaim tim dikali faktor sama; sisanya dibayar lebih dulu bulan berikutnya | `teamCarry` |
 | Batas atas per Lisensi | 59,82% (kepada Mitra baru), 59,08% (kepada Pelanggan) | `perLicenseUpperBounds` |

@@ -48,7 +48,7 @@ export const PLAN = {
 
   // Bab 8.5 Plan B
   subscriptionCommission: 70_000, // 20% x 3,5 PV x Rp100.000
-  roPairBp: 300, // 3% x PV kaki kecil x Rp100.000
+  roPairBp: 500, // keputusan Coach 29 Oktober 2026: 5% (semula 3%) x PV kaki kecil x Rp100.000
   roRoyaltyTiers: [
     { tier: 1, smallLeg: 100, shareBp: 150 },
     { tier: 2, smallLeg: 400, shareBp: 150 },
@@ -70,7 +70,7 @@ export const PLAN = {
   planACapBp: 6000, // spesifikasi 10.1: 60% omzet bersih Lisensi (PP 29/2021 Pasal 49)
   poolTargetBp: 5500, // spesifikasi 8: Pool Aktif mengisi sampai 55%
   poolMaxPerSale: 500_000, // keputusan Coach 29 Oktober 2026: bagian Pool paling banyak per penjualan
-  planBCapBp: 4000, // 40% omzet bersih Langganan
+  planBCapBp: 5000, // keputusan Coach 29 Oktober 2026: 50% (semula 40%) omzet bersih Langganan
 
   // Bab 12.2 butir 4
   serviceFundPerLicense: 426_000,
@@ -106,6 +106,9 @@ export const PLAN = {
   // Spesifikasi 7: dana leadership
   leadershipFundBp: 500,
   leadershipPersonalMonthlyCap: 100_000_000,
+
+  // Keputusan Coach 29 Oktober 2026: Bonus Pembinaan paling banyak per orang per bulan; kelebihan -> Pool Aktif
+  pembinaanPersonalMonthlyCap: 500_000_000,
 } as const;
 
 export type RankName = (typeof PLAN.monthlyRanks)[number]["name"];

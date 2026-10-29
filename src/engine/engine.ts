@@ -8,6 +8,7 @@ import {
 import {
   allocateEqualWithCap,
   allocateWeightedWithCap,
+  capPerAccount,
   applyBp,
   distributePool,
   pairDay,
@@ -1136,6 +1137,7 @@ export class MitransEngine {
       identityCapExcess: 0,
       berkahUnconfirmed: 0,
       carriedFromLastMonth: this.poolCarry,
+      pembinaanOverCap: 0,
       topUp: 0,
     };
     let heldNoSubscription = 0;
@@ -1301,6 +1303,10 @@ export class MitransEngine {
       }
     }
     const teamCarryNext = this.teamCarry.reduce((a, e) => a + e.gross, 0);
+    pool.pembinaanOverCap = capPerAccount(
+      settled.filter((e) => e.type === "PEMBINAAN"),
+      PLAN.pembinaanPersonalMonthlyCap,
+    );
 
     // 5. Peringkat bulanan (spesifikasi 6), lalu Bonus Prestasi Peringkat: klaim pada bulan aktif
     //    pertama setelah terverifikasi, antrean menurut urutan.
@@ -1391,6 +1397,7 @@ export class MitransEngine {
       pool.rankFundLeftover +
       pool.identityCapExcess +
       pool.berkahUnconfirmed +
+      pool.pembinaanOverCap +
       pool.carriedFromLastMonth;
     // Spesifikasi 8: bila bonus Plan A di bawah 55%, selisihnya sampai 55% ikut dibagi lewat Pool Aktif.
     const poolTarget = applyBp(licenseNet, PLAN.poolTargetBp);

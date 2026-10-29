@@ -204,6 +204,8 @@ export interface PoolSources {
   identityCapExcess: number;
   berkahUnconfirmed: number;
   carriedFromLastMonth: number;
+  /** Bonus Pembinaan di atas Rp500 jt per orang per bulan (keputusan Coach 29 Oktober 2026). */
+  pembinaanOverCap: number;
   /** Pengisian Pool sampai 55% omzet bersih Lisensi (spesifikasi 8); sisanya tidak dibawa. */
   topUp: number;
 }

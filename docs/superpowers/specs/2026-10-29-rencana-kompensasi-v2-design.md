@@ -275,3 +275,23 @@ Dampak simulasi keputusan 5–8 (skala 1): Plan A dibayar turun dari 55% menjadi
 6. Baru setelah itu keputusan deploy oleh Coach.
 
 Dampak simulasi keputusan 9 (skala 1): Plan A organik 17,1–20,1% omzet bersih Lisensi (bulan tertinggi sekitar 34%); Mitra pertama skenario headline Rp10.375.000 dari 90 hari pertama (Rp8.375.000 tanpa Pool). Tabel bagian 10–11 di atas sudah memakai Fast Start Rp750.000; ilustrasi bagian 11 masih model awal dan tidak memasukkan batas Pool.
+
+### 14.2 Keputusan tentang biaya, jangka panjang, dan keadilan (29 Oktober 2026)
+
+| # | Hal | Keputusan Coach |
+|---|---|---|
+| 10 | Workshop | Setiap pembeli Lisensi berhak **1 workshop 2 hari tanpa biaya**. Biaya Rp800.000 per peserta + operasional Rp1.300.000 per event (dibagi jumlah peserta). Workshop berikutnya opsional (berbayar atau daring); ketentuan "workshop bulanan tanpa biaya" v1.2 diganti. |
+| 11 | Batas Bonus Pembinaan | Paling banyak **Rp500.000.000 per orang per bulan**; kelebihan masuk Pool Aktif. |
+| 12 | Plan B (Langganan) | Plafon naik 40% → **50%**; Pasangan RO naik 3% → **5%**. Batas atas terburuk per Langganan 47,47%. |
+| 13 | Ilustrasi Rp1 miliar per bulan | **Hanya di Rencana Pemasaran** sebagai simulasi batas atas, lengkap dengan syaratnya (sekitar Rp40,5 miliar omzet bersih jaringan per bulan untuk Royal Crown) dan data sebaran penghasilan. Tidak dipakai di iklan atau konten promosi. |
+
+Laba per Lisensi setelah keputusan 10 (omzet bersih Rp6.756.757; dana layanan Rp426.000; workshop Rp800.000; operasional Rp1.300.000 per event):
+
+| Peserta per event | Bonus 35% (pola headline) | Bonus 59,82% (terburuk) |
+|---|---:|---:|
+| 30 | 46,2% | 21,4% |
+| 15 | 45,6% | 20,8% |
+
+Simulasi pola headline dengan engine (setiap Mitra menjual 2 per bulan selama 2 bulan pertamanya, lalu membina): Mitra pertama Rp10.375.000 dari 90 hari pertama (Rp8.375.000 tanpa Pool); 25 dari 25 Mitra yang menyelesaikan 90 hari memperoleh ≥ Rp7.500.000; bonus Plan A sekitar 35% omzet bersih Lisensi.
+
+Susunan ilustrasi Rp1 miliar per bulan (Royal Crown): Pasangan Rp90 jt (batas 20/hari) + Pembinaan Rp500 jt (batas baru) + Leadership Rp100 jt + Royalti RO Rp100 jt + Pasangan RO 5% (kaki kecil ±5.700 Langganan) Rp100 jt + Sponsor, Pool, Komisi Langganan ±Rp32 jt + bonus Plan B lain. Batas per identitas tetap Rp1 miliar per bulan.

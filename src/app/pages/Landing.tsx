@@ -368,7 +368,7 @@ export function Landing() {
               </div>
               <div className="plan-row">
                 <span>Pasangan Langganan</span>
-                <span>3% × PV kaki kecil × Rp100.000</span>
+                <span>{PLAN.roPairBp / 100}% × PV kaki kecil × Rp100.000</span>
               </div>
               <div className="plan-row">
                 <span>Royalti Langganan</span>

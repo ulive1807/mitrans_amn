@@ -134,6 +134,26 @@ export function distributePool(
   return { perSale, shares, distributed, remainder: pool - distributed };
 }
 
+/**
+ * Batasi jumlah per akun (Bonus Pembinaan per bulan). Entri diturunkan berurutan sampai total
+ * akun mencapai batas. Mengembalikan kelebihan yang dipotong.
+ */
+export function capPerAccount(
+  entries: { accountId: string; amount: number }[],
+  cap: number,
+): number {
+  const used = new Map<string, number>();
+  let excess = 0;
+  for (const e of entries) {
+    const room = Math.max(0, cap - (used.get(e.accountId) ?? 0));
+    const pay = Math.min(e.amount, room);
+    excess += e.amount - pay;
+    e.amount = pay;
+    used.set(e.accountId, (used.get(e.accountId) ?? 0) + pay);
+  }
+  return excess;
+}
+
 /** Urutan peringkat bulanan (spesifikasi 6): Member = 0, Royal Crown = 11. */
 export function rankIndex(rank: MonthlyRankName): number {
   return PLAN.monthlyRanks.findIndex((r) => r.name === rank);

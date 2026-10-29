@@ -151,7 +151,7 @@ lines.push(
   `| Lisensi Pelanggan dikonversi | 59,08% | ${(b.converted * 100).toFixed(2).replace(".", ",")}% |`,
 );
 lines.push(
-  `| Langganan | 37,47% | ${(b.subscription * 100).toFixed(2).replace(".", ",")}% |`,
+  `| Langganan | 47,47% | ${(b.subscription * 100).toFixed(2).replace(".", ",")}% |`,
 );
 lines.push("");
 lines.push("## Skenario headline: \"ajak 2 orang per bulan selama 2 bulan, dan bantu mereka melakukan hal yang sama\"");

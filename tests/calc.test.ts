@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   allocateEqualWithCap,
   allocateWeightedWithCap,
+  capPerAccount,
   applyBp,
   distributePool,
   pairDay,
@@ -70,22 +71,22 @@ describe("Bonus Pembinaan v2.0 (spesifikasi 5.4)", () => {
   });
 });
 
-describe("Pasangan Langganan (Lampiran B.4 dan 10.1)", () => {
-  it("kaki kecil 87,5 PV -> Rp262.500", () => {
+describe("Pasangan Langganan 5% (keputusan Coach 29 Oktober 2026)", () => {
+  it("kaki kecil 87,5 PV -> Rp437.500", () => {
     expect(
       roPairAmount(
         40 * PLAN.subscription.pvTenths,
         25 * PLAN.subscription.pvTenths,
       ),
-    ).toBe(262_500);
+    ).toBe(437_500);
   });
-  it("kaki kecil 70 PV -> Rp210.000", () => {
+  it("kaki kecil 70 PV -> Rp350.000", () => {
     expect(
       roPairAmount(
         30 * PLAN.subscription.pvTenths,
         20 * PLAN.subscription.pvTenths,
       ),
-    ).toBe(210_000);
+    ).toBe(350_000);
   });
 });
 
@@ -168,8 +169,9 @@ describe("Batas atas biaya bonus per Lisensi v2.0 (spesifikasi 10.2)", () => {
     expect(b.toCustomer).toBeLessThan(0.6);
     expect(b.converted).toBeLessThan(0.6);
   });
-  it("Langganan tetap 37,47%", () => {
-    expect(b.subscription * 100).toBeCloseTo(37.47, 2);
+  it("Langganan 47,47% di bawah plafon Plan B 50%", () => {
+    expect(b.subscription * 100).toBeCloseTo(47.47, 2);
+    expect(PLAN.planBCapBp).toBe(5000);
   });
 });
 
@@ -238,5 +240,19 @@ describe("Jadwal Jumat (Bab 11.1)", () => {
     expect(payoutFriday(atWib("2027-01-08", 7, 0))).toBe("2027-01-08");
     expect(payoutFriday(atWib("2027-01-08", 7, 1))).toBe("2027-01-15");
     expect(payoutFriday(atWib("2027-01-04", 15, 0))).toBe("2027-01-08");
+  });
+});
+
+describe("Batas Bonus Pembinaan per orang (keputusan Coach 29 Oktober 2026)", () => {
+  it("Rp500 jt per orang per bulan; kelebihan dikembalikan", () => {
+    expect(PLAN.pembinaanPersonalMonthlyCap).toBe(500_000_000);
+    const entries = [
+      { accountId: "a", amount: 300_000_000 },
+      { accountId: "a", amount: 300_000_000 },
+      { accountId: "b", amount: 100_000_000 },
+    ];
+    const excess = capPerAccount(entries, 500_000_000);
+    expect(entries.map((e) => e.amount)).toEqual([300_000_000, 200_000_000, 100_000_000]);
+    expect(excess).toBe(100_000_000);
   });
 });

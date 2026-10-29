@@ -226,7 +226,7 @@ export function Aturan() {
               per bulan, kepada Mitra PLS penjual atau Sponsor langsung.
             </li>
             <li>
-              Pasangan Langganan: 3% × PV Langganan kaki kecil bulan itu ×
+              Pasangan Langganan: {PLAN.roPairBp / 100}% × PV Langganan kaki kecil bulan itu ×
               Rp100.000, dalam 10 level, tanpa akumulasi antarbulan.
             </li>
             <li>
