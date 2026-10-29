@@ -356,7 +356,7 @@ export class MitransEngine {
   /**
    * Paket Family (keputusan Coach 29 Oktober 2026): 1 pembayaran untuk ayah (posisi utama) dan sampai 2
    * anggota keluarga dewasa yang disponsori langsung oleh ayah: satu di kaki kiri ayah, satu di kaki kanan.
-   * Semua kursi dijual oleh Sponsor ayah: Bonus Sponsor Rp2.500.000 per paket (dibagi rata per kursi) dan
+   * Semua kursi dijual oleh Sponsor ayah: Bonus Sponsor Rp3.000.000 per paket (dibagi rata per kursi) dan
    * Fast Start per kursi untuknya; ayah tidak menerima Bonus Sponsor/Fast Start dari keluarganya. Volume
    * ibu dan anak dihitung untuk ayah seperti volume biasa. Akses 12 bulan.
    */

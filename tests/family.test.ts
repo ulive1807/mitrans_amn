@@ -40,11 +40,11 @@ describe("Paket Family Rp25 jt, 12 bulan, 3 kursi (keputusan Coach 29 Oktober 20
     for (const id of ["AYAH", "IBU", "ANAK"]) expect(w.engine.accounts.get(id)!.accessMonths).toBe(12);
   });
 
-  it("penjual: Bonus Sponsor Rp2.500.000 per paket + Fast Start 3 x Rp1.000.000; ayah tidak menerima Sponsor/Fast Start", () => {
+  it("penjual: Bonus Sponsor Rp3.000.000 per paket + Fast Start 3 x Rp1.000.000; ayah tidak menerima Sponsor/Fast Start", () => {
     w.engine.purchaseFamily(FAM);
     const gross = (id: string, t: "SPONSOR" | "FAST_START") => w.entries(id, t).reduce((a, e) => a + e.gross, 0);
-    expect(PLAN.family.sponsorBonus).toBe(2_500_000);
-    expect(gross("A", "SPONSOR")).toBe(2_500_000);
+    expect(PLAN.family.sponsorBonus).toBe(3_000_000);
+    expect(gross("A", "SPONSOR")).toBe(3_000_000);
     expect(gross("A", "FAST_START")).toBe(3_000_000);
     expect(gross("AYAH", "SPONSOR")).toBe(0);
     expect(gross("AYAH", "FAST_START")).toBe(0);
@@ -83,8 +83,8 @@ describe("Paket Family Rp25 jt, 12 bulan, 3 kursi (keputusan Coach 29 Oktober 20
   });
 
   it("batas atas biaya bonus per paket Family di bawah 60%", () => {
-    // Sponsor Rp2,5 jt per paket + Fast Start, Pendamping, dan bonus tim per kursi.
-    expect(perLicenseUpperBounds().family * 100).toBeCloseTo(54.23, 1);
+    // Sponsor Rp3 jt per paket + Fast Start, Pendamping, dan bonus tim per kursi.
+    expect(perLicenseUpperBounds().family * 100).toBeCloseTo(56.45, 1);
     expect(perLicenseUpperBounds().family).toBeLessThan(0.6);
   });
 });
@@ -113,5 +113,41 @@ describe("Setiap kursi Family adalah hak usaha tersendiri", () => {
     w.engine.closeThrough("2027-02");
     expect(w.engine.isActive("IBU", "2027-02")).toBe(true);
     expect(w.engine.isActive("AYAH", "2027-02")).toBe(false);
+  });
+
+  it("pola 2 Family per bulan selama 2 bulan lalu membina: penjual menerima > Rp25 jt dalam 90 hari tanpa Pool Aktif", () => {
+    // Dunia sendiri agar akun dari beforeEach tidak ikut dihitung.
+    const e = createWorld().engine;
+    let n = 0;
+    let s = 0;
+    const reg = (sponsorId: string, t: number) => {
+      const id = `F${++n}`;
+      e.registerMitra({ id, name: id, nik: String(3_200_000_000_000_000 + n), sponsorId, at: t });
+      e.passQuiz(id);
+      return id;
+    };
+    const heads: { id: string; j: number }[] = [];
+    const months = ["2027-01", "2027-02", "2027-03", "2027-04"];
+    months.forEach((m, i) => {
+      const t = at(`${m}-10`);
+      if (i === 0) {
+        const id = reg("MITRANS-002", t);
+        e.purchaseLicense({ saleId: `L${++s}`, buyerId: id, at: t });
+        heads.push({ id, j: 0 });
+        return;
+      }
+      for (const h of heads.filter((x) => x.j < i && i - x.j <= 2))
+        for (let k = 0; k < 2; k++) {
+          const head = reg(h.id, t);
+          e.purchaseFamily({ saleId: `FAM${++s}`, headId: head, leftId: reg(head, t), rightId: reg(head, t), at: t });
+          heads.push({ id: head, j: i });
+        }
+    });
+    e.closeThrough("2027-04");
+    const end = e.program90End("F1")!;
+    const earned = e.ledger
+      .filter((x) => x.accountId === "F1" && x.status === "payable" && x.accruedAt < end && x.type !== "POOL_AKTIF")
+      .reduce((a, x) => a + x.amount, 0);
+    expect(earned).toBe(26_525_000);
   });
 });

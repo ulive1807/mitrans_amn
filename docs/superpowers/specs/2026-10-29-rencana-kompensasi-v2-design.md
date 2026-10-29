@@ -315,11 +315,14 @@ Simulasi headline resmi (2 per bulan selama 2 bulan, lalu bina; engine, skala 1)
 |---|---|---|
 | 17 | Produk | **Lisensi Atlas Family Rp25.000.000** (omzet bersih Rp22.522.523, PPN Rp2.477.477, 225 PV): 3 kursi dewasa, akses aplikasi **12 bulan**; Atlas Membership mulai bulan ke-13. |
 | 18 | Posisi usaha | **Ayah** = posisi utama, disponsori penjual. **Anak** ditempatkan langsung di kaki **kiri** ayah dan **ibu** di kaki **kanan** ayah; Sponsor keduanya adalah ayah. Setiap kursi dewasa (≥18 tahun, NIK sendiri) adalah hak usaha tersendiri. Anak <18 tahun hanya akun pengguna. |
-| 19 | Bonus (keputusan akhir 29 Oktober 2026) | Semua kursi dijual oleh **Sponsor ayah**: Bonus Sponsor **Rp2.500.000 per paket** + Fast Start Rp1.000.000 per kursi bila dalam 90 hari pertama penjual (total Rp5.500.000). **Ayah tidak menerima Bonus Sponsor/Fast Start** dari ibu dan anak, karena keluarga sudah memperoleh nilai hemat Rp8.273.000 (25%). Bonus lain tetap; volume ibu dan anak dihitung untuk ayah. Batas atas per paket 54,23%. |
+| 19 | Bonus (keputusan akhir 29 Oktober 2026) | Semua kursi dijual oleh **Sponsor ayah**: Bonus Sponsor **Rp3.000.000 per paket** (semula Rp2.500.000; lihat baris 20) + Fast Start Rp1.000.000 per kursi bila dalam 90 hari pertama penjual (total Rp6.000.000). **Ayah tidak menerima Bonus Sponsor/Fast Start** dari ibu dan anak, karena keluarga sudah memperoleh nilai hemat Rp8.273.000 (25%). Bonus lain tetap; volume ibu dan anak dihitung untuk ayah. Batas atas per paket 56,45%. |
+| 20 | Target pola Family (29 Oktober 2026) | Pola "2 paket Family per bulan selama 2 bulan, lalu bina" harus menghasilkan > Rp25 jt dalam 90 hari **tanpa Pool Aktif**. Bonus Sponsor Family dinaikkan **Rp2.500.000 → Rp3.000.000**; bonus lain tetap (Pendamping tidak dinaikkan karena batas atas Lisensi Atlas akan melewati 60%). |
 
-Laba per paket Family (dana layanan Rp426.000 per 3 bulan per akun = Rp5.112.000 untuk 12 bulan; 3 workshop): **33,9%** pada pola headline, **14,3%** pada bonus terburuk. Bagi keluarga, Family lebih hemat Rp8.273.000 dibanding 3 Lisensi + 9 bulan Atlas Membership untuk 3 orang (Rp33.273.000).
+Laba per paket Family (dana layanan Rp426.000 per 3 bulan per akun = Rp5.112.000 untuk 12 bulan; 3 workshop): **33,9%** pada pola headline, **12,1%** pada bonus terburuk (setelah keputusan 20). Bagi keluarga, Family lebih hemat Rp8.273.000 dibanding 3 Lisensi + 9 bulan Atlas Membership untuk 3 orang (Rp33.273.000).
 
-Ilustrasi engine: Mitra yang menjual 1 Family di bulan ke-1 dan 1 Family di bulan ke-2 menerima Rp14.525.000 dari 90 hari pertamanya (Sponsor Rp5.000.000, Fast Start Rp6.000.000, Pasangan Rp450.000, Pembinaan Rp75.000, Pool Rp3.000.000); Rp11.525.000 tanpa Pool (engine, keputusan akhir baris 19).
+Ilustrasi engine (setelah keputusan 20):
+- **Pola Family resmi**: 2 Family di bulan ke-2 dan 2 Family di bulan ke-3, lalu setiap ayah melakukan hal yang sama: **Rp32.525.000** dalam 90 hari (Sponsor Rp12.000.000, Fast Start Rp12.000.000, Pasangan Rp1.800.000, Pembinaan Rp525.000, Pendamping Rp200.000, Pool Rp6.000.000); **Rp26.525.000 tanpa Pool** (uji `tests/family.test.ts`). Bonus Plan A sekitar 36% omzet bersih.
+- 1 Family per bulan selama 2 bulan: Rp15.525.000; Rp12.525.000 tanpa Pool.
 
 Ketentuan hak usaha per kursi (dibuktikan uji `tests/family.test.ts`):
 - Setiap kursi dewasa yang terdaftar sebagai Mitra adalah **hak usaha tersendiri**: posisi, status aktif, program 90 hari (dimulai saat Family diaktifkan), peringkat, dan batas per identitas masing-masing.

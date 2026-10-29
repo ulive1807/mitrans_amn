@@ -30,7 +30,7 @@ export const PLAN = {
     seats: 3,
     accessMonths: 12,
     /** Bonus Sponsor per paket untuk Sponsor ayah (keputusan Coach 29 Oktober 2026), dibagi rata per kursi. */
-    sponsorBonus: 2_500_000,
+    sponsorBonus: 3_000_000, // naik dari Rp2.500.000 (keputusan Coach 29 Oktober 2026, pola 2 Family/bulan)
   },
   subscription: {
     /** Nama dagang Langganan bulanan (keputusan Coach 29 Oktober 2026). */

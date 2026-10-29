@@ -476,7 +476,7 @@ const blocks = [
     [
       [
         "Bonus Sponsor",
-        "Rp750.000 per Lisensi Atlas yang dijual langsung; Rp2.500.000 per paket Lisensi Atlas Family",
+        "Rp750.000 per Lisensi Atlas yang dijual langsung; Rp3.000.000 per paket Lisensi Atlas Family",
         "Penjualan lunas",
         "Mitra PLS penjual",
       ],
@@ -583,7 +583,7 @@ const blocks = [
     [
       [
         "Mitra PLS yang menjual paket (Sponsor kursi utama)",
-        "Bonus Sponsor Rp2.500.000 per paket, ditambah Fast Start Rp1.000.000 per kursi bila dijual dalam 90 hari pertamanya (paling banyak Rp5.500.000 per paket)",
+        "Bonus Sponsor Rp3.000.000 per paket, ditambah Fast Start Rp1.000.000 per kursi bila dijual dalam 90 hari pertamanya (paling banyak Rp6.000.000 per paket)",
         "Ketiga kursi tercatat sebagai penjualan baru pribadinya",
       ],
       [
@@ -994,32 +994,38 @@ const blocks = [
       "Bonus Sponsor dan Fast Start atas penjualan yang sudah terjadi tetap dibayarkan.",
     ],
   ],
-  ["h2", "10.3 Contoh penjualan Lisensi Atlas Family"],
+  ["h2", "10.3 Contoh pola Lisensi Atlas Family: 2 paket per bulan selama 2 bulan"],
+  ["p", "Keadaan yang diandaikan:"],
   [
-    "p",
-    "Mitra PLS Contoh menjual 1 paket Lisensi Atlas Family pada bulan ke-2 dan 1 paket pada bulan ke-3 sejak aktivasi Lisensinya. Setiap paket diisi 3 orang dewasa yang masing-masing mendaftar sebagai Mitra PLS.",
+    "ul",
+    [
+      "Mitra PLS Contoh mengaktifkan Lisensinya pada bulan ke-1, lalu menjual 2 paket Lisensi Atlas Family pada bulan ke-2 dan 2 paket pada bulan ke-3 (4 paket, 12 kursi). Setiap kursi diisi orang dewasa yang mendaftar sendiri sebagai Mitra PLS.",
+      "Setiap pemegang kursi utama yang ia sponsori melakukan pola yang sama pada bulan kedua dan ketiga sejak aktivasinya. Kursi kedua dan ketiga diandaikan belum menjual. Tidak ada pembatalan.",
+      "Pool Aktif bulan itu cukup besar sehingga setiap penjualan memperoleh bagian paling banyak Rp500.000.",
+    ],
   ],
   [
     "table",
-    ["Komponen", "Perhitungan", "Jumlah"],
+    ["Komponen", "Perhitungan", "Jumlah 90 hari"],
     [
-      ["Bonus Sponsor", "2 paket × Rp2.500.000", "Rp5.000.000"],
-      ["Bonus Fast Start", "6 kursi × Rp1.000.000", "Rp6.000.000"],
-      ["Bonus Pasangan", "Sesuai jaringan yang terbentuk", "Rp450.000"],
-      [
-        "Bonus Pembinaan",
-        "25% × Bonus Pasangan kursi utama yang ia sponsori",
-        "Rp75.000",
-      ],
-      ["**Jumlah tanpa Pool Aktif**", "", "**Rp11.525.000**"],
-      ["Pool Aktif", "6 penjualan × paling banyak Rp500.000", "Rp3.000.000"],
-      ["**Jumlah bruto 90 hari**", "", "**Rp14.525.000**"],
+      ["Bonus Sponsor", "4 paket × Rp3.000.000", "Rp12.000.000"],
+      ["Bonus Fast Start", "12 kursi × Rp1.000.000", "Rp12.000.000"],
+      ["Bonus Pasangan", "Sesuai jaringan yang terbentuk dalam 90 hari", "Rp1.800.000"],
+      ["Bonus Pembinaan", "25% × Bonus Pasangan generasi 1–3", "Rp525.000"],
+      ["Bonus Pendamping", "2 kursi utama binaan membuat penjualan Fast Start pertamanya dalam 90 hari Mitra PLS Contoh", "Rp200.000"],
+      ["**Jumlah tanpa Pool Aktif**", "", "**Rp26.525.000**"],
+      ["Pool Aktif", "12 penjualan × paling banyak Rp500.000 (tidak tetap)", "Rp6.000.000"],
+      ["**Jumlah bruto 90 hari**", "", "**Rp32.525.000**"],
     ],
-    [2, 3, 1.6],
+    [2, 3.4, 1.6],
   ],
   [
-    "p",
-    "Pemegang kursi utama tidak menerima Bonus Sponsor maupun Fast Start dari keluarganya. Ia memperoleh 1 pasangan (Rp150.000) dari kursi kedua dan ketiga, yang dibayar setelah ia aktif.",
+    "ul",
+    [
+      "Angka bruto, sebelum pajak penghasilan. Pola ini berarti menjual 4 paket senilai Rp100.000.000 dalam 2 bulan, dan jumlah keluarga yang dibutuhkan berlipat setiap bulan, sehingga tidak dapat berlangsung terus.",
+      "Bila Mitra PLS Contoh menjual 1 paket per bulan selama 2 bulan, jumlahnya Rp12.525.000 tanpa Pool Aktif.",
+      "Pemegang kursi utama tidak menerima Bonus Sponsor maupun Fast Start dari keluarganya. Ia memperoleh 1 pasangan (Rp150.000) dari kursi kedua dan ketiga, yang dibayar setelah ia aktif.",
+    ],
   ],
   ["h2", "10.4 Ilustrasi batas atas penghasilan bulanan"],
   [
@@ -1134,8 +1140,8 @@ const blocks = [
       ],
       [
         "Lisensi Atlas Family (per paket)",
-        "(Rp2.500.000 + 3 × (Rp1.000.000 + Rp100.000 + 5 × Rp150.000 × 1,90)) ÷ Rp22.522.523 + 4,5% + 5%",
-        "54,23%",
+        "(Rp3.000.000 + 3 × (Rp1.000.000 + Rp100.000 + 5 × Rp150.000 × 1,90)) ÷ Rp22.522.523 + 4,5% + 5%",
+        "56,45%",
       ],
       ["Atlas Membership", "Rp70.000 ÷ Rp359.459 + 5 × 5% + 3%", "47,47%"],
     ],
@@ -1204,17 +1210,17 @@ const blocks = [
       ],
       [
         "30% penjualan Mitra PLS baru berupa Family",
-        "19,3%",
+        "20,3%",
         "11,3%",
-        "52,1%",
+        "51,6%",
         "0",
         "67,1%",
       ],
       [
         "60% penjualan Mitra PLS baru berupa Family",
-        "20,3%",
+        "21,8%",
         "10,6%",
-        "50,1%",
+        "49,2%",
         "0",
         "71,0%",
       ],
@@ -1472,7 +1478,7 @@ const blocks = [
       ],
       [
         "Menjual paket Lisensi Atlas Family",
-        "Bonus Sponsor Rp2.500.000 per paket + Fast Start per kursi",
+        "Bonus Sponsor Rp3.000.000 per paket + Fast Start per kursi",
         "Seperti di atas",
       ],
       [
