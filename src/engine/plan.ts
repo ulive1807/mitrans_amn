@@ -42,14 +42,6 @@ export const PLAN = {
   pembinaanRatesBp: [2500, 2500, 2500, 500, 500, 500], // spesifikasi 5.4
 
   // Bab 8.2 Peringkat
-  ranks: [
-    { name: "Bronze", smallLeg: 5, reward: 500_000 },
-    { name: "Silver", smallLeg: 15, reward: 1_000_000 },
-    { name: "Gold", smallLeg: 50, reward: 2_500_000 },
-    { name: "Platinum", smallLeg: 150, reward: 5_000_000 },
-    { name: "Diamond", smallLeg: 500, reward: 10_000_000 },
-    { name: "Emerald", smallLeg: 1000, reward: 30_000_000 },
-  ],
   rankFundBp: 700, // spesifikasi 6: 7% omzet bersih Lisensi bulan itu
   rankClaimMaxWaitMonths: 6, // lewat ini dilunasi dana cadangan Perusahaan
 
@@ -121,8 +113,9 @@ export const PLAN = {
   leadershipPersonalMonthlyCap: 100_000_000,
 } as const;
 
-export type RankName = (typeof PLAN.ranks)[number]["name"];
-export type MonthlyRankName = (typeof PLAN.monthlyRanks)[number]["name"];
+export type RankName = (typeof PLAN.monthlyRanks)[number]["name"];
+/** Nama lama dari Task 1; sama dengan RankName. */
+export type MonthlyRankName = RankName;
 
 /** Opsi yang TIDAK ditetapkan dokumen dan dipilih sebagai asumsi kerja. Lihat docs/ARSITEKTUR_SISTEM.md bagian Asumsi. */
 export interface EngineOptions {

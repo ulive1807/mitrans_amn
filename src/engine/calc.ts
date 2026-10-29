@@ -39,13 +39,8 @@ export function applyBp(amount: number, bp: number): number {
   return Math.round((amount * bp) / 10_000);
 }
 
-/** Peringkat yang tercapai untuk jumlah Lisensi kaki kecil tertentu (Bab 8.2). */
-export function ranksForSmallLeg(smallLeg: number): RankName[] {
-  return PLAN.ranks.filter((r) => smallLeg >= r.smallLeg).map((r) => r.name);
-}
-
 export function rankReward(rank: RankName): number {
-  return PLAN.ranks.find((r) => r.name === rank)!.reward;
+  return PLAN.monthlyRanks.find((r) => r.name === rank)!.reward;
 }
 
 /** Pasangan Langganan (Bab 8.5, Lampiran B.4): 3% x PV kaki kecil x Rp100.000, tanpa akumulasi. */

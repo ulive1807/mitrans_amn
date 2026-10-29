@@ -118,13 +118,13 @@ export function Aturan() {
               <tr>
                 <td>Prestasi Peringkat</td>
                 <td>
-                  {PLAN.ranks
-                    .map((r) => `${r.name} ${rp(r.reward)}`)
-                    .join(" · ")}
+                  12 peringkat bulanan, {rp(PLAN.monthlyRanks[1].reward)} sampai{" "}
+                  {rp(PLAN.monthlyRanks[PLAN.monthlyRanks.length - 1].reward)}
                 </td>
                 <td>
-                  Sekali per peringkat; dana 2% omzet bersih Lisensi; antrean;
-                  &gt;6 bulan dari dana cadangan
+                  Sekali per peringkat setelah {PLAN.rankVerifyMonths} bulan
+                  terverifikasi; dana {PLAN.rankFundBp / 100}% omzet bersih
+                  Lisensi; antrean; &gt;6 bulan dari dana cadangan
                 </td>
               </tr>
               <tr>
@@ -145,22 +145,31 @@ export function Aturan() {
               </tr>
             </tbody>
           </table>
-          <h3>Peringkat (kaki kecil kumulatif dalam 10 level)</h3>
+          <h3>Peringkat bulanan (volume per kaki dalam 10 level, paket setara per bulan)</h3>
           <table className="t">
             <thead>
               <tr>
                 <th>Peringkat</th>
-                <th className="r">Lisensi per kaki</th>
+                <th className="r">Transaksi pribadi</th>
+                <th className="r">Kiri : kanan</th>
+                <th className="r">Mitra langsung aktif</th>
+                <th>Pemimpin</th>
+                <th className="r">Pemeliharaan</th>
                 <th className="r">Bonus sekali</th>
               </tr>
             </thead>
             <tbody>
-              {PLAN.ranks.map((r) => (
+              {PLAN.monthlyRanks.slice(1).map((r) => (
                 <tr key={r.name}>
                   <td>{r.name}</td>
+                  <td className="r num">{r.personalTx}</td>
                   <td className="r num">
-                    {r.smallLeg.toLocaleString("id-ID")}
+                    {r.legPaket.toLocaleString("id-ID")} :{" "}
+                    {r.legPaket.toLocaleString("id-ID")}
                   </td>
+                  <td className="r num">{r.directActive}</td>
+                  <td>{r.leaderRank ? `2 ${r.leaderRank}, kaki berbeda` : "–"}</td>
+                  <td className="r num">{r.maintainBp / 100}% per kaki</td>
                   <td className="r num">{rp(r.reward)}</td>
                 </tr>
               ))}

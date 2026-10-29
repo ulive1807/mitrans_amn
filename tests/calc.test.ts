@@ -9,7 +9,6 @@ import {
   maintainsRank,
   perLicenseUpperBounds,
   qualifiedRank,
-  ranksForSmallLeg,
   roPairAmount,
 } from "../src/engine/calc";
 import { PLAN } from "../src/engine/plan";
@@ -142,15 +141,6 @@ describe("Pool Aktif (Bab 8.4)", () => {
     expect(r.shares.get("dua")).toBe(80_000);
     expect(r.shares.get("lima")).toBe(200_000);
     expect(r.remainder).toBe(0);
-  });
-});
-
-describe("Peringkat (Bab 8.2)", () => {
-  it("ambang kaki kecil", () => {
-    expect(ranksForSmallLeg(4)).toEqual([]);
-    expect(ranksForSmallLeg(15)).toEqual(["Bronze", "Silver"]);
-    expect(ranksForSmallLeg(1000)).toHaveLength(6);
-    expect(PLAN.ranks.reduce((a, r) => a + r.reward, 0)).toBe(49_000_000);
   });
 });
 

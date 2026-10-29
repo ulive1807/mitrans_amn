@@ -454,29 +454,47 @@ function Peringkat({
 }) {
   const acc = engine.accounts.get(accId)!;
   const small = engine.smallLeg(accId);
-  const next = PLAN.ranks.find((r) => small < r.smallLeg);
+  const month = engine.today.slice(0, 7);
+  const input = engine.rankInputs(accId, month);
+  const achievedIdx = acc.ranksAchieved.length
+    ? PLAN.monthlyRanks.findIndex(
+        (r) => r.name === acc.ranksAchieved[acc.ranksAchieved.length - 1].rank,
+      )
+    : 0;
+  const next = PLAN.monthlyRanks[achievedIdx + 1];
   const claims = [...engine.rankPaid, ...engine.rankQueue].filter(
     (c) => c.accountId === accId,
   );
+  const smallPaket = Math.min(input.legPaket.L, input.legPaket.R);
   return (
     <div className="row2 even">
-      <Panel title="Peringkat" hint="Kaki kecil kumulatif dalam 10 level">
+      <Panel title="Peringkat" hint="Volume bulan ini per kaki, paket setara">
         <div style={{ fontSize: 30, fontWeight: 700 }}>
           {currentRank(engine, accId) ?? "Belum berperingkat"}
         </div>
-        <p className="muted">Kaki kecil saat ini: {num(small)} Lisensi</p>
+        <p className="muted">
+          Bulan ini: kiri {input.legPaket.L.toFixed(2)} · kanan{" "}
+          {input.legPaket.R.toFixed(2)} paket · {input.personalTx} transaksi
+          pribadi · {input.directActive} Mitra langsung aktif
+        </p>
+        {acc.rankVerify && (
+          <p className="muted" style={{ fontSize: 13 }}>
+            Verifikasi {acc.rankVerify.rank}: {acc.rankVerify.months} dari{" "}
+            {PLAN.rankVerifyMonths} bulan
+          </p>
+        )}
         {next && (
           <>
             <div className="progress" aria-label={`Menuju ${next.name}`}>
               <i
                 style={{
-                  width: `${Math.min(100, (small / next.smallLeg) * 100)}%`,
+                  width: `${Math.min(100, (smallPaket / next.legPaket) * 100)}%`,
                 }}
               />
             </div>
             <p className="muted" style={{ fontSize: 13 }}>
-              Menuju {next.name}: {num(small)} / {num(next.smallLeg)} Lisensi di
-              kaki kiri dan kanan
+              Menuju {next.name}: kaki kecil {smallPaket.toFixed(2)} /{" "}
+              {num(next.legPaket)} paket bulan ini
             </p>
           </>
         )}
@@ -490,13 +508,13 @@ function Peringkat({
             </tr>
           </thead>
           <tbody>
-            {PLAN.ranks.map((r) => {
+            {PLAN.monthlyRanks.slice(1).map((r) => {
               const got = acc.ranksAchieved.find((x) => x.rank === r.name);
               const claim = claims.find((c) => c.rank === r.name);
               return (
                 <tr key={r.name}>
                   <td>{r.name}</td>
-                  <td className="r num">{num(r.smallLeg)}</td>
+                  <td className="r num">{num(r.legPaket)}</td>
                   <td className="r num">{rp(r.reward)}</td>
                   <td>
                     {claim?.paidMonth ? (

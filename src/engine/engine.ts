@@ -2,6 +2,7 @@ import {
   DEFAULT_OPTIONS,
   PLAN,
   type EngineOptions,
+  type RankName,
 
 } from "./plan";
 import {
@@ -10,8 +11,11 @@ import {
   distributePool,
   pairDay,
   pembinaanRateBp,
+  maintainsRank,
+  qualifiedRank,
+  rankIndex,
   rankReward,
-  ranksForSmallLeg,
+  type RankInput,
   roPairAmount,
 } from "./calc";
 import {
@@ -136,6 +140,9 @@ export class MitransEngine {
   private pendampingBySeller = new Map<string, string>();
   /** Bonus Balik Modal per identitas (NIK). */
   private balikModalByNik = new Map<string, LedgerEntry>();
+  /** Masukan dan peringkat bayar per bulan yang sudah ditutup (spesifikasi 6). */
+  private rankInputsByMonth = new Map<string, Map<string, RankInput>>();
+  private paidAsByMonth = new Map<string, Map<string, RankName>>();
   private currentDayEnd = 0;
   private nextEntryId = 1;
   private currentDay: string;
@@ -432,6 +439,7 @@ export class MitransEngine {
     if (volumeNode) {
       this.walkUp(volumeNode, (anc, side) => {
         anc.roPvTenths[side] += PLAN.subscription.pvTenths;
+        anc.monthNet[side] += PLAN.subscription.netPrice;
         ms.roTouched.add(anc.id);
       });
     }
@@ -500,6 +508,8 @@ export class MitransEngine {
       this.walkUp(sale.volumeNodeId, (anc, side) => {
         if (!sale.countedBy!.has(anc.id)) return;
         anc.cumLicenses[side] = Math.max(0, anc.cumLicenses[side] - 1);
+        if (sale.month === wibMonth(at))
+          anc.monthNet[side] = Math.max(0, anc.monthNet[side] - PLAN.license.netPrice);
         if (anc.todayIn[side] > 0) anc.todayIn[side]--;
         else if (anc.carry[side] > 0) anc.carry[side]--;
         else needsReview = true; // unit sudah dipasangkan
@@ -772,6 +782,7 @@ export class MitransEngine {
       right: null,
       createdAt: at,
       cumLicenses: { L: 0, R: 0 },
+      monthNet: { L: 0, R: 0 },
       carry: { L: 0, R: 0 },
       todayIn: { L: 0, R: 0 },
       roPvTenths: { L: 0, R: 0 },
@@ -834,27 +845,14 @@ export class MitransEngine {
 
   /** Catat 1 Lisensi pada node `nodeId` untuk upline dalam 10 level. */
   private addLicenseVolume(sale: Sale, nodeId: string): void {
-    const at = sale.convertedAt ?? sale.at;
     this.walkUp(nodeId, (anc, side) => {
       if (sale.countedBy!.has(anc.id)) return;
       sale.countedBy!.add(anc.id);
       anc.cumLicenses[side]++;
+      anc.monthNet[side] += PLAN.license.netPrice;
       anc.todayIn[side]++;
       this.touchedToday.add(anc.id);
-      this.checkRanks(anc, at);
     });
-  }
-
-  private checkRanks(node: BinaryNode, at: number): void {
-    const acc = this.accounts.get(node.accountId)!;
-    if (acc.role !== "mitra") return;
-    const reached = ranksForSmallLeg(
-      Math.min(node.cumLicenses.L, node.cumLicenses.R),
-    );
-    for (const rank of reached) {
-      if (!acc.ranksAchieved.some((r) => r.rank === rank))
-        acc.ranksAchieved.push({ rank, at, claimed: false });
-    }
   }
 
   /** Catat Lisensi untuk program 90 hari penjual dan Sponsor-sponsornya, lalu periksa Bonus Balik Modal. */
@@ -1261,7 +1259,9 @@ export class MitransEngine {
     }
     const teamCarryNext = this.teamCarry.reduce((a, e) => a + e.gross, 0);
 
-    // 5. Bonus Prestasi Peringkat: klaim pada bulan aktif pertama setelah tercapai, antrean menurut urutan.
+    // 5. Peringkat bulanan (spesifikasi 6), lalu Bonus Prestasi Peringkat: klaim pada bulan aktif
+    //    pertama setelah terverifikasi, antrean menurut urutan.
+    this.evaluateRanks(month, active, closeAt);
     const newClaims: RankClaim[] = [];
     for (const acc of this.accounts.values()) {
       if (acc.role !== "mitra" || !isActive(acc.id)) continue;
@@ -1520,6 +1520,125 @@ export class MitransEngine {
       companyStructural,
       heldNoSubscription,
     });
+  }
+
+  /**
+   * Peringkat bulanan (spesifikasi 6). Node diproses dari yang terdalam agar peringkat pemimpin di
+   * kaki bawah sudah diketahui. Hanya Mitra aktif yang dapat memenuhi syarat atau memelihara peringkat.
+   */
+  private evaluateRanks(month: string, active: Set<string>, closeAt: number): void {
+    const names = PLAN.monthlyRanks.map((r) => r.name);
+    const personal = this.personalSales(month);
+    const directActive = new Map<string, number>();
+    for (const id of active) {
+      const sp = this.accounts.get(id)!.sponsorId;
+      if (sp) directActive.set(sp, (directActive.get(sp) ?? 0) + 1);
+    }
+    const best = new Map<string, { L: number; R: number }>();
+    const inputs = new Map<string, RankInput>();
+    const paidAs = new Map<string, RankName>();
+    const ordered = [...this.nodes.values()].sort((a, b) => b.depth - a.depth);
+    for (const node of ordered) {
+      const acc = this.accounts.get(node.accountId)!;
+      if (acc.role !== "mitra") continue;
+      const b = best.get(node.id) ?? { L: 0, R: 0 };
+      const input: RankInput = {
+        personalTx: personal.get(acc.id) ?? 0,
+        legPaket: {
+          L: node.monthNet.L / PLAN.license.netPrice,
+          R: node.monthNet.R / PLAN.license.netPrice,
+        },
+        directActive: directActive.get(acc.id) ?? 0,
+        leaderBest: { L: names[b.L], R: names[b.R] },
+      };
+      inputs.set(acc.id, input);
+      const isAct = active.has(acc.id);
+      const q: RankName = isAct ? qualifiedRank(input) : "Member";
+      let pa = q;
+      if (isAct)
+        for (const r of acc.ranksAchieved)
+          if (rankIndex(r.rank) > rankIndex(pa) && maintainsRank(r.rank, input.legPaket)) pa = r.rank;
+      paidAs.set(acc.id, pa);
+
+      // Verifikasi 3 bulan berturut-turut.
+      const v = acc.rankVerify;
+      if (v) {
+        if (isAct && maintainsRank(v.rank, input.legPaket)) v.months++;
+        else acc.rankVerify = undefined;
+      }
+      const highestAchieved = acc.ranksAchieved.reduce((m, r) => Math.max(m, rankIndex(r.rank)), 0);
+      if (
+        rankIndex(q) > highestAchieved &&
+        rankIndex(q) > (acc.rankVerify ? rankIndex(acc.rankVerify.rank) : 0)
+      )
+        acc.rankVerify = { rank: q, since: month, months: 1 };
+      if (acc.rankVerify && acc.rankVerify.months >= PLAN.rankVerifyMonths) {
+        for (let i = 1; i <= rankIndex(acc.rankVerify.rank); i++) {
+          if (!acc.ranksAchieved.some((r) => r.rank === names[i]))
+            acc.ranksAchieved.push({ rank: names[i], at: closeAt - 1, claimed: false });
+        }
+        acc.ranksAchieved.sort((x, y) => rankIndex(x.rank) - rankIndex(y.rank));
+        acc.rankVerify = undefined;
+      }
+
+      // Teruskan peringkat bayar ke upline sebagai pemimpin di kaki yang sesuai.
+      const idx = rankIndex(pa);
+      if (idx > 0)
+        this.walkUp(node.id, (anc, side) => {
+          const cur = best.get(anc.id) ?? { L: 0, R: 0 };
+          if (idx > cur[side]) cur[side] = idx;
+          best.set(anc.id, cur);
+        });
+    }
+    for (const node of this.nodes.values()) node.monthNet = { L: 0, R: 0 };
+    this.rankInputsByMonth.set(month, inputs);
+    this.paidAsByMonth.set(month, paidAs);
+  }
+
+  /** Peringkat bayar bulan yang sudah ditutup (Member bila belum ditutup atau tidak memenuhi). */
+  paidAsRank(accountId: string, month: string): RankName {
+    return this.paidAsByMonth.get(month)?.get(accountId) ?? "Member";
+  }
+
+  /**
+   * Masukan peringkat: dari catatan tutup bulan, atau hitungan berjalan untuk bulan terbuka
+   * (pemimpin memakai peringkat bayar bulan sebelumnya).
+   */
+  rankInputs(accountId: string, month: string): RankInput {
+    const closed = this.rankInputsByMonth.get(month)?.get(accountId);
+    if (closed) return closed;
+    const acc = this.mustAccount(accountId);
+    const node = acc.nodeId ? this.nodes.get(acc.nodeId) : undefined;
+    const prev = addMonths(month, -1);
+    const leaderBest: { L: RankName; R: RankName } = { L: "Member", R: "Member" };
+    if (node) {
+      for (const side of ["L", "R"] as const) {
+        const start = side === "L" ? node.left : node.right;
+        const stack: [string, number][] = start ? [[start, 1]] : [];
+        while (stack.length) {
+          const [id, d] = stack.pop()!;
+          const n = this.nodes.get(id)!;
+          const r = this.paidAsRank(n.accountId, prev);
+          if (rankIndex(r) > rankIndex(leaderBest[side])) leaderBest[side] = r;
+          if (d < PLAN.maxLevels) {
+            if (n.left) stack.push([n.left, d + 1]);
+            if (n.right) stack.push([n.right, d + 1]);
+          }
+        }
+      }
+    }
+    const directActive = [...this.accounts.values()].filter(
+      (a) => a.sponsorId === accountId && a.role === "mitra" && this.isActive(a.id, month),
+    ).length;
+    return {
+      personalTx: this.personalSales(month).get(accountId) ?? 0,
+      legPaket: {
+        L: (node?.monthNet.L ?? 0) / PLAN.license.netPrice,
+        R: (node?.monthNet.R ?? 0) / PLAN.license.netPrice,
+      },
+      directActive,
+      leaderBest,
+    };
   }
 
   /** Bonus program 90 hari dibayar setelah masa pengembalian 7 hari kerja; Sponsor pada Jumat berikutnya. */

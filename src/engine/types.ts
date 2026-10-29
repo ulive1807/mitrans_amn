@@ -25,7 +25,9 @@ export interface Account {
   nodeId?: string;
   /** Pernah berstatus aktif paling sedikit sekali (syarat Plan B). */
   everActive: boolean;
-  /** Peringkat yang sudah tercapai (sekali per identitas). */
+  /** Verifikasi peringkat yang sedang berjalan (spesifikasi 6): perlu 3 bulan berturut-turut. */
+  rankVerify?: { rank: RankName; since: string; months: number };
+  /** Peringkat yang sudah tercapai dan terverifikasi (sekali per identitas), urut dari rendah. */
   ranksAchieved: { rank: RankName; at: number; claimed: boolean }[];
   terminated?: boolean;
 }
@@ -39,7 +41,9 @@ export interface BinaryNode {
   left: string | null;
   right: string | null;
   createdAt: number;
-  /** Jumlah Lisensi kumulatif per kaki dalam 10 level (untuk peringkat dan royalti). */
+  /** Omzet bersih Lisensi dan Langganan per kaki dalam 10 level bulan berjalan (peringkat bulanan). */
+  monthNet: { L: number; R: number };
+  /** Jumlah Lisensi kumulatif per kaki dalam 10 level (penempatan, Royalti RO, tampilan). */
   cumLicenses: { L: number; R: number };
   /** Saldo unit pasangan yang belum dipasangkan. */
   carry: { L: number; R: number };
