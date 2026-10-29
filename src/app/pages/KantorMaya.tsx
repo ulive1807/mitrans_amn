@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import {
   BONUS_LABEL,
+  addMonths,
   PLAN,
   PLAN_B_TYPES,
   type BinaryNode,
@@ -537,13 +538,21 @@ function Peringkat({
           </tbody>
         </table>
       </Panel>
-      <Panel title="Royalti" hint="Syarat kaki kecil kumulatif">
+      <Panel title="Leadership dan Royalti RO" hint="Leadership: peringkat bulanan · Royalti RO: kaki kecil kumulatif">
+        <p style={{ fontSize: 13.5 }}>
+          Bobot leadership bulan lalu:{" "}
+          {PLAN.monthlyRanks[
+            PLAN.monthlyRanks.findIndex(
+              (r) =>
+                r.name ===
+                engine.paidAsRank(accId, addMonths(engine.today.slice(0, 7), -1)),
+            )
+          ].leadershipWeight}{" "}
+          (mulai Director). Dana {PLAN.leadershipFundBp / 100}% omzet bersih
+          Lisensi, paling banyak {rp(PLAN.leadershipPersonalMonthlyCap)} per
+          orang per bulan.
+        </p>
         {[
-          ...PLAN.royaltyTiers.map((t) => ({
-            ...t,
-            name: `Royalti tingkat ${t.tier}`,
-            share: t.shareBp,
-          })),
           ...PLAN.roRoyaltyTiers.map((t) => ({
             ...t,
             name: `Royalti RO tingkat ${t.tier}`,
@@ -575,9 +584,9 @@ function Peringkat({
           </div>
         ))}
         <p className="muted" style={{ fontSize: 13 }}>
-          Royalti dibagi rata kepada pemegang tingkat yang aktif bulan itu,
-          paling banyak {rp(PLAN.royaltyPersonalMonthlyCap)} per orang per
-          bulan.
+          Royalti RO dibagi rata kepada pemegang tingkat yang memenuhi syarat
+          Plan B, paling banyak {rp(PLAN.roRoyaltyPersonalMonthlyCap)} per
+          orang per bulan.
         </p>
       </Panel>
     </div>

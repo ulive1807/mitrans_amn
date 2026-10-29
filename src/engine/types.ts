@@ -89,7 +89,7 @@ export type BonusType =
   | "PASANGAN"
   | "PEMBINAAN"
   | "PRESTASI"
-  | "ROYALTI"
+  | "LEADERSHIP"
   | "POOL_AKTIF"
   | "KOMISI_LANGGANAN"
   | "PASANGAN_RO"
@@ -104,7 +104,7 @@ export const PLAN_A_TYPES: BonusType[] = [
   "PASANGAN",
   "PEMBINAAN",
   "PRESTASI",
-  "ROYALTI",
+  "LEADERSHIP",
   "POOL_AKTIF",
 ];
 export const PLAN_B_TYPES: BonusType[] = [
@@ -133,7 +133,7 @@ export const BONUS_LABEL: Record<BonusType, string> = {
   PASANGAN: "Bonus Pasangan",
   PEMBINAAN: "Bonus Pembinaan",
   PRESTASI: "Bonus Prestasi Peringkat",
-  ROYALTI: "Royalti",
+  LEADERSHIP: "Bonus Leadership",
   POOL_AKTIF: "Pool Aktif",
   KOMISI_LANGGANAN: "Komisi Langganan",
   PASANGAN_RO: "Pasangan Langganan (RO)",
@@ -192,8 +192,8 @@ export interface RankClaim {
 
 export interface PoolSources {
   forfeitedTeam: number;
-  royaltyUnassigned: number;
-  royaltyOverCap: number;
+  leadershipUnassigned: number;
+  leadershipOverCap: number;
   rankFundLeftover: number;
   identityCapExcess: number;
   berkahUnconfirmed: number;
@@ -243,7 +243,7 @@ export interface MonthReport {
   rankPaidFromFund: number;
   rankPaidFromReserve: number;
   rankQueueOutstanding: number;
-  royaltyFund: number;
+  leadershipFund: number;
   roRoyaltyFund: number;
   heldAmount: number;
   forfeitedAmount: number;

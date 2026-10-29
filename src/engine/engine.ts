@@ -7,6 +7,7 @@ import {
 } from "./plan";
 import {
   allocateEqualWithCap,
+  allocateWeightedWithCap,
   applyBp,
   distributePool,
   pairDay,
@@ -64,7 +65,7 @@ function emptyByType(): Record<BonusType, number> {
     PASANGAN: 0,
     PEMBINAAN: 0,
     PRESTASI: 0,
-    ROYALTI: 0,
+    LEADERSHIP: 0,
     POOL_AKTIF: 0,
     KOMISI_LANGGANAN: 0,
     PASANGAN_RO: 0,
@@ -1084,8 +1085,8 @@ export class MitransEngine {
     const isActive = (id: string) => active.has(id);
     const pool: PoolSources = {
       forfeitedTeam: 0,
-      royaltyUnassigned: 0,
-      royaltyOverCap: 0,
+      leadershipUnassigned: 0,
+      leadershipOverCap: 0,
       rankFundLeftover: 0,
       identityCapExcess: 0,
       berkahUnconfirmed: 0,
@@ -1210,10 +1211,7 @@ export class MitransEngine {
     const licenseNet = licenseSales.length * PLAN.license.netPrice;
     const planACap = applyBp(licenseNet, this.options.planACapBp);
     const rankFund = applyBp(licenseNet, PLAN.rankFundBp);
-    const royaltyFunds = PLAN.royaltyTiers.map((t) =>
-      applyBp(licenseNet, t.shareBp),
-    );
-    const royaltyFund = royaltyFunds.reduce((a, b) => a + b, 0);
+    const leadershipFund = applyBp(licenseNet, PLAN.leadershipFundBp);
     const sumSettled = (types: BonusType[]) =>
       settled
         .filter((e) => types.includes(e.type))
@@ -1221,7 +1219,7 @@ export class MitransEngine {
     const directPaid = sumSettled(DIRECT_TYPES);
     const teamBudget = Math.max(
       0,
-      planACap - directPaid - rankFund - royaltyFund,
+      planACap - directPaid - rankFund - leadershipFund,
     );
 
     const carryIn = this.teamCarry;
@@ -1302,29 +1300,24 @@ export class MitransEngine {
     this.rankQueue.push(...queue);
     pool.rankFundLeftover = rankLeft;
 
-    // 6. Royalti Plan A.
-    const royaltyHolders = (smallLeg: number) =>
-      [...this.accounts.values()]
-        .filter(
-          (a) =>
-            a.role === "mitra" &&
-            a.nodeId &&
-            isActive(a.id) &&
-            this.smallLeg(a.id) >= smallLeg,
-        )
-        .map((a) => a.id);
-    const royalty = allocateEqualWithCap(
-      PLAN.royaltyTiers.map((t, i) => ({
-        amount: royaltyFunds[i],
-        holders: royaltyHolders(t.smallLeg),
-      })),
-      PLAN.royaltyPersonalMonthlyCap,
+    // 6. Dana leadership 5% (spesifikasi 7): dibagi menurut bobot peringkat bayar kepada Mitra aktif.
+    const leadershipHolders = [...this.accounts.values()]
+      .filter((a) => a.role === "mitra" && isActive(a.id))
+      .map((a) => ({
+        id: a.id,
+        weight: PLAN.monthlyRanks[rankIndex(this.paidAsRank(a.id, month))].leadershipWeight,
+      }))
+      .filter((h) => h.weight > 0);
+    const leadership = allocateWeightedWithCap(
+      leadershipFund,
+      leadershipHolders,
+      PLAN.leadershipPersonalMonthlyCap,
     );
-    pool.royaltyUnassigned = royalty.unassigned;
-    pool.royaltyOverCap = royalty.overCap;
-    for (const [id, amt] of royalty.allocation) {
+    pool.leadershipUnassigned = leadership.unassigned;
+    pool.leadershipOverCap = leadership.overCap;
+    for (const [id, amt] of leadership.allocation) {
       settle(
-        this.accrue(id, "ROYALTI", amt, closeAt - 1, { deferred: true, month }),
+        this.accrue(id, "LEADERSHIP", amt, closeAt - 1, { deferred: true, month }),
         amt,
         closeFriday,
       );
@@ -1348,8 +1341,8 @@ export class MitransEngine {
       .reduce((a, e) => a + e.amount, 0);
     const poolSources =
       pool.forfeitedTeam +
-      pool.royaltyUnassigned +
-      pool.royaltyOverCap +
+      pool.leadershipUnassigned +
+      pool.leadershipOverCap +
       pool.rankFundLeftover +
       pool.identityCapExcess +
       pool.berkahUnconfirmed +
@@ -1513,7 +1506,7 @@ export class MitransEngine {
       rankPaidFromFund,
       rankPaidFromReserve,
       rankQueueOutstanding: this.rankQueue.reduce((a, c) => a + c.amount, 0),
-      royaltyFund,
+      leadershipFund,
       roRoyaltyFund: roFunds.reduce((a, b) => a + b, 0),
       heldAmount: this.held.reduce((a, e) => a + e.gross, 0),
       forfeitedAmount: pool.forfeitedTeam,

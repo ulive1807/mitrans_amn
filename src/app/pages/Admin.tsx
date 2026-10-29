@@ -246,10 +246,11 @@ function TutupBulan({ reports }: { reports: MonthReport[] }) {
       </Panel>
       <Panel title="Rumus anggaran bonus tim (Bab 12.2)">
         <p style={{ margin: 0 }}>
-          Anggaran bonus tim = plafon Plan A − Bonus Sponsor − Bonus Layanan
-          Berkah − dana peringkat (2%) − dana Royalti (2%). Bila klaim Level,
-          Pasangan, dan Pembinaan melebihi anggaran, semua klaim dibayar dengan
-          faktor yang sama dan sisanya dibayar lebih dulu bulan berikutnya.
+          Anggaran bonus tim = plafon Plan A (60%) − bonus langsung (Sponsor,
+          Berkah, Fast Start, Pendamping, Balik Modal) − dana peringkat (7%) −
+          dana leadership (5%). Bila klaim Pasangan dan Pembinaan melebihi
+          anggaran, semua klaim dibayar dengan faktor yang sama dan sisanya
+          dibayar lebih dulu bulan berikutnya. Pool Aktif mengisi sampai 55%.
         </p>
       </Panel>
     </>
@@ -272,7 +273,7 @@ function Jumat() {
               <th className="r">Entri</th>
               <th className="r">Sponsor</th>
               <th className="r">Bonus tim</th>
-              <th className="r">Bulanan (Prestasi, Royalti, Pool, Plan B)</th>
+              <th className="r">Bulanan (Prestasi, Leadership, Pool, Plan B)</th>
               <th className="r">Total bruto</th>
             </tr>
           </thead>
@@ -394,7 +395,7 @@ function Dana({ reports }: { reports: MonthReport[] }) {
               <tr>
                 <th>Bulan</th>
                 <th className="r">Bonus tim hangus</th>
-                <th className="r">Royalti tanpa penerima / lebih batas</th>
+                <th className="r">Leadership tanpa penerima / lebih batas</th>
                 <th className="r">Sisa dana peringkat</th>
                 <th className="r">Berkah tak terkonfirmasi</th>
                 <th className="r">Bawaan</th>
@@ -413,7 +414,7 @@ function Dana({ reports }: { reports: MonthReport[] }) {
                     <td className="r num">{rpShort(r.pool.forfeitedTeam)}</td>
                     <td className="r num">
                       {rpShort(
-                        r.pool.royaltyUnassigned + r.pool.royaltyOverCap,
+                        r.pool.leadershipUnassigned + r.pool.leadershipOverCap,
                       )}
                     </td>
                     <td className="r num">

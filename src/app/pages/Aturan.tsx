@@ -128,11 +128,15 @@ export function Aturan() {
                 </td>
               </tr>
               <tr>
-                <td>Royalti</td>
-                <td>Tingkat 1 (400:400) 1% · Tingkat 2 (1.000:1.000) 1%</td>
+                <td>Leadership</td>
                 <td>
-                  Dibagi rata; {rp(PLAN.royaltyPersonalMonthlyCap)} per orang
-                  per bulan
+                  Dana {PLAN.leadershipFundBp / 100}% omzet bersih Lisensi, dibagi
+                  menurut bobot peringkat bulan itu (Director 1 sampai Royal
+                  Crown 8)
+                </td>
+                <td>
+                  Mitra aktif yang memelihara peringkat;{" "}
+                  {rp(PLAN.leadershipPersonalMonthlyCap)} per orang per bulan
                 </td>
               </tr>
               <tr>

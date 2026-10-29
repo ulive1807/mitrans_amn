@@ -111,3 +111,47 @@ describe("Peringkat bulanan (spesifikasi 6)", () => {
     expect(w.engine.rankInputs("A", "2027-01").legPaket.L).toBe(3);
   });
 });
+
+describe("Dana leadership 5% (spesifikasi 7)", () => {
+  /** Bangun Mitra `id` yang memenuhi peringkat ke-k (0 = Member) pada tanggal yang sama. */
+  function grow(id: string, sponsor: string, leg: "L" | "R" | undefined, k: number, date: string) {
+    w.mitra(id, sponsor, at(date), { leg });
+    if (k === 0) {
+      sellCustomers(id, 1, date);
+      return;
+    }
+    const r = PLAN.monthlyRanks[k];
+    grow(`${id}L`, id, "L", k - 1, date);
+    grow(`${id}R`, id, "R", k - 1, date);
+    for (let j = 0; j < r.directActive - 2; j++) grow(`${id}X${j}`, id, undefined, 0, date);
+    for (const side of ["L", "R"] as const) {
+      const child = `${id}${side}`;
+      while (w.engine.rankInputs(id, date.slice(0, 7)).legPaket[side] < r.legPaket)
+        sellCustomers(child, 1, date);
+    }
+  }
+
+  it("Director aktif menerima dana leadership bulan itu", () => {
+    grow("D", "A", "L", 4, "2027-01-10");
+    w.engine.closeThrough("2027-01");
+    expect(w.engine.paidAsRank("D", "2027-01")).toBe("Director");
+    const r = w.engine.report("2027-01")!;
+    expect(r.leadershipFund).toBe(Math.round((r.licenseNet * PLAN.leadershipFundBp) / 10_000));
+    const lead = w.entries("D", "LEADERSHIP");
+    expect(lead.map((e) => e.amount)).toEqual([r.leadershipFund]);
+    expect(r.pool.leadershipUnassigned).toBe(0);
+  });
+
+  it("tanpa pemegang peringkat berbobot, seluruh dana masuk Pool", () => {
+    builderJanuary();
+    w.engine.closeThrough("2027-01");
+    const r = w.engine.report("2027-01")!;
+    expect(r.leadershipFund).toBeGreaterThan(0);
+    expect(r.pool.leadershipUnassigned).toBe(r.leadershipFund);
+  });
+
+  it("bulan tanpa Lisensi: dana leadership 0", () => {
+    w.engine.closeThrough("2027-02");
+    expect(w.engine.report("2027-02")!.leadershipFund).toBe(0);
+  });
+});

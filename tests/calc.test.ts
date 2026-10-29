@@ -89,14 +89,14 @@ describe("Pasangan Langganan (Lampiran B.4 dan 10.1)", () => {
   });
 });
 
-describe("Royalti (Bab 10.3)", () => {
+describe("Pembagian rata dengan batas (Royalti RO, contoh Bab 10.3)", () => {
   const fund = applyBp(20_000_000_000, 100);
   it("dana tingkat 1 = 1% x Rp20 miliar = Rp200 juta", () =>
     expect(fund).toBe(200_000_000));
   it("5 pemegang -> masing-masing Rp40 juta", () => {
     const r = allocateEqualWithCap(
       [{ amount: fund, holders: ["a", "b", "c", "d", "e"] }],
-      PLAN.royaltyPersonalMonthlyCap,
+      PLAN.roRoyaltyPersonalMonthlyCap,
     );
     expect([...r.allocation.values()]).toEqual(Array(5).fill(40_000_000));
     expect(r.leftover).toBe(0);
@@ -104,7 +104,7 @@ describe("Royalti (Bab 10.3)", () => {
   it("1 pemegang -> Rp100 juta, sisa Rp100 juta masuk Pool Aktif", () => {
     const r = allocateEqualWithCap(
       [{ amount: fund, holders: ["a"] }],
-      PLAN.royaltyPersonalMonthlyCap,
+      PLAN.roRoyaltyPersonalMonthlyCap,
     );
     expect(r.allocation.get("a")).toBe(100_000_000);
     expect(r.overCap).toBe(100_000_000);

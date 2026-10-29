@@ -45,12 +45,6 @@ export const PLAN = {
   rankFundBp: 700, // spesifikasi 6: 7% omzet bersih Lisensi bulan itu
   rankClaimMaxWaitMonths: 6, // lewat ini dilunasi dana cadangan Perusahaan
 
-  // Bab 8.3 Royalti Plan A
-  royaltyTiers: [
-    { tier: 1, smallLeg: 400, shareBp: 100 },
-    { tier: 2, smallLeg: 1000, shareBp: 100 },
-  ],
-  royaltyPersonalMonthlyCap: 100_000_000,
 
   // Bab 8.5 Plan B
   subscriptionCommission: 70_000, // 20% x 3,5 PV x Rp100.000
