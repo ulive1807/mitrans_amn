@@ -128,6 +128,8 @@ export interface SimulationSummary {
   rankPaidFromReserve: number;
   poolCarryEnd: number;
   heldEnd: number;
+  /** Porsi Mitra yang jendela 90 harinya sudah selesai dan memperoleh Bonus Balik Modal. */
+  balikModalShare: number;
 }
 
 export interface SimulationResult {
@@ -490,7 +492,74 @@ export function summarize(
     rankPaidFromReserve: sum((r) => r.rankPaidFromReserve),
     poolCarryEnd: engine.poolCarryAmount,
     heldEnd: engine.heldEntries.reduce((a, e) => a + e.gross, 0),
+    balikModalShare: balikModalShare(engine),
   };
+}
+
+function balikModalShare(engine: MitransEngine): number {
+  const lastClose = engine.reports.length
+    ? Date.parse(`${engine.reports[engine.reports.length - 1].month}-01T00:00:00Z`)
+    : 0;
+  const done = [...engine.accounts.values()].filter((a) => {
+    const end = a.role === "mitra" ? engine.program90End(a.id) : undefined;
+    return end !== undefined && end < lastClose;
+  });
+  if (done.length === 0) return 0;
+  return done.filter((a) => engine.program90Progress(a.id).achieved).length / done.length;
+}
+
+/**
+ * Skenario headline (spesifikasi 1 dan 11): setiap Mitra PLS menjual 1 Lisensi ke kaki kiri dan 1 ke
+ * kaki kanan per bulan, mulai bulan setelah aktivasinya. "terus": setiap bulan sampai `growthMonths`;
+ * "sekali": hanya pada bulan pertamanya. Semua berlangganan mulai bulan ke-4 dan menjalankan pembinaan.
+ */
+export function runHeadlineScenario(opts: {
+  growthMonths: number;
+  months: number;
+  mode: "terus" | "sekali";
+  options?: Partial<EngineOptions>;
+}): SimulationResult {
+  const startMonth = "2027-01";
+  const startIdx = monthIndex(startMonth);
+  const engine = new MitransEngine(atWib(`${startMonth}-01`, 0, 1), opts.options);
+  const all: { id: string; joinIdx: number }[] = [];
+  let counter = 0;
+  let sale = 0;
+  const join = (sponsorId: string, at: number, leg: Side, m: number) => {
+    const id = `M${++counter}`;
+    engine.registerMitra({ id, name: syntheticName(counter), nik: syntheticNik(counter), sponsorId, at });
+    engine.passQuiz(id);
+    engine.purchaseLicense({ saleId: `L${++sale}`, buyerId: id, at, legPreference: leg });
+    all.push({ id, joinIdx: m });
+  };
+  for (let m = 0; m < opts.months; m++) {
+    const month = monthFromIndex(startIdx + m);
+    for (const h of all) {
+      if (m - h.joinIdx + 1 >= PLAN.subscriptionRequiredFromMonth)
+        engine.paySubscription({ saleId: `S${++sale}`, accountId: h.id, forMonth: month, at: atWib(`${month}-01`, 6) });
+      engine.confirmCoaching(h.id, month);
+    }
+    const at = atWib(`${month}-10`, 10);
+    if (m === 0) {
+      join("MITRANS-002", at, "L", m);
+      continue;
+    }
+    if (m >= opts.growthMonths) continue;
+    const sellers = all.filter(
+      (h) => h.joinIdx < m && (opts.mode === "terus" || h.joinIdx === m - 1),
+    );
+    for (const sp of sellers) {
+      join(sp.id, at, "L", m);
+      join(sp.id, at, "R", m);
+    }
+  }
+  engine.closeThrough(monthFromIndex(startIdx + opts.months - 1));
+  const p = {
+    name: `headline-${opts.mode}-${opts.growthMonths}`,
+    label: `Headline: 2 per bulan (${opts.mode}), ${opts.growthMonths} bulan pertumbuhan`,
+    months: opts.months,
+  };
+  return { engine, reports: engine.reports, summary: summarize(p, engine) };
 }
 
 /** Skenario standar yang mencerminkan Bab 12.3. */

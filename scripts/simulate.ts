@@ -1,5 +1,5 @@
 /**
- * Menjalankan skenario uji Bab 12.3 dan menulis docs/HASIL_SIMULASI.md.
+ * Menjalankan skenario uji (Bab 12.3 v1.2 dan skenario headline v2.0) dan menulis docs/HASIL_SIMULASI.md.
  * Pemakaian: npm run simulate [-- --scale 0.5]
  */
 import { writeFileSync } from "node:fs";
@@ -8,6 +8,7 @@ import {
   BONUS_LABEL,
   PLAN,
   perLicenseUpperBounds,
+  runHeadlineScenario,
   runIdealScenario,
   runScenario,
   standardScenarios,
@@ -62,16 +63,16 @@ lines.push(
   "> **Hasil ini bukan proyeksi penjualan dan bukan perkiraan penghasilan.** Jaringan, nama, dan NIK seluruhnya sintetis.",
 );
 lines.push(
-  '> Tujuannya menguji apakah aturan dan plafon bekerja. Angka "dokumen" adalah hasil uji internal di Rencana Pemasaran Bab 12.3,',
+  '> Tujuannya menguji apakah aturan dan plafon bekerja. Kolom "v1.2 (dokumen)" adalah hasil uji internal Rencana Pemasaran v1.2 Bab 12.3,',
 );
 lines.push(
-  "> yang asumsi lengkapnya tidak tercantum, sehingga selisih wajar terjadi dan perlu dibahas (lihat bagian Catatan).",
+  "> sebagai pembanding aturan lama; engine kini menjalankan aturan v2.0 (spesifikasi 2026-10-29).",
 );
 lines.push("");
 lines.push("## Ringkasan per skenario");
 lines.push("");
 lines.push(
-  "| Skenario | Lisensi | Mitra PLS | Plan A dibayar (engine) | Plan A (dokumen) | Plan B dibayar (engine) | Plan B (dokumen) | Bulan Plan A tertinggi | Faktor plafon dipakai |",
+  "| Skenario | Lisensi | Mitra PLS | Plan A dibayar (engine) | Plan A v1.2 (dokumen) | Plan B dibayar (engine) | Plan B v1.2 (dokumen) | Bulan Plan A tertinggi | Faktor plafon dipakai |",
 );
 lines.push("|---|---:|---:|---:|---:|---:|---:|---:|---|");
 for (const { res, docA, docB } of runs) {
@@ -135,23 +136,55 @@ for (const { res, ms } of runs) {
 lines.push("");
 const b = perLicenseUpperBounds();
 lines.push(
-  "## Batas atas biaya per Lisensi (dihitung ulang dari parameter, Bab 12.2)",
+  "## Batas atas biaya per Lisensi (dihitung ulang dari parameter, spesifikasi 10.2)",
 );
 lines.push("");
-lines.push("| Jenis | Dokumen | Engine |");
+lines.push("| Jenis | Spesifikasi v2.0 | Engine |");
 lines.push("|---|---:|---:|");
 lines.push(
-  `| Lisensi kepada Mitra PLS baru | 48,95% | ${(b.toMitra * 100).toFixed(2).replace(".", ",")}% |`,
+  `| Lisensi kepada Mitra PLS baru | 58,62% | ${(b.toMitra * 100).toFixed(2).replace(".", ",")}% |`,
 );
 lines.push(
-  `| Lisensi kepada Pelanggan | 38,6% | ${(b.toCustomer * 100).toFixed(2).replace(".", ",")}% |`,
+  `| Lisensi kepada Pelanggan | 57,88% | ${(b.toCustomer * 100).toFixed(2).replace(".", ",")}% |`,
 );
 lines.push(
-  `| Lisensi Pelanggan dikonversi | 49,7% | ${(b.converted * 100).toFixed(2).replace(".", ",")}% |`,
+  `| Lisensi Pelanggan dikonversi | 57,88% | ${(b.converted * 100).toFixed(2).replace(".", ",")}% |`,
 );
 lines.push(
-  `| Langganan | 38% | ${(b.subscription * 100).toFixed(2).replace(".", ",")}% |`,
+  `| Langganan | 37,47% | ${(b.subscription * 100).toFixed(2).replace(".", ",")}% |`,
 );
+lines.push("");
+lines.push("## Skenario headline: \"ajak 2 orang per bulan selama 2 bulan, dan bantu mereka melakukan hal yang sama\"");
+lines.push("");
+lines.push("Setiap Mitra PLS menjual 1 Lisensi ke kaki kiri dan 1 ke kaki kanan per bulan mulai bulan setelah aktivasinya; semua berlangganan mulai bulan ke-4 dan menjalankan pembinaan. Penjualan terjadi tanggal 10, sehingga penjualan bulan ke-3 (tepat hari ke-90) sudah di luar jendela 90 hari.");
+lines.push("");
+lines.push("| Skenario | Mitra PLS | Bonus Mitra pertama dari 90 hari pertama | Tanpa Pool Aktif | Porsi Mitra yang memperoleh Balik Modal* | Median total per Mitra PLS | Porsi tanpa bonus |");
+lines.push("|---|---:|---:|---:|---:|---:|---:|");
+const headlineRuns = [
+  runHeadlineScenario({ growthMonths: 5, months: 8, mode: "terus" }),
+  runHeadlineScenario({ growthMonths: 8, months: 8, mode: "sekali" }),
+];
+for (const h of headlineRuns) {
+  const end = h.engine.program90End("M1")!;
+  const m1 = h.engine.ledger.filter(
+    (e) => e.accountId === "M1" && e.status === "payable" && e.accruedAt < end,
+  );
+  const tot = m1.reduce((a, e) => a + e.amount, 0);
+  const noPool = m1.filter((e) => e.type !== "POOL_AKTIF").reduce((a, e) => a + e.amount, 0);
+  const s = h.summary;
+  lines.push(
+    `| ${s.label} | ${s.mitraCount} | ${rp(tot)} | ${rp(noPool)} | ${pct(s.balikModalShare)} | ${rp(s.income.median)} | ${pct(s.income.zeroShare)} |`,
+  );
+}
+lines.push("");
+lines.push("\\* Di antara Mitra PLS yang jendela 90 harinya sudah selesai pada akhir simulasi.");
+lines.push("");
+lines.push("Rasio bonus Plan A per bulan (skenario terus):");
+lines.push("");
+lines.push("| Bulan | Lisensi | Plan A dibayar | Pengisian Pool (top-up) | Mitra aktif |");
+lines.push("|---|---:|---:|---:|---:|");
+for (const r of headlineRuns[0].reports)
+  lines.push(`| ${r.month} | ${r.licensesSold} | ${pct(r.planAPct)} | ${rp(r.pool.topUp)} | ${r.activeMitra} / ${r.totalMitra} |`);
 lines.push("");
 lines.push("## Catatan pembacaan");
 lines.push("");
@@ -162,7 +195,13 @@ lines.push(
   "- Skenario ideal: setiap Mitra PLS mensponsori tepat 2 Mitra PLS (kiri dan kanan), satu level per bulan, semua berlangganan dan menjalankan pembinaan.",
 );
 lines.push(
-  "- Selisih dengan angka dokumen berasal dari asumsi perilaku dan aturan penempatan yang tidak diatur dokumen. Lihat docs/ARSITEKTUR_SISTEM.md bagian Asumsi.",
+  "- Kolom v1.2 (dokumen) hanya pembanding: engine kini memakai plafon Plan A 60% dan pengisian Pool Aktif sampai 55%, sehingga bulan dengan Mitra aktif cenderung membayar tepat 55%.",
+);
+lines.push(
+  "- Pada skenario headline, Pool Aktif menjadi bagian besar penghasilan Mitra awal karena hanya sedikit Mitra yang aktif saat jaringan masih kecil. Ini konsekuensi aturan pengisian 55% dan perlu keputusan (lihat ringkasan pekerjaan).",
+);
+lines.push(
+  "- Asumsi penempatan dan aturan yang tidak diatur dokumen: lihat docs/ARSITEKTUR_SISTEM.md bagian Asumsi.",
 );
 lines.push("");
 

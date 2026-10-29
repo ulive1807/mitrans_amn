@@ -6,7 +6,7 @@ Status: **prototipe**. Yang ada di repositori ini adalah engine komisi yang teru
 
 | Bagian | Lokasi | Status |
 |---|---|---|
-| Engine komisi/PV (Plan A + Plan B, plafon, masa tunggu, konversi, pembatalan) | `src/engine/` | Teruji 54 uji unit/integrasi |
+| Engine komisi/PV v2.0 (program 90 hari, peringkat bulanan, leadership, Plan B, plafon, masa tunggu, konversi, pembatalan) | `src/engine/` | Teruji unit/integrasi (`npm test`) |
 | Simulasi jaringan buatan (cermin Bab 12.3) | `src/engine/simulation.ts`, `scripts/simulate.ts` | Hasil di `docs/HASIL_SIMULASI.md` |
 | Halaman depan | `/` | Selesai (prototipe) |
 | Ringkasan aturan (dibangun dari konstanta engine) | `/aturan` | Selesai |
@@ -57,8 +57,17 @@ Prinsip implementasi:
 | A10 | Faktor plafon vs pembayaran Jumat | Faktor ditetapkan saat tutup bulan. Bila faktor < 100%, bonus tim dibayar pada Jumat tutup bulan, bukan mingguan | `closeMonth` langkah 4 |
 | A11 | Pool Aktif melebihi ruang plafon Plan A | Sisanya dibawa ke bulan berikutnya | `poolCarry` |
 | A12 | Pembatalan setelah unit dipasangkan | Volume dan saldo dikurangi; bonus pasangan yang sudah timbul ditandai untuk ditinjau admin | `refundSale().needsReview` |
+| A13 | Jendela program 90 hari | `[aktivasi Lisensi pertama, +90 hari)`; penjualan tepat hari ke-90 tidak dihitung. Fast Start, Pendamping, dan Balik Modal hanya dari Lisensi pertama setiap pembeli | `inProgram90`, `recordProgram90` |
+| A14 | Syarat "minimal 1 di tiap kaki" Balik Modal | Node akun berisi ≥1 Lisensi di kaki kiri dan kanan (termasuk volume tim) | `program90Progress().legs` |
+| A15 | Pemimpin "kaki berbeda" pada peringkat bulanan | Peringkat bayar tertinggi di kaki biner kiri dan kanan dalam 10 level pada bulan yang sama; hanya Mitra aktif yang memenuhi atau memelihara peringkat | `evaluateRanks` |
 
 ## 4. Temuan dari pengujian yang perlu dibahas
+
+> Temuan v2.0 (29 Oktober 2026) ada di butir 4–6; butir 1–3 adalah temuan v1.2.
+
+4. **Pengisian Pool Aktif sampai 55% mendominasi Plan A.** Pada skenario organik 5 tahun, Pool Aktif 41% omzet bersih Lisensi, sedangkan Prestasi dan Leadership 0%. Akibatnya total Plan A selalu 55% pada bulan yang punya Mitra aktif, dan Pool terkonsentrasi pada penjual terbanyak (tertinggi Rp1,49 miliar selama 5 tahun di skenario 30%). Median penghasilan tetap Rp0.
+5. **Peringkat bulanan Excel hampir tidak tercapai** pada skenario organik: syarat volume per bulan per kaki tinggi untuk penjualan acak. Builder masih dapat dicapai lewat pola headline.
+6. **Mitra pertama pada skenario headline** memperoleh Rp16,2 juta dari 90 hari pertama, tetapi Rp8,9 juta di antaranya dari Pool Aktif karena hanya sedikit Mitra yang aktif saat jaringan kecil. Tanpa Pool: Rp7,375 juta.
 
 1. **Batas atas biaya Langganan 38% (Bab 12.2) dihitung dari 20% PV**, padahal persentase lain dari omzet bersih. Rp70.000 / Rp359.459 = 19,47%, sehingga batas atas sebenarnya 37,47%. Tidak berbahaya, tetapi teks rumus perlu diselaraskan.
 2. **Hasil simulasi engine berbeda dari angka uji internal Bab 12.3** (lihat `docs/HASIL_SIMULASI.md`). Penyebab utamanya: syarat aktif 2 penjualan per bulan membuat sebagian besar bonus tim **ditahan lalu hangus ke Pool Aktif**. Akibatnya:
