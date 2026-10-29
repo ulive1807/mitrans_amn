@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom";
 import { PLAN } from "../../engine";
 import { rp } from "../format";
-import { Logo, ProtoRibbon } from "../components/ui";
+import { Headline, Logo, ProtoRibbon } from "../components/ui";
 
 /*
  * Copy halaman depan mengikuti Kode Etik Pasal 17–18:
@@ -318,6 +318,12 @@ export function Landing() {
             ))}
           </div>
 
+          <Headline tone="dark" />
+          <p className="hero-note" style={{ marginTop: 0 }}>
+            Bonus Balik Modal {rp(PLAN.balikModalBonus)} diberikan bila dalam{" "}
+            {PLAN.program90Days} hari Anda menjual {PLAN.balikModalPersonal}{" "}
+            Lisensi dan tim Anda menjual {PLAN.balikModalTeam} Lisensi.
+          </p>
           <div className="plan-split">
             <div className="plan-box">
               <h3>Plan A</h3>
@@ -335,11 +341,19 @@ export function Landing() {
                 </span>
               </div>
               <div className="plan-row">
-                <span>Bonus Level · Pasangan · Pembinaan</span>
+                <span>Program 90 hari</span>
+                <span>
+                  Fast Start {rp(PLAN.fastStartBonus)} per Lisensi · Pendamping{" "}
+                  {rp(PLAN.pendampingBonus)} · Balik Modal{" "}
+                  {rp(PLAN.balikModalBonus)}
+                </span>
+              </div>
+              <div className="plan-row">
+                <span>Bonus Pasangan · Pembinaan</span>
                 <span>Dari jaringan biner, sampai 10 level</span>
               </div>
               <div className="plan-row">
-                <span>Prestasi Peringkat · Royalti · Pool Aktif</span>
+                <span>Prestasi Peringkat · Leadership · Pool Aktif</span>
                 <span>Dari dana bulanan, dengan batas</span>
               </div>
             </div>

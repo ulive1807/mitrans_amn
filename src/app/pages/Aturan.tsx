@@ -1,6 +1,6 @@
 import { PLAN, perLicenseUpperBounds } from "../../engine";
 import { pct, rp } from "../format";
-import { ProtoRibbon, TopBar } from "../components/ui";
+import { Headline, ProtoRibbon, TopBar } from "../components/ui";
 
 /** Ringkasan aturan dibangun dari konstanta engine yang sama, agar halaman dan perhitungan tidak berbeda. */
 export function Aturan() {
@@ -71,6 +71,7 @@ export function Aturan() {
 
         <div className="card">
           <h2>3. Plan A — dari penjualan Lisensi</h2>
+          <Headline />
           <table className="t">
             <thead>
               <tr>
@@ -88,6 +89,33 @@ export function Aturan() {
                 <td>
                   Lunas, tidak dibatalkan; pemegang Lisensi bulan ke-4+ wajib
                   Langganan aktif
+                </td>
+              </tr>
+              <tr>
+                <td>Fast Start</td>
+                <td>{rp(PLAN.fastStartBonus)} per Lisensi</td>
+                <td>
+                  Dijual dalam {PLAN.program90Days} hari pertama sejak aktivasi
+                  Lisensi penjual; Lisensi pertama pembeli; dibayar Jumat setelah{" "}
+                  {PLAN.refundWorkdays} hari kerja
+                </td>
+              </tr>
+              <tr>
+                <td>Pendamping</td>
+                <td>{rp(PLAN.pendampingBonus)} sekali per Mitra binaan</td>
+                <td>
+                  Kepada Sponsor, saat Mitra binaan menjual Lisensi pertamanya
+                  dalam {PLAN.program90Days} hari pertamanya
+                </td>
+              </tr>
+              <tr>
+                <td>Balik Modal</td>
+                <td>{rp(PLAN.balikModalBonus)} sekali per identitas</td>
+                <td>
+                  Dalam {PLAN.program90Days} hari: {PLAN.balikModalPersonal}{" "}
+                  Lisensi pribadi (kaki kiri dan kanan berisi) dan{" "}
+                  {PLAN.balikModalTeam} Lisensi dari tim. Syarat program, bukan
+                  janji penghasilan
                 </td>
               </tr>
               <tr>
@@ -112,7 +140,11 @@ export function Aturan() {
               </tr>
               <tr>
                 <td>Pembinaan</td>
-                <td>Generasi sponsor 1–3: 25%; 4–6: 10% dari Bonus Pasangan</td>
+                <td>
+                  Generasi sponsor 1–3:{" "}
+                  {pct(PLAN.pembinaanRatesBp[0] / 10_000, 0)}; 4–6:{" "}
+                  {pct(PLAN.pembinaanRatesBp[3] / 10_000, 0)} dari Bonus Pasangan
+                </td>
                 <td>Hanya Mitra PLS pemegang Lisensi</td>
               </tr>
               <tr>
@@ -143,8 +175,9 @@ export function Aturan() {
                 <td>Pool Aktif</td>
                 <td>Sebanding penjualan baru pribadi Mitra PLS aktif</td>
                 <td>
-                  Sumber: bonus hangus, sisa dana Royalti/peringkat, kelebihan
-                  batas, Berkah tak terkonfirmasi
+                  Sumber: bonus hangus, sisa dana peringkat/leadership,
+                  kelebihan batas, Berkah tak terkonfirmasi, dan pengisian sampai{" "}
+                  {pct(PLAN.poolTargetBp / 10_000, 0)} omzet bersih Lisensi
                 </td>
               </tr>
             </tbody>
@@ -207,13 +240,16 @@ export function Aturan() {
           <h2>5. Status aktif, masa tunggu, dan jadwal bayar</h2>
           <ul>
             <li>
-              Aktif = paling sedikit {PLAN.activeMinPersonalSales} penjualan
-              baru pribadi dalam satu bulan kalender (pembelian sendiri tidak
-              dihitung).
+              Aktif = paling sedikit {PLAN.activeMinPersonalSales90} penjualan
+              baru pribadi pada bulan yang menyentuh {PLAN.program90Days} hari
+              pertama, dan {PLAN.activeMinPersonalSales} sesudahnya (pembelian
+              sendiri tidak dihitung).
             </li>
             <li>
-              Bonus Level, Pasangan, dan Pembinaan pada bulan tidak aktif
-              ditahan 2 bulan; bila tetap tidak aktif, hangus ke Pool Aktif.
+              Bonus Pasangan dan Pembinaan pada bulan tidak aktif ditahan 2
+              bulan; bila tetap tidak aktif, hangus ke Pool Aktif. Bonus yang
+              ditahan dalam {PLAN.program90Days} hari pertama belum hangus
+              sampai bulan hari ke-{PLAN.program90HoldUntilDay}.
             </li>
             <li>
               Setiap Jumat (batas 07.00 WIB): Bonus Sponsor, Berkah jatuh tempo,
@@ -221,7 +257,8 @@ export function Aturan() {
             </li>
             <li>
               Tutup bulan (tanggal 1 pukul 00.00 WIB): status aktif, masa
-              tunggu, Prestasi, Royalti, Pool Aktif, Plan B, dan batas gabungan.
+              tunggu, peringkat bulanan, Prestasi, Leadership, Pool Aktif, Plan
+              B, dan batas gabungan.
             </li>
           </ul>
         </div>
@@ -235,6 +272,13 @@ export function Aturan() {
                 <td className="r">
                   {pct(PLAN.planACapBp / 10_000, 0)} omzet bersih Lisensi per
                   bulan
+                </td>
+              </tr>
+              <tr>
+                <td>Pengisian Pool Aktif</td>
+                <td className="r">
+                  Sampai {pct(PLAN.poolTargetBp / 10_000, 0)} omzet bersih
+                  Lisensi per bulan
                 </td>
               </tr>
               <tr>

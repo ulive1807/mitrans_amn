@@ -13,6 +13,7 @@ import {
 import { BarChart } from "../components/Chart";
 import {
   Badge,
+  Headline,
   Kpi,
   Panel,
   ProtoRibbon,
@@ -33,7 +34,7 @@ const TABS: { id: Tab; label: string }[] = [
   { id: "ringkasan", label: "Ringkasan" },
   { id: "jaringan", label: "Jaringan biner" },
   { id: "bonus", label: "Komisi & bonus" },
-  { id: "peringkat", label: "Peringkat & Royalti" },
+  { id: "peringkat", label: "Peringkat & Leadership" },
   { id: "planb", label: "Plan B · Langganan" },
   { id: "rujukan", label: "Rujukan & orientasi" },
 ];
@@ -136,6 +137,56 @@ export function KantorMaya() {
   );
 }
 
+/** Kartu program 90 hari (spesifikasi 5.2): kemajuan menuju Bonus Balik Modal. */
+function Program90({ engine, accId }: { engine: MitransEngine; accId: string }) {
+  const p = engine.program90Progress(accId);
+  if (p.endsAt === undefined) {
+    return (
+      <Panel title="Program 90 Hari" hint="Mulai saat Lisensi pertama diaktifkan">
+        <Headline />
+        <p className="muted">Program 90 hari dimulai saat Lisensi pertama Anda diaktifkan.</p>
+      </Panel>
+    );
+  }
+  const daysLeft = Math.max(0, Math.ceil((p.endsAt - Date.parse(`${engine.today}T00:00:00+07:00`)) / 86_400_000));
+  const rows: { label: string; value: string; done: boolean }[] = [
+    { label: "Lisensi pribadi", value: `${p.personal} / ${PLAN.balikModalPersonal}`, done: p.personal >= PLAN.balikModalPersonal },
+    { label: "Lisensi tim", value: `${p.team} / ${PLAN.balikModalTeam}`, done: p.team >= PLAN.balikModalTeam },
+    { label: "Kaki kiri berisi", value: p.legs.L ? "Ya" : "Belum", done: p.legs.L },
+    { label: "Kaki kanan berisi", value: p.legs.R ? "Ya" : "Belum", done: p.legs.R },
+  ];
+  return (
+    <Panel
+      title="Program 90 Hari"
+      hint={daysLeft > 0 ? `Sisa ${daysLeft} hari · berakhir ${dateLabel(p.endsAt)}` : `Berakhir ${dateLabel(p.endsAt)}`}
+    >
+      <Headline />
+      <table className="t">
+        <tbody>
+          {rows.map((r) => (
+            <tr key={r.label}>
+              <td>{r.label}</td>
+              <td className="r num">{r.value}</td>
+              <td>{r.done ? <Badge tone="good">✓</Badge> : <span className="muted">–</span>}</td>
+            </tr>
+          ))}
+          <tr>
+            <td>Bonus Balik Modal {rp(PLAN.balikModalBonus)}</td>
+            <td className="r" colSpan={2}>
+              {p.achieved ? <Badge tone="good">✓ Diperoleh</Badge> : <span className="muted">Belum</span>}
+            </td>
+          </tr>
+        </tbody>
+      </table>
+      <p className="muted" style={{ fontSize: 13 }}>
+        Bonus Balik Modal {rp(PLAN.balikModalBonus)} diberikan bila dalam 90 hari Anda menjual{" "}
+        {PLAN.balikModalPersonal} Lisensi dan tim Anda menjual {PLAN.balikModalTeam} Lisensi. Ini
+        syarat program, bukan janji penghasilan.
+      </p>
+    </Panel>
+  );
+}
+
 function Ringkasan({
   engine,
   accId,
@@ -183,7 +234,7 @@ function Ringkasan({
               <Badge tone="warn">⏸ Belum aktif</Badge>
             )
           }
-          sub={`${sales} dari ${PLAN.activeMinPersonalSales} penjualan baru pribadi`}
+          sub={`${sales} dari ${engine.activeThreshold(accId, lastMonth)} penjualan baru pribadi`}
         />
         <Kpi
           label={`Diterima ${monthLabel(lastMonth)}`}
@@ -200,11 +251,12 @@ function Ringkasan({
           value={rpShort(held.reduce((a, e) => a + e.gross, 0))}
           sub={
             held.length
-              ? `${held.length} entri · masa tunggu 2 bulan`
+              ? `${held.length} entri · masa tunggu sampai ${monthLabel(held.map((e) => e.holdUntil ?? "").sort().slice(-1)[0])}`
               : "Tidak ada"
           }
         />
       </div>
+      <Program90 engine={engine} accId={accId} />
       <div className="row2">
         <Panel title="Diterima per bulan" hint="Per bulan penetapan">
           <BarChart

@@ -136,3 +136,20 @@ export function Badge({
 }) {
   return <span className={`badge b-${tone}`}>{children}</span>;
 }
+
+/** Headline strategi membangun bisnis v2.0 beserta subjudul wajib (spesifikasi bagian 1). */
+export const HEADLINE =
+  "Ajak 2 orang per bulan selama 2 bulan, dan bantu mereka melakukan hal yang sama.";
+export const HEADLINE_SUBTITLE =
+  "Ajak = bantu mereka memiliki dan memakai Lisensi Mitrans-Astra. Bonus hanya timbul dari penjualan produk yang lunas, bukan dari pendaftaran.";
+
+export function Headline({ tone = "light" }: { tone?: "light" | "dark" }) {
+  return (
+    <div className={`headline headline-${tone}`}>
+      <p className="headline-main">{HEADLINE}</p>
+      <p className="headline-sub">
+        <em>{HEADLINE_SUBTITLE}</em>
+      </p>
+    </div>
+  );
+}
