@@ -314,7 +314,7 @@ Simulasi headline resmi (2 per bulan selama 2 bulan, lalu bina; engine, skala 1)
 | # | Hal | Keputusan Coach |
 |---|---|---|
 | 17 | Produk | **Lisensi Atlas Family Rp25.000.000** (omzet bersih Rp22.522.523, PPN Rp2.477.477, 225 PV): 3 kursi dewasa, akses aplikasi **12 bulan**; Atlas Membership mulai bulan ke-13. |
-| 18 | Posisi usaha | Setiap kursi dewasa (≥18 tahun, NIK sendiri) yang mendaftar Mitra PLS mendapat **posisi sendiri**, ditempatkan di bawah Sponsor penjual seperti pembeli biasa. Pemegang kursi tidak menerima bonus dari pembelian keluarganya sendiri. Anak <18 tahun hanya akun pengguna. |
+| 18 | Posisi usaha | **Ayah** = posisi utama, disponsori penjual. **Anak** ditempatkan langsung di kaki **kiri** ayah dan **ibu** di kaki **kanan** ayah; Sponsor keduanya adalah ayah. Setiap kursi dewasa (≥18 tahun, NIK sendiri) adalah hak usaha tersendiri. Anak <18 tahun hanya akun pengguna. |
 | 19 | Bonus | **Per kursi, setara 3 Lisensi Atlas**: Sponsor 3 × Rp750.000 = Rp2.250.000; Fast Start (90 hari pertama penjual) 3 × Rp1.000.000 = Rp3.000.000; volume 3 unit; 3 penjualan pribadi untuk status aktif. Batas atas terburuk per paket 53,12%. |
 
 Laba per paket Family (dana layanan Rp426.000 per 3 bulan per akun = Rp5.112.000 untuk 12 bulan; 3 workshop): **33,9%** pada pola headline, **14,3%** pada bonus terburuk. Bagi keluarga, Family lebih hemat Rp8.273.000 dibanding 3 Lisensi + 9 bulan Atlas Membership untuk 3 orang (Rp33.273.000).
@@ -324,4 +324,4 @@ Ilustrasi engine: Mitra yang menjual 1 Family di bulan ke-1 dan 1 Family di bula
 Ketentuan hak usaha per kursi (dibuktikan uji `tests/family.test.ts`):
 - Setiap kursi dewasa yang terdaftar sebagai Mitra adalah **hak usaha tersendiri**: posisi, status aktif, program 90 hari (dimulai saat Family diaktifkan), peringkat, dan batas per identitas masing-masing.
 - Bulan ke-1 sampai ke-12 bonus setiap kursi tidak mensyaratkan Atlas Membership; mulai bulan ke-13 Membership wajib aktif untuk bonus.
-- Volume kursi tidak dihitung bagi kursi lain dalam paket yang sama, walaupun penempatan otomatis menaruh satu kursi di bawah kursi lain. Penjualan baru oleh kursi mana pun dihitung normal.
+- Bonus Sponsor dan Fast Start ketiga kursi untuk penjual (Sponsor ayah); ayah tidak menerima Bonus Sponsor dari keluarganya. **Volume ibu dan anak dihitung sebagai volume ayah** (keputusan Coach 29 Oktober 2026): ayah langsung memperoleh 1 pasangan (Rp150.000) dan volume peringkat 1:1. Catatan risiko: berbeda dengan prinsip "pembelian sendiri tidak dihitung" (Rencana Pemasaran v1.2 Bab 9.1); perlu konfirmasi konsultan hukum.

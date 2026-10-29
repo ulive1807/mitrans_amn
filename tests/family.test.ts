@@ -5,12 +5,14 @@ import { PLAN } from "../src/engine/plan";
 import { at, createWorld } from "./helpers";
 
 let w: ReturnType<typeof createWorld>;
+const FAM = { saleId: "F1", headId: "AYAH", leftId: "ANAK", rightId: "IBU", at: at("2027-01-06") };
 
 beforeEach(() => {
   w = createWorld();
   w.mitra("A", "MITRANS-002", at("2027-01-01"));
-  // Keluarga: ayah, ibu, anak dewasa mendaftar sebagai Mitra (gratis) lewat tautan A, belum membeli.
-  for (const id of ["AYAH", "IBU", "ANAK"]) w.mitra(id, "A", at("2027-01-05"), { buy: false });
+  // Keluarga: ayah mendaftar lewat tautan A; ibu dan anak dewasa disponsori langsung oleh ayah. Belum membeli.
+  w.mitra("AYAH", "A", at("2027-01-05"), { buy: false });
+  for (const id of ["IBU", "ANAK"]) w.mitra(id, "AYAH", at("2027-01-05"), { buy: false });
 });
 
 describe("Paket Family Rp25 jt, 12 bulan, 3 kursi (keputusan Coach 29 Oktober 2026)", () => {
@@ -26,33 +28,38 @@ describe("Paket Family Rp25 jt, 12 bulan, 3 kursi (keputusan Coach 29 Oktober 20
     });
   });
 
-  it("setiap kursi dewasa menjadi Lisensi atas nama sendiri dengan posisi sendiri di bawah Sponsor penjual", () => {
-    const sales = w.engine.purchaseFamily({ saleId: "F1", seatIds: ["AYAH", "IBU", "ANAK"], at: at("2027-01-06") });
-    expect(sales.map((s) => s.buyerId)).toEqual(["AYAH", "IBU", "ANAK"]);
+  it("ayah posisi utama di bawah penjual; anak di kaki kiri ayah, ibu di kaki kanan ayah", () => {
+    const sales = w.engine.purchaseFamily(FAM);
+    expect(sales.map((s) => s.buyerId)).toEqual(["AYAH", "ANAK", "IBU"]);
+    expect(sales.every((s) => s.sellerId === "A")).toBe(true);
     expect(sales.reduce((a, s) => a + s.net!, 0)).toBe(PLAN.family.netPrice);
-    for (const id of ["AYAH", "IBU", "ANAK"]) {
-      const acc = w.engine.accounts.get(id)!;
-      expect(acc.nodeId).toBeDefined();
-      expect(acc.accessMonths).toBe(12);
-    }
+    const node = (id: string) => w.engine.nodes.get(w.engine.accounts.get(id)!.nodeId!)!;
+    expect(node("AYAH").left).toBe(node("ANAK").id);
+    expect(node("AYAH").right).toBe(node("IBU").id);
+    expect(w.engine.accounts.get("IBU")!.sponsorId).toBe("AYAH");
+    for (const id of ["AYAH", "IBU", "ANAK"]) expect(w.engine.accounts.get(id)!.accessMonths).toBe(12);
   });
 
   it("bonus penjual per kursi: Sponsor 3 x Rp750.000 dan Fast Start 3 x Rp1.000.000 (Rp5.250.000)", () => {
-    w.engine.purchaseFamily({ saleId: "F1", seatIds: ["AYAH", "IBU", "ANAK"], at: at("2027-01-06") });
+    w.engine.purchaseFamily(FAM);
     const gross = (t: "SPONSOR" | "FAST_START") => w.entries("A", t).reduce((a, e) => a + e.gross, 0);
     expect(gross("SPONSOR")).toBe(2_250_000);
     expect(gross("FAST_START")).toBe(3_000_000);
     expect(w.engine.personalSales("2027-01").get("A")).toBe(3);
   });
 
-  it("ayah tidak menerima bonus dari pembelian keluarganya sendiri", () => {
-    w.engine.purchaseFamily({ saleId: "F1", seatIds: ["AYAH", "IBU", "ANAK"], at: at("2027-01-06") });
+  it("ayah tidak menerima Bonus Sponsor/Fast Start dari keluarganya, tetapi volume ibu dan anak dihitung untuk ayah", () => {
+    w.engine.purchaseFamily(FAM);
     w.engine.advance(at("2027-01-08"));
-    expect(w.engine.entriesFor("AYAH")).toHaveLength(0);
+    expect(w.entries("AYAH", "SPONSOR")).toHaveLength(0);
+    expect(w.entries("AYAH", "FAST_START")).toHaveLength(0);
+    const node = w.engine.nodes.get(w.engine.accounts.get("AYAH")!.nodeId!)!;
+    expect(node.cumLicenses).toEqual({ L: 1, R: 1 });
+    expect(w.entries("AYAH", "PASANGAN").map((e) => e.gross)).toEqual([PLAN.pairBonus]);
   });
 
   it("omzet bersih bulan itu memakai harga Family", () => {
-    w.engine.purchaseFamily({ saleId: "F1", seatIds: ["AYAH", "IBU", "ANAK"], at: at("2027-01-06") });
+    w.engine.purchaseFamily(FAM);
     w.engine.closeThrough("2027-01");
     const r = w.engine.report("2027-01")!;
     expect(r.licenseNet).toBe(PLAN.license.netPrice + PLAN.family.netPrice);
@@ -60,19 +67,17 @@ describe("Paket Family Rp25 jt, 12 bulan, 3 kursi (keputusan Coach 29 Oktober 20
   });
 
   it("Atlas Membership baru menjadi syarat bonus mulai bulan ke-13", () => {
-    w.engine.purchaseFamily({ saleId: "F1", seatIds: ["AYAH", "IBU", "ANAK"], at: at("2027-01-06") });
+    w.engine.purchaseFamily(FAM);
     expect(w.engine.subscriptionConditionMet("AYAH", "2027-12")).toBe(true);
     expect(w.engine.subscriptionConditionMet("AYAH", "2028-01")).toBe(false);
     expect(w.engine.subscriptionConditionMet("A", "2027-04")).toBe(false);
   });
 
-  it("menolak lebih dari 3 kursi, kursi ganda, atau Sponsor berbeda", () => {
-    w.mitra("LAIN", "MITRANS-002", at("2027-01-05"), { buy: false });
-    w.mitra("KE4", "A", at("2027-01-05"), { buy: false });
+  it("menolak kursi yang tidak disponsori langsung oleh ayah atau kursi ganda", () => {
+    w.mitra("LAIN", "A", at("2027-01-05"), { buy: false });
     const t = at("2027-01-06");
-    expect(() => w.engine.purchaseFamily({ saleId: "X1", seatIds: ["AYAH", "IBU", "ANAK", "KE4"], at: t })).toThrow(EngineError);
-    expect(() => w.engine.purchaseFamily({ saleId: "X2", seatIds: ["AYAH", "AYAH"], at: t })).toThrow(EngineError);
-    expect(() => w.engine.purchaseFamily({ saleId: "X3", seatIds: ["AYAH", "LAIN"], at: t })).toThrow(EngineError);
+    expect(() => w.engine.purchaseFamily({ saleId: "X1", headId: "AYAH", leftId: "LAIN", at: t })).toThrow(EngineError);
+    expect(() => w.engine.purchaseFamily({ saleId: "X2", headId: "AYAH", leftId: "IBU", rightId: "IBU", at: t })).toThrow(EngineError);
   });
 
   it("batas atas biaya bonus per paket Family di bawah 60%", () => {
@@ -84,14 +89,7 @@ describe("Paket Family Rp25 jt, 12 bulan, 3 kursi (keputusan Coach 29 Oktober 20
 
 describe("Setiap kursi Family adalah hak usaha tersendiri", () => {
   beforeEach(() => {
-    w.engine.purchaseFamily({ saleId: "F1", seatIds: ["AYAH", "IBU", "ANAK"], at: at("2027-01-06") });
-  });
-
-  it("volume kursi satu paket tidak dihitung untuk kursi lain di paket yang sama", () => {
-    for (const id of ["AYAH", "IBU", "ANAK"]) {
-      const node = w.engine.nodes.get(w.engine.accounts.get(id)!.nodeId!)!;
-      expect(node.cumLicenses).toEqual({ L: 0, R: 0 });
-    }
+    w.engine.purchaseFamily(FAM);
   });
 
   it("setiap kursi punya program 90 hari sendiri: IBU menjual dalam 90 hari -> Sponsor + Fast Start untuk IBU", () => {

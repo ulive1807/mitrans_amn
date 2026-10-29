@@ -142,8 +142,6 @@ export class MitransEngine {
   /** Masukan dan peringkat bayar per bulan yang sudah ditutup (spesifikasi 6). */
   private rankInputsByMonth = new Map<string, Map<string, RankInput>>();
   private paidAsByMonth = new Map<string, Map<string, RankName>>();
-  /** Paket Family: id paket -> akun pemegang kursi. */
-  private bundleSeats = new Map<string, Set<string>>();
   private currentDayEnd = 0;
   private nextEntryId = 1;
   private currentDay: string;
@@ -272,14 +270,14 @@ export class MitransEngine {
     buyerId: string;
     at: number;
     legPreference?: Side;
-    /** Internal: kursi paket Family. */
-    family?: { bundleId: string; net: number };
+    /** Internal: kursi paket Family (penjual = Sponsor ayah). */
+    family?: { bundleId: string; net: number; sellerId: string };
   }): Sale {
     this.advance(input.at);
     const buyer = this.mustAccount(input.buyerId);
     if (buyer.role === "struktural")
       throw new EngineError("Akun struktural tidak membeli");
-    const seller = this.mustAccount(buyer.sponsorId!);
+    const seller = this.mustAccount(input.family?.sellerId ?? buyer.sponsorId!);
     this.assertSellerCanSell(seller);
     if (this.sales.has(input.saleId))
       throw new EngineError(`Penjualan ${input.saleId} sudah ada`);
@@ -356,31 +354,48 @@ export class MitransEngine {
   }
 
   /**
-   * Paket Family (keputusan Coach 29 Oktober 2026): 1 pembayaran untuk 1–3 kursi dewasa. Setiap kursi
-   * menjadi Lisensi atas nama pemegangnya sendiri (Mitra atau Pelanggan), dijual oleh Sponsor yang
-   * sama, dengan akses 12 bulan. Bonus dihitung per kursi seperti Lisensi Atlas.
+   * Paket Family (keputusan Coach 29 Oktober 2026): 1 pembayaran untuk ayah (posisi utama) dan sampai 2
+   * anggota keluarga dewasa yang disponsori langsung oleh ayah: satu di kaki kiri ayah, satu di kaki kanan.
+   * Penjual semua kursi adalah Sponsor ayah (Bonus Sponsor dan Fast Start per kursi untuknya); volume
+   * kursi kiri/kanan dihitung untuk ayah seperti volume biasa. Akses 12 bulan.
    */
-  purchaseFamily(input: { saleId: string; seatIds: string[]; at: number }): Sale[] {
-    const seats = input.seatIds;
-    if (seats.length < 1 || seats.length > PLAN.family.seats)
-      throw new EngineError(`Family berisi 1–${PLAN.family.seats} kursi`);
-    if (new Set(seats).size !== seats.length) throw new EngineError("Kursi Family harus orang berbeda");
-    const sponsors = new Set(seats.map((id) => this.mustAccount(id).sponsorId));
-    if (sponsors.size !== 1) throw new EngineError("Semua kursi Family harus dari tautan Sponsor yang sama");
+  purchaseFamily(input: {
+    saleId: string;
+    headId: string;
+    leftId?: string;
+    rightId?: string;
+    at: number;
+  }): Sale[] {
+    const head = this.mustAccount(input.headId);
+    const others: [string, Side][] = [];
+    if (input.leftId) others.push([input.leftId, "L"]);
+    if (input.rightId) others.push([input.rightId, "R"]);
+    const ids = [head.id, ...others.map(([id]) => id)];
+    if (new Set(ids).size !== ids.length) throw new EngineError("Kursi Family harus orang berbeda");
+    for (const [id] of others)
+      if (this.mustAccount(id).sponsorId !== head.id)
+        throw new EngineError("Anggota keluarga harus disponsori langsung oleh pemegang kursi utama");
+    if (head.nodeId) throw new EngineError("Pemegang kursi utama sudah memegang Lisensi");
     if (this.sales.has(`${input.saleId}-1`)) throw new EngineError(`Penjualan ${input.saleId} sudah ada`);
-    this.bundleSeats.set(input.saleId, new Set(seats));
+    const sellerId = head.sponsorId!;
     const base = Math.floor(PLAN.family.netPrice / PLAN.family.seats);
-    const nets = Array.from({ length: PLAN.family.seats }, (_, i) =>
-      i === 0 ? PLAN.family.netPrice - base * (PLAN.family.seats - 1) : base,
+    const net = (i: number) => (i === 0 ? PLAN.family.netPrice - base * (PLAN.family.seats - 1) : base);
+    const family = (i: number) => ({ bundleId: input.saleId, net: net(i), sellerId });
+    const sales = [
+      this.purchaseLicense({ saleId: `${input.saleId}-1`, buyerId: head.id, at: input.at, family: family(0) }),
+    ];
+    others.forEach(([id, side], i) =>
+      sales.push(
+        this.purchaseLicense({
+          saleId: `${input.saleId}-${i + 2}`,
+          buyerId: id,
+          at: input.at,
+          legPreference: side,
+          family: family(i + 1),
+        }),
+      ),
     );
-    return seats.map((buyerId, i) =>
-      this.purchaseLicense({
-        saleId: `${input.saleId}-${i + 1}`,
-        buyerId,
-        at: input.at,
-        family: { bundleId: input.saleId, net: nets[i] },
-      }),
-    );
+    return sales;
   }
 
   /** Pelanggan mengonfirmasi pendampingan orientasi di aplikasi (Bab 7 butir 5). */
@@ -898,10 +913,7 @@ export class MitransEngine {
 
   /** Catat 1 Lisensi pada node `nodeId` untuk upline dalam 10 level. */
   private addLicenseVolume(sale: Sale, nodeId: string): void {
-    const coSeats = sale.bundleId ? this.bundleSeats.get(sale.bundleId) : undefined;
     this.walkUp(nodeId, (anc, side) => {
-      // Kursi Family tidak menjadi volume bagi kursi lain dalam paket yang sama (bukan pembelian sendiri).
-      if (coSeats?.has(anc.accountId)) return;
       if (sale.countedBy!.has(anc.id)) return;
       sale.countedBy!.add(anc.id);
       anc.cumLicenses[side]++;
