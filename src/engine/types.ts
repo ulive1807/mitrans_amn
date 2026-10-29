@@ -45,9 +45,6 @@ export interface BinaryNode {
   carry: { L: number; R: number };
   /** Unit masuk hari berjalan, diproses pada akhir hari. */
   todayIn: { L: number; R: number };
-  /** Kedalaman (1..10) yang sudah berisi Lisensi Mitra PLS per kaki, sebagai bitmask. */
-  levelMask: { L: number; R: number };
-  levelPaidMask: number;
   /** PV Langganan per kaki dalam 10 level untuk bulan berjalan (persepuluh PV). */
   roPvTenths: { L: number; R: number };
 }
@@ -85,7 +82,6 @@ export type BonusType =
   | "FAST_START"
   | "PENDAMPING"
   | "BALIK_MODAL"
-  | "LEVEL"
   | "PASANGAN"
   | "PEMBINAAN"
   | "PRESTASI"
@@ -101,7 +97,6 @@ export const PLAN_A_TYPES: BonusType[] = [
   "FAST_START",
   "PENDAMPING",
   "BALIK_MODAL",
-  "LEVEL",
   "PASANGAN",
   "PEMBINAAN",
   "PRESTASI",
@@ -123,7 +118,7 @@ export const DIRECT_TYPES: BonusType[] = [
 ];
 /** Bonus program 90 hari: dibayar setelah masa pengembalian 7 hari kerja. */
 export const PROGRAM90_TYPES: BonusType[] = ["FAST_START", "PENDAMPING", "BALIK_MODAL"];
-export const TEAM_TYPES: BonusType[] = ["LEVEL", "PASANGAN", "PEMBINAAN"];
+export const TEAM_TYPES: BonusType[] = ["PASANGAN", "PEMBINAAN"];
 
 export const BONUS_LABEL: Record<BonusType, string> = {
   SPONSOR: "Bonus Sponsor",
@@ -131,7 +126,6 @@ export const BONUS_LABEL: Record<BonusType, string> = {
   FAST_START: "Bonus Fast Start",
   PENDAMPING: "Bonus Pendamping",
   BALIK_MODAL: "Bonus Balik Modal",
-  LEVEL: "Bonus Level",
   PASANGAN: "Bonus Pasangan",
   PEMBINAAN: "Bonus Pembinaan",
   PRESTASI: "Bonus Prestasi Peringkat",
@@ -175,7 +169,7 @@ export interface LedgerEntry {
   settledMonth?: string;
   payoutDate?: string;
   saleId?: string;
-  /** Untuk Bonus Pembinaan: generasi. Untuk Bonus Level: kedalaman. */
+  /** Untuk Bonus Pembinaan: generasi. Untuk Bonus Pasangan: jumlah pasangan. */
   ref?: number;
   note?: string;
   /** Bulan terakhir masa tunggu untuk bonus yang ditahan. */
@@ -200,6 +194,8 @@ export interface PoolSources {
   identityCapExcess: number;
   berkahUnconfirmed: number;
   carriedFromLastMonth: number;
+  /** Pengisian Pool sampai 55% omzet bersih Lisensi (spesifikasi 8); sisanya tidak dibawa. */
+  topUp: number;
 }
 
 export interface MonthReport {
@@ -221,6 +217,8 @@ export interface MonthReport {
   planBPct: number;
   planACap: number;
   planBCap: number;
+  /** 55% omzet bersih Lisensi: batas pengisian Pool Aktif (spesifikasi 8). */
+  poolTarget: number;
   teamBudget: number;
   teamClaims: number;
   teamFactor: number;

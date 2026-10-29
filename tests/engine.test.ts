@@ -3,7 +3,7 @@ import { EngineError, MitransEngine } from "../src/engine/engine";
 import { PLAN } from "../src/engine/plan";
 import { addDays, atWib } from "../src/engine/time";
 import { syntheticNik } from "../src/engine/simulation";
-import type { BonusType } from "../src/engine/types";
+import { BONUS_LABEL, type BonusType } from "../src/engine/types";
 
 let engine: MitransEngine;
 let nik = 1;
@@ -115,7 +115,7 @@ describe("Akun struktural (Bab 2)", () => {
   });
 });
 
-describe("Plan A: Sponsor, Level, Pasangan (Bab 8.1)", () => {
+describe("Plan A: Sponsor dan Pasangan (Bab 8.1)", () => {
   beforeEach(() => {
     mitra("B", "A", jan(5), { leg: "L" });
     mitra("C", "A", jan(5), { leg: "R" });
@@ -127,13 +127,11 @@ describe("Plan A: Sponsor, Level, Pasangan (Bab 8.1)", () => {
     ]);
   });
 
-  it("Bonus Level kedalaman 1 sekali saat kedua kaki terisi", () => {
-    const lv = entries("A", "LEVEL");
-    expect(lv).toHaveLength(1);
-    expect(lv[0]).toMatchObject({ gross: 750_000, ref: 1 });
+  it("v2.0: tidak ada Bonus Level", () => {
     mitra("D", "B", jan(6), { leg: "L" });
     mitra("E", "C", jan(6), { leg: "R" });
-    expect(entries("A", "LEVEL").map((e) => e.ref)).toEqual([1, 2]);
+    expect(Object.keys(BONUS_LABEL)).not.toContain("LEVEL");
+    expect(engine.ledger.every((e) => e.type in BONUS_LABEL)).toBe(true);
   });
 
   it("Bonus Pasangan dihitung pada akhir hari, dan dibayar setelah tutup bulan bila aktif", () => {
@@ -200,16 +198,13 @@ describe("Status aktif dan masa tunggu 2 bulan (Bab 9.1 dan 9.3), sesudah progra
   it("bonus tim ditahan saat tidak aktif lalu dibayar bila aktif dalam 2 bulan berikutnya", () => {
     engine.closeThrough("2027-06");
     const pair = entries("A", "PASANGAN")[0];
-    const level = entries("A", "LEVEL")[0];
     expect(pair.status).toBe("held");
-    expect(level.status).toBe("held");
     expect(pair.holdUntil).toBe("2027-08");
     customer("P1", "A", at("2027-07-03"));
     customer("P2", "A", at("2027-07-04"));
     engine.closeThrough("2027-07");
     expect(engine.isActive("A", "2027-07")).toBe(true);
     expect(pair.status).toBe("payable");
-    expect(level.status).toBe("payable");
     expect(pair.settledMonth).toBe("2027-07");
   });
 
@@ -218,7 +213,7 @@ describe("Status aktif dan masa tunggu 2 bulan (Bab 9.1 dan 9.3), sesudah progra
     const pair = entries("A", "PASANGAN")[0];
     expect(pair.status).toBe("forfeited");
     const aug = engine.report("2027-08")!;
-    expect(aug.pool.forfeitedTeam).toBe(PLAN.pairBonus + PLAN.levelBonus);
+    expect(aug.pool.forfeitedTeam).toBe(PLAN.pairBonus);
   });
 
   it("pembelian untuk diri sendiri tidak dihitung", () => {

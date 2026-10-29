@@ -250,8 +250,6 @@ function Ringkasan({
               <dd>
                 {num(node.carry.L)} / {num(node.carry.R)}
               </dd>
-              <dt>Kedalaman Bonus Level terbayar</dt>
-              <dd>{countBits(node.levelPaidMask)} dari 10</dd>
               <dt>Langganan bulan {monthLabel(lastMonth)}</dt>
               <dd>
                 {engine.subscriptionConditionMet(accId, lastMonth)
@@ -286,14 +284,6 @@ function Ringkasan({
   );
 }
 
-function countBits(x: number): number {
-  let n = 0;
-  while (x) {
-    n += x & 1;
-    x >>= 1;
-  }
-  return n;
-}
 
 function Jaringan({ engine, accId }: { engine: MitransEngine; accId: string }) {
   const acc = engine.accounts.get(accId)!;
@@ -425,7 +415,6 @@ function BonusTable({ entries }: { entries: LedgerEntry[] }) {
                 <td className="num">{dateLabel(e.accruedAt)}</td>
                 <td>
                   {BONUS_LABEL[e.type]}
-                  {e.type === "LEVEL" && e.ref ? ` · kedalaman ${e.ref}` : ""}
                   {e.type === "PEMBINAAN" && e.ref ? ` · gen ${e.ref}` : ""}
                   {e.type === "PASANGAN" && e.ref ? ` · ${e.ref} pasangan` : ""}
                 </td>

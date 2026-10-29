@@ -103,17 +103,6 @@ export function Aturan() {
                 </td>
               </tr>
               <tr>
-                <td>Level</td>
-                <td>
-                  {rp(PLAN.levelBonus)} sekali per kedalaman 1–10 saat kedua
-                  kaki pertama kali berisi Lisensi Mitra PLS
-                </td>
-                <td>
-                  Paling banyak {rp(PLAN.levelBonusLifetimeCap)} seumur
-                  keanggotaan
-                </td>
-              </tr>
-              <tr>
                 <td>Pasangan</td>
                 <td>{rp(PLAN.pairBonus)} per pasangan (1 kiri + 1 kanan)</td>
                 <td>

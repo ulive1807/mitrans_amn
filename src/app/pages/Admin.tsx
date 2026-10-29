@@ -282,7 +282,7 @@ function Jumat() {
               .reverse()
               .map((r) => {
                 const team =
-                  r.byType.LEVEL + r.byType.PASANGAN + r.byType.PEMBINAAN;
+                  r.byType.PASANGAN + r.byType.PEMBINAAN;
                 const direct = r.byType.SPONSOR + r.byType.BERKAH;
                 return (
                   <tr key={r.date}>

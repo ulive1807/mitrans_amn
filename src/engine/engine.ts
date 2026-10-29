@@ -57,7 +57,6 @@ function emptyByType(): Record<BonusType, number> {
     FAST_START: 0,
     PENDAMPING: 0,
     BALIK_MODAL: 0,
-    LEVEL: 0,
     PASANGAN: 0,
     PEMBINAAN: 0,
     PRESTASI: 0,
@@ -324,18 +323,16 @@ export class MitransEngine {
     if (!buyer.licenseActivatedAt) buyer.licenseActivatedAt = input.at;
 
     if (buyer.role === "mitra") {
-      let createdNode = false;
       if (!buyer.nodeId) {
         const node = this.placeNode(buyer, input.at, input.legPreference);
         buyer.nodeId = node.id;
-        createdNode = true;
       }
       sale.volumeNodeId = buyer.nodeId;
-      this.addLicenseVolume(sale, buyer.nodeId, createdNode);
+      this.addLicenseVolume(sale, buyer.nodeId);
     } else {
       const nodeId = this.volumeNodeFor(seller);
       sale.volumeNodeId = nodeId;
-      if (nodeId) this.addLicenseVolume(sale, nodeId, false);
+      if (nodeId) this.addLicenseVolume(sale, nodeId);
     }
     if (firstLicenseOfBuyer && seller.role === "mitra") this.recordProgram90(sale, seller);
     return sale;
@@ -382,7 +379,7 @@ export class MitransEngine {
     const node = this.placeNode(acc, input.at, input.legPreference);
     acc.nodeId = node.id;
     sale.volumeNodeId = node.id;
-    this.addLicenseVolume(sale, node.id, true);
+    this.addLicenseVolume(sale, node.id);
     const ms = this.month(wibMonth(input.at));
     ms.conversions++;
     ms.newMitra++;
@@ -777,8 +774,6 @@ export class MitransEngine {
       cumLicenses: { L: 0, R: 0 },
       carry: { L: 0, R: 0 },
       todayIn: { L: 0, R: 0 },
-      levelMask: { L: 0, R: 0 },
-      levelPaidMask: 0,
       roPvTenths: { L: 0, R: 0 },
     };
     if (parent && side) {
@@ -837,18 +832,10 @@ export class MitransEngine {
     }
   }
 
-  /**
-   * Catat 1 Lisensi pada node `nodeId` untuk upline dalam 10 level.
-   * `mitraLicenseNode`: node ini adalah posisi Mitra PLS yang baru terisi Lisensi (memicu Bonus Level).
-   */
-  private addLicenseVolume(
-    sale: Sale,
-    nodeId: string,
-    mitraLicenseNode: boolean,
-  ): void {
+  /** Catat 1 Lisensi pada node `nodeId` untuk upline dalam 10 level. */
+  private addLicenseVolume(sale: Sale, nodeId: string): void {
     const at = sale.convertedAt ?? sale.at;
-    this.walkUp(nodeId, (anc, side, d) => {
-      if (mitraLicenseNode) this.markLevel(anc, side, d, at, sale.id);
+    this.walkUp(nodeId, (anc, side) => {
       if (sale.countedBy!.has(anc.id)) return;
       sale.countedBy!.add(anc.id);
       anc.cumLicenses[side]++;
@@ -856,25 +843,6 @@ export class MitransEngine {
       this.touchedToday.add(anc.id);
       this.checkRanks(anc, at);
     });
-  }
-
-  /** Bonus Level (8.1, Lampiran B.1): sekali per kedalaman saat kedua kaki pertama kali berisi Lisensi Mitra PLS. */
-  private markLevel(
-    anc: BinaryNode,
-    side: Side,
-    depth: number,
-    at: number,
-    saleId: string,
-  ): void {
-    const bit = 1 << (depth - 1);
-    anc.levelMask[side] |= bit;
-    if (anc.levelMask.L & anc.levelMask.R & bit && !(anc.levelPaidMask & bit)) {
-      anc.levelPaidMask |= bit;
-      this.accrue(anc.accountId, "LEVEL", PLAN.levelBonus, at, {
-        saleId,
-        ref: depth,
-      });
-    }
   }
 
   private checkRanks(node: BinaryNode, at: number): void {
@@ -1124,6 +1092,7 @@ export class MitransEngine {
       identityCapExcess: 0,
       berkahUnconfirmed: 0,
       carriedFromLastMonth: this.poolCarry,
+      topUp: 0,
     };
     let heldNoSubscription = 0;
     const settled: LedgerEntry[] = [];
@@ -1377,7 +1346,7 @@ export class MitransEngine {
           !(e.type === "PRESTASI" && e.note?.includes("cadangan")),
       )
       .reduce((a, e) => a + e.amount, 0);
-    const poolTotal =
+    const poolSources =
       pool.forfeitedTeam +
       pool.royaltyUnassigned +
       pool.royaltyOverCap +
@@ -1385,6 +1354,10 @@ export class MitransEngine {
       pool.identityCapExcess +
       pool.berkahUnconfirmed +
       pool.carriedFromLastMonth;
+    // Spesifikasi 8: bila bonus Plan A di bawah 55%, selisihnya sampai 55% ikut dibagi lewat Pool Aktif.
+    const poolTarget = applyBp(licenseNet, PLAN.poolTargetBp);
+    pool.topUp = Math.max(0, poolTarget - planABeforePool - poolSources);
+    const poolTotal = poolSources + pool.topUp;
     const poolRoom = Math.max(0, planACap - planABeforePool);
     const poolAvailable = Math.min(poolTotal, poolRoom);
     const activeSales = new Map([...sales].filter(([id]) => active.has(id)));
@@ -1405,7 +1378,8 @@ export class MitransEngine {
       });
       settle(e, pay, closeFriday);
     }
-    this.poolCarry = poolTotal - poolDistributed;
+    // Yang dibagi diambil lebih dulu dari sumber Pool; sisa top-up tidak dibawa ke bulan berikutnya.
+    this.poolCarry = Math.max(0, poolSources - poolDistributed);
 
     // 9. Plan B.
     const subSales = ms.subscriptionSaleIds
@@ -1519,6 +1493,7 @@ export class MitransEngine {
       planBPct: subscriptionNet > 0 ? planBPaid / subscriptionNet : 0,
       planACap,
       planBCap,
+      poolTarget,
       teamBudget,
       teamClaims: carryTotal + currentTotal,
       teamFactor,

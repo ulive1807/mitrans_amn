@@ -36,8 +36,6 @@ export const PLAN = {
   berkahBonus: 50_000,
   berkahMaturityDays: 30,
   berkahConfirmDeadlineDays: 60, // lewat ini tanpa konfirmasi -> Pool Aktif (8.4 butir 5)
-  levelBonus: 750_000,
-  levelBonusLifetimeCap: 7_500_000,
   pairBonus: 150_000,
   pairDailyCap: 20,
   /** Persentase Bonus Pembinaan per generasi sponsor (bp). Generasi 1..6. */
