@@ -69,6 +69,7 @@ export const PLAN = {
   // Bab 12.1 Plafon
   planACapBp: 6000, // spesifikasi 10.1: 60% omzet bersih Lisensi (PP 29/2021 Pasal 49)
   poolTargetBp: 5500, // spesifikasi 8: Pool Aktif mengisi sampai 55%
+  poolMaxPerSale: 500_000, // keputusan Coach 29 Oktober 2026: bagian Pool paling banyak per penjualan
   planBCapBp: 4000, // 40% omzet bersih Langganan
 
   // Bab 12.2 butir 4

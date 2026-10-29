@@ -175,3 +175,21 @@ describe("Perbaikan tinjauan akhir: verifikasi per peringkat", () => {
     expect(w.entries("A", "PRESTASI").map((e) => e.note)).toEqual(["Builder"]);
   });
 });
+
+describe("Keputusan Coach: pemimpin dari garis sponsor langsung", () => {
+  it("Builder generasi ke-2 di kaki kanan tidak dihitung sebagai pemimpin", () => {
+    w.mitra("B", "A", at("2027-01-05"), { leg: "L" });
+    w.mitra("C", "A", at("2027-01-05"), { leg: "R" });
+    w.mitra("B1", "B", at("2027-01-06"), { leg: "L" });
+    w.mitra("B2", "B", at("2027-01-06"), { leg: "R" });
+    w.mitra("C1", "C", at("2027-01-06"), { leg: "L" });
+    w.mitra("C2", "C", at("2027-01-06"), { leg: "R" });
+    w.mitra("C1a", "C1", at("2027-01-07"), { leg: "L" });
+    w.mitra("C1b", "C1", at("2027-01-07"), { leg: "R" });
+    for (const id of ["B1", "B2", "C1a", "C1b"]) sellCustomers(id, 2, "2027-01-10");
+    w.engine.closeThrough("2027-01");
+    expect(w.engine.paidAsRank("C1", "2027-01")).toBe("Builder");
+    expect(w.engine.paidAsRank("C", "2027-01")).toBe("Member");
+    expect(w.engine.rankInputs("A", "2027-01").leaderBest).toEqual({ L: "Builder", R: "Member" });
+  });
+});

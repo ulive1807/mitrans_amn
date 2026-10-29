@@ -10,10 +10,10 @@ Dibuat oleh `npm run simulate` pada 2026-10-29 · Rencana Pemasaran v2.0-draf ·
 
 | Skenario | Lisensi | Mitra PLS | Plan A dibayar (engine) | Plan A v1.2 (dokumen) | Plan B dibayar (engine) | Plan B v1.2 (dokumen) | Bulan Plan A tertinggi | Faktor plafon dipakai |
 |---|---:|---:|---:|---:|---:|---:|---:|---|
-| Jaringan ideal 12 level (semua Mitra PLS menjual 2 Lisensi) | 4.095 | 4.095 | 55,0% | 46,9% | 35,2% | 36,7% | 55,0% (2027-02) | Tidak · Pool dibatasi 3 bulan |
-| Jaringan 5 tahun, penjualan rata (70% pembeli menjadi Mitra PLS) | 22.686 | 16.974 | 55,0% | 31,1% | 11,2% | 26,6% | 55,0% (2028-08) | Tidak |
-| Jaringan 5 tahun, penjualan naik lalu turun (70%) | 24.835 | 18.401 | 55,0% | 31,8% | 11,0% | 26,7% | 55,0% (2031-11) | Tidak |
-| Jaringan 5 tahun, penjualan rata, hanya 30% pembeli menjadi Mitra PLS | 22.609 | 9.084 | 55,0% | 26,5% | 13,0% | 26,8% | 55,0% (2029-11) | Tidak |
+| Jaringan ideal 12 level (semua Mitra PLS menjual 2 Lisensi) | 4.095 | 4.095 | 27,7% | 46,9% | 35,2% | 36,7% | 27,7% (2027-03) | Tidak · Pool dibatasi 3 bulan |
+| Jaringan 5 tahun, penjualan rata (70% pembeli menjadi Mitra PLS) | 22.686 | 16.974 | 16,5% | 31,1% | 11,2% | 26,6% | 30,2% (2027-04) | Tidak |
+| Jaringan 5 tahun, penjualan naik lalu turun (70%) | 24.835 | 18.401 | 17,0% | 31,8% | 11,0% | 26,7% | 29,7% (2027-03) | Tidak |
+| Jaringan 5 tahun, penjualan rata, hanya 30% pembeli menjadi Mitra PLS | 22.609 | 9.084 | 19,5% | 26,5% | 13,0% | 26,8% | 29,9% (2027-05) | Tidak |
 
 ## Rincian pembayaran per jenis (seluruh periode)
 
@@ -28,7 +28,7 @@ Dibuat oleh `npm run simulate` pada 2026-10-29 · Rencana Pemasaran v2.0-draf ·
 | Bonus Pembinaan | 0,0% | 0,3% | 0,4% | 0,6% |
 | Bonus Prestasi Peringkat | 0,0% | 0,0% | 0,0% | 0,0% |
 | Bonus Leadership | 0,0% | 0,0% | 0,0% | 0,0% |
-| Pool Aktif | 34,6% | 41,5% | 41,3% | 40,7% |
+| Pool Aktif | 7,4% | 3,0% | 3,3% | 5,2% |
 | Komisi Langganan | 19,4% | 7,6% | 7,6% | 8,3% |
 | Pasangan Langganan (RO) | 12,8% | 2,1% | 1,9% | 2,0% |
 | Royalti Langganan (RO) | 3,0% | 1,5% | 1,5% | 2,7% |
@@ -39,19 +39,19 @@ Persentase Plan A terhadap omzet bersih Lisensi; Plan B terhadap omzet bersih La
 
 | Skenario | Median total diterima per Mitra PLS | Persentil 90 | Tertinggi | Porsi Mitra PLS tanpa bonus | Rata-rata porsi Mitra PLS aktif per bulan |
 |---|---:|---:|---:|---:|---:|
-| ideal-12 | Rp0 | Rp8.067.932 | Rp50.152.558 | 50,0% | 19,3% |
-| flat-5y | Rp0 | Rp17.083.554 | Rp473.755.249 | 61,3% | 4,3% |
-| risefall-5y | Rp0 | Rp16.801.566 | Rp602.939.488 | 61,6% | 4,9% |
-| flat-5y-30 | Rp0 | Rp28.407.542 | Rp1.494.793.956 | 52,0% | 7,8% |
+| ideal-12 | Rp0 | Rp4.385.500 | Rp46.370.126 | 50,0% | 19,3% |
+| flat-5y | Rp0 | Rp5.825.500 | Rp343.072.821 | 61,3% | 4,3% |
+| risefall-5y | Rp0 | Rp6.263.000 | Rp458.709.274 | 61,6% | 4,9% |
+| flat-5y-30 | Rp0 | Rp12.074.500 | Rp1.254.151.536 | 52,0% | 7,8% |
 
 ## Kesehatan dana
 
 | Skenario | Prestasi dari dana cadangan | Sisa Pool Aktif akhir | Bonus masih ditahan akhir | Waktu jalan |
 |---|---:|---:|---:|---:|
 | ideal-12 | Rp0 | Rp3.815.040.000 | Rp0 | 0.5 detik |
-| flat-5y | Rp0 | Rp0 | Rp448.550.000 | 18.5 detik |
-| risefall-5y | Rp0 | Rp0 | Rp73.002.500 | 20.7 detik |
-| flat-5y-30 | Rp0 | Rp0 | Rp380.362.500 | 18.4 detik |
+| flat-5y | Rp0 | Rp0 | Rp448.550.000 | 16.5 detik |
+| risefall-5y | Rp0 | Rp0 | Rp73.002.500 | 23.9 detik |
+| flat-5y-30 | Rp0 | Rp0 | Rp380.362.500 | 17.4 detik |
 
 ## Batas atas biaya per Lisensi (dihitung ulang dari parameter, spesifikasi 10.2)
 
@@ -68,8 +68,8 @@ Setiap Mitra PLS menjual 1 Lisensi ke kaki kiri dan 1 ke kaki kanan per bulan mu
 
 | Skenario | Mitra PLS | Bonus Mitra pertama dari 90 hari pertama | Tanpa Pool Aktif | Porsi Mitra yang memperoleh Balik Modal* | Median total per Mitra PLS | Porsi tanpa bonus |
 |---|---:|---:|---:|---:|---:|---:|
-| Headline: 2 per bulan (terus), 5 bulan pertumbuhan | 81 | Rp16.248.198 | Rp7.375.000 | 33,3% | Rp0 | 66,7% |
-| Headline: 2 per bulan (sekali), 8 bulan pertumbuhan | 255 | Rp7.632.432 | Rp2.850.000 | 0,0% | Rp0 | 50,2% |
+| Headline: 2 per bulan (terus), 5 bulan pertumbuhan | 81 | Rp9.375.000 | Rp7.375.000 | 33,3% | Rp0 | 66,7% |
+| Headline: 2 per bulan (sekali), 8 bulan pertumbuhan | 255 | Rp3.850.000 | Rp2.850.000 | 0,0% | Rp0 | 50,2% |
 
 \* Di antara Mitra PLS yang jendela 90 harinya sudah selesai pada akhir simulasi.
 
@@ -78,10 +78,10 @@ Rasio bonus Plan A per bulan (skenario terus):
 | Bulan | Lisensi | Plan A dibayar | Pengisian Pool (top-up) | Mitra aktif |
 |---|---:|---:|---:|---:|
 | 2027-01 | 1 | 0,0% | Rp2.905.405 | 0 / 1 |
-| 2027-02 | 2 | 55,0% | Rp2.350.000 | 1 / 3 |
-| 2027-03 | 6 | 55,0% | Rp7.407.433 | 3 / 9 |
-| 2027-04 | 18 | 55,0% | Rp23.447.299 | 9 / 27 |
-| 2027-05 | 54 | 55,0% | Rp64.816.898 | 27 / 81 |
+| 2027-02 | 2 | 27,0% | Rp2.350.000 | 1 / 3 |
+| 2027-03 | 6 | 32,1% | Rp7.407.433 | 3 / 9 |
+| 2027-04 | 18 | 31,1% | Rp23.447.299 | 9 / 27 |
+| 2027-05 | 54 | 32,7% | Rp64.816.898 | 27 / 81 |
 | 2027-06 | 0 | 0,0% | Rp0 | 0 / 81 |
 | 2027-07 | 0 | 0,0% | Rp0 | 0 / 81 |
 | 2027-08 | 0 | 0,0% | Rp0 | 0 / 81 |

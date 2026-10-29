@@ -113,7 +113,8 @@ export function Aturan() {
                 <td>{rp(PLAN.balikModalBonus)} sekali per identitas</td>
                 <td>
                   Dalam {PLAN.program90Days} hari: {PLAN.balikModalPersonal}{" "}
-                  Lisensi pribadi (kaki kiri dan kanan berisi) dan{" "}
+                  Lisensi pribadi (minimal 1 Mitra baru pribadi di kaki kiri dan 1
+                  di kaki kanan) dan{" "}
                   {PLAN.balikModalTeam} Lisensi dari tim. Syarat program, bukan
                   janji penghasilan
                 </td>
@@ -173,7 +174,10 @@ export function Aturan() {
               </tr>
               <tr>
                 <td>Pool Aktif</td>
-                <td>Sebanding penjualan baru pribadi Mitra PLS aktif</td>
+                <td>
+                  Sebanding penjualan baru pribadi Mitra PLS aktif, paling banyak{" "}
+                  {rp(PLAN.poolMaxPerSale)} per penjualan
+                </td>
                 <td>
                   Sumber: bonus hangus, sisa dana peringkat/leadership,
                   kelebihan batas, Berkah tak terkonfirmasi, dan pengisian sampai{" "}
@@ -205,7 +209,7 @@ export function Aturan() {
                     {r.legPaket.toLocaleString("id-ID")}
                   </td>
                   <td className="r num">{r.directActive}</td>
-                  <td>{r.leaderRank ? `2 ${r.leaderRank}, kaki berbeda` : "–"}</td>
+                  <td>{r.leaderRank ? `2 ${r.leaderRank} disponsori langsung, kaki berbeda` : "–"}</td>
                   <td className="r num">{r.maintainBp / 100}% per kaki</td>
                   <td className="r num">{rp(r.reward)}</td>
                 </tr>
@@ -278,7 +282,8 @@ export function Aturan() {
                 <td>Pengisian Pool Aktif</td>
                 <td className="r">
                   Sampai {pct(PLAN.poolTargetBp / 10_000, 0)} omzet bersih
-                  Lisensi per bulan
+                  Lisensi per bulan, paling banyak {rp(PLAN.poolMaxPerSale)} per
+                  penjualan; sisanya kembali ke perusahaan
                 </td>
               </tr>
               <tr>

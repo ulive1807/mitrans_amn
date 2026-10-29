@@ -136,7 +136,10 @@ export class MitransEngine {
   private companyByMonth = new Map<string, number>();
   private clawbackByMonth = new Map<string, LedgerEntry[]>();
   /** Program 90 hari: penjualan pribadi dan tim yang dihitung dalam jendela 90 hari tiap akun. */
-  private program90Sales = new Map<string, { personal: Set<string>; team: Set<string> }>();
+  private program90Sales = new Map<
+    string,
+    { personal: Set<string>; team: Set<string>; personalLegs: Map<string, Side> }
+  >();
   /** Penjual yang Mitra binaannya sudah memberi Bonus Pendamping kepada Sponsor-nya -> saleId pemicu. */
   private pendampingBySeller = new Map<string, string>();
   /** Bonus Balik Modal per identitas (NIK). */
@@ -476,6 +479,7 @@ export class MitransEngine {
     this.pendingBerkah = this.pendingBerkah.filter((e) => e.saleId !== saleId);
     const program90Affected: string[] = [];
     for (const [id, c] of this.program90Sales) {
+      c.personalLegs.delete(saleId);
       if (c.personal.delete(saleId) || c.team.delete(saleId)) program90Affected.push(id);
     }
     for (const [sellerId, sid] of this.pendampingBySeller)
@@ -628,12 +632,12 @@ export class MitransEngine {
   } {
     const acc = this.mustAccount(accountId);
     const c = this.program90Sales.get(accountId);
-    const node = acc.nodeId ? this.nodes.get(acc.nodeId) : undefined;
     const bm = this.balikModalByNik.get(acc.nik);
+    const sides = [...(c?.personalLegs.values() ?? [])];
     return {
       personal: c?.personal.size ?? 0,
       team: c?.team.size ?? 0,
-      legs: { L: (node?.cumLicenses.L ?? 0) > 0, R: (node?.cumLicenses.R ?? 0) > 0 },
+      legs: { L: sides.includes("L"), R: sides.includes("R") },
       achieved: !!bm && this.isLive(bm),
       endsAt: this.program90End(accountId),
     };
@@ -902,14 +906,20 @@ export class MitransEngine {
     const bucket = (id: string) => {
       let c = this.program90Sales.get(id);
       if (!c) {
-        c = { personal: new Set(), team: new Set() };
+        c = { personal: new Set(), team: new Set(), personalLegs: new Map() };
         this.program90Sales.set(id, c);
       }
       return c;
     };
     const touched: Account[] = [];
     if (this.inProgram90(seller.id, sale.at)) {
-      bucket(seller.id).personal.add(sale.id);
+      const c = bucket(seller.id);
+      c.personal.add(sale.id);
+      // Keputusan Coach: syarat kaki Balik Modal dari Mitra baru yang dijual pribadi, bukan limpahan tim.
+      const buyerNode = this.accounts.get(sale.buyerId)!.nodeId;
+      const side =
+        seller.nodeId && buyerNode ? this.sideUnder(seller.nodeId, buyerNode) : undefined;
+      if (side) c.personalLegs.set(sale.id, side);
       touched.push(seller);
     }
     let cur = seller.sponsorId ? this.accounts.get(seller.sponsorId) : undefined;
@@ -1390,7 +1400,7 @@ export class MitransEngine {
     const poolAvailable = Math.min(poolTotal, poolRoom);
     const activeSales = new Map([...sales].filter(([id]) => active.has(id)));
     const identityTotals = this.identityTotals(settled);
-    const dist = distributePool(poolAvailable, activeSales);
+    const dist = distributePool(poolAvailable, activeSales, PLAN.poolMaxPerSale);
     let poolDistributed = 0;
     for (const [id, share] of dist.shares) {
       const acc = this.accounts.get(id)!;
@@ -1406,8 +1416,10 @@ export class MitransEngine {
       });
       settle(e, pay, closeFriday);
     }
-    // Yang dibagi diambil lebih dulu dari sumber Pool; sisa top-up tidak dibawa ke bulan berikutnya.
-    this.poolCarry = Math.max(0, poolSources - poolDistributed);
+    // Bila ada penerima, sisa Pool (di atas batas per penjualan, sisa pembulatan, dan sisa top-up)
+    // kembali ke perusahaan (keputusan Coach 29 Oktober 2026). Bila tidak ada penerima sama sekali,
+    // sumber Pool dibawa ke bulan berikutnya; top-up tidak pernah dibawa.
+    this.poolCarry = activeSales.size > 0 && dist.perSale > 0 ? 0 : Math.max(0, poolSources - poolDistributed);
 
     // 9. Plan B.
     const subSales = ms.subscriptionSaleIds
@@ -1614,14 +1626,16 @@ export class MitransEngine {
       for (const name of names) if (streaks[name]) top = name;
       acc.rankVerify = top ? { rank: top, ...streaks[top]! } : undefined;
 
-      // Teruskan peringkat bayar ke upline sebagai pemimpin di kaki yang sesuai.
+      // Keputusan Coach: pemimpin dihitung dari Mitra yang disponsori langsung, menurut kaki
+      // biner tempatnya berada di bawah posisi Sponsor.
       const idx = rankIndex(pa);
-      if (idx > 0)
-        this.walkUp(node.id, (anc, side) => {
-          const cur = best.get(anc.id) ?? { L: 0, R: 0 };
-          if (idx > cur[side]) cur[side] = idx;
-          best.set(anc.id, cur);
-        });
+      const sponsorNode = acc.sponsorId ? this.accounts.get(acc.sponsorId)?.nodeId : undefined;
+      const side = idx > 0 && sponsorNode ? this.sideUnder(sponsorNode, node.id) : undefined;
+      if (side) {
+        const cur = best.get(sponsorNode!) ?? { L: 0, R: 0 };
+        if (idx > cur[side]) cur[side] = idx;
+        best.set(sponsorNode!, cur);
+      }
     }
     for (const node of this.nodes.values()) node.monthNet = { L: 0, R: 0 };
     this.rankInputsByMonth.set(month, inputs);
@@ -1645,19 +1659,11 @@ export class MitransEngine {
     const prev = addMonths(month, -1);
     const leaderBest: { L: RankName; R: RankName } = { L: "Member", R: "Member" };
     if (node) {
-      for (const side of ["L", "R"] as const) {
-        const start = side === "L" ? node.left : node.right;
-        const stack: [string, number][] = start ? [[start, 1]] : [];
-        while (stack.length) {
-          const [id, d] = stack.pop()!;
-          const n = this.nodes.get(id)!;
-          const r = this.paidAsRank(n.accountId, prev);
-          if (rankIndex(r) > rankIndex(leaderBest[side])) leaderBest[side] = r;
-          if (d < PLAN.maxLevels) {
-            if (n.left) stack.push([n.left, d + 1]);
-            if (n.right) stack.push([n.right, d + 1]);
-          }
-        }
+      for (const a of this.accounts.values()) {
+        if (a.sponsorId !== accountId || !a.nodeId) continue;
+        const side = this.sideUnder(node.id, a.nodeId);
+        const r = this.paidAsRank(a.id, prev);
+        if (side && rankIndex(r) > rankIndex(leaderBest[side])) leaderBest[side] = r;
       }
     }
     const directActive = [...this.accounts.values()].filter(
@@ -1672,6 +1678,16 @@ export class MitransEngine {
       directActive,
       leaderBest,
     };
+  }
+
+  /** Kaki (kiri/kanan) tempat `nodeId` berada di bawah `ancestorId`; undefined bila bukan keturunannya. */
+  private sideUnder(ancestorId: string, nodeId: string): Side | undefined {
+    let child = this.nodes.get(nodeId);
+    while (child?.parentId) {
+      if (child.parentId === ancestorId) return child.side ?? undefined;
+      child = this.nodes.get(child.parentId);
+    }
+    return undefined;
   }
 
   /** Bonus program 90 hari dibayar setelah masa pengembalian 7 hari kerja; Sponsor pada Jumat berikutnya. */

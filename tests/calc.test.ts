@@ -129,6 +129,15 @@ describe("Pembagian rata dengan batas (Royalti RO, contoh Bab 10.3)", () => {
   });
 });
 
+describe("Pool Aktif: batas per penjualan (keputusan Coach 29 Oktober 2026)", () => {
+  it("bagian per penjualan paling banyak batas; sisanya tidak dibagikan", () => {
+    const r = distributePool(10_000_000, new Map([["a", 2], ["b", 3]]), 500_000);
+    expect(r.perSale).toBe(500_000);
+    expect(r.distributed).toBe(2_500_000);
+    expect(r.remainder).toBe(7_500_000);
+  });
+});
+
 describe("Pool Aktif (Bab 8.4)", () => {
   it("Rp120 juta / 3.000 penjualan = Rp40.000 per penjualan", () => {
     const sales = new Map<string, number>([

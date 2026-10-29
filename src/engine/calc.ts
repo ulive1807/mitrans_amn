@@ -110,6 +110,7 @@ export function allocateEqualWithCap(
 export function distributePool(
   pool: number,
   salesByAccount: Map<string, number>,
+  maxPerSale = Number.POSITIVE_INFINITY,
 ): {
   perSale: number;
   shares: Map<string, number>;
@@ -121,7 +122,7 @@ export function distributePool(
   const shares = new Map<string, number>();
   if (totalSales === 0 || pool <= 0)
     return { perSale: 0, shares, distributed: 0, remainder: Math.max(pool, 0) };
-  const perSale = Math.floor(pool / totalSales);
+  const perSale = Math.min(Math.floor(pool / totalSales), maxPerSale);
   let distributed = 0;
   for (const [id, n] of salesByAccount) {
     const amt = perSale * n;

@@ -81,7 +81,7 @@ Semua persentase di dokumen ini dihitung dari **omzet bersih** (setelah PPN). An
 |---|---|---|---|
 | Fast Start | Rp500.000 per Lisensi | Lisensi dijual langsung dalam 90 hari pertama penjual; lunas; lewat masa pengembalian 7 hari kerja | Penjual |
 | Pendamping | Rp100.000 sekali per Mitra binaan | Mitra yang disponsori langsung menjual Lisensi pertamanya dalam 90 hari pertamanya | Sponsor Mitra binaan |
-| Balik Modal | Rp1.500.000 sekali per identitas | Dalam 90 hari: ≥4 Lisensi pribadi (≥1 di tiap kaki) dan ≥4 Lisensi dijual tim sponsor | Mitra PLS itu |
+| Balik Modal | Rp1.500.000 sekali per identitas | Dalam 90 hari: ≥4 Lisensi pribadi (minimal 1 Mitra baru yang dijual pribadi di kaki kiri dan 1 di kaki kanan; Lisensi Pelanggan dihitung pribadi tetapi tidak mengisi kaki) dan ≥4 Lisensi dijual tim sponsor | Mitra PLS itu |
 
 Yang tidak dihitung untuk ketiganya: pembelian sendiri, akun yang dikendalikan sendiri, pembelian yang dibatalkan atau dikembalikan, dan Langganan.
 
@@ -106,16 +106,16 @@ Volume kaki dihitung dalam **paket setara per bulan** = omzet bersih Lisensi dan
 |---|---:|---:|---:|---|---|---:|
 | Member | 0 | 0 : 0 | 0 | – | – | Rp0 |
 | Builder | 1 | 2 : 2 | 2 | – | 70% per kaki | Rp150.000 |
-| Executive | 2 | 5 : 5 | 3 | 2 Builder, kaki berbeda | 70% per kaki | Rp300.000 |
-| Manager | 3 | 12 : 12 | 4 | 2 Executive, kaki berbeda | 70% per kaki | Rp600.000 |
-| Director | 4 | 25 : 25 | 5 | 2 Manager, kaki berbeda | 80% per kaki | Rp1.200.000 |
-| Senior Director | 5 | 50 : 50 | 6 | 2 Director, kaki berbeda | 80% per kaki | Rp2.400.000 |
-| Emerald | 6 | 100 : 100 | 7 | 2 Senior Director, kaki berbeda | 80% per kaki | Rp4.000.000 |
-| Diamond | 8 | 200 : 200 | 8 | 2 Emerald, kaki berbeda | 80% per kaki | Rp7.500.000 |
-| Double Diamond | 10 | 400 : 400 | 9 | 2 Diamond, kaki berbeda | 80% per kaki | Rp12.500.000 |
-| Crown Diamond | 12 | 750 : 750 | 10 | 2 Double Diamond, kaki berbeda | 80% per kaki | Rp20.000.000 |
-| Ambassador | 15 | 1.500 : 1.500 | 12 | 2 Crown Diamond, kaki berbeda | 80% per kaki | Rp35.000.000 |
-| Royal Crown | 20 | 3.000 : 3.000 | 15 | 2 Ambassador, kaki berbeda | 80% per kaki | Rp50.000.000 |
+| Executive | 2 | 5 : 5 | 3 | 2 Builder, kaki berbeda (disponsori langsung) | 70% per kaki | Rp300.000 |
+| Manager | 3 | 12 : 12 | 4 | 2 Executive, kaki berbeda (disponsori langsung) | 70% per kaki | Rp600.000 |
+| Director | 4 | 25 : 25 | 5 | 2 Manager, kaki berbeda (disponsori langsung) | 80% per kaki | Rp1.200.000 |
+| Senior Director | 5 | 50 : 50 | 6 | 2 Director, kaki berbeda (disponsori langsung) | 80% per kaki | Rp2.400.000 |
+| Emerald | 6 | 100 : 100 | 7 | 2 Senior Director, kaki berbeda (disponsori langsung) | 80% per kaki | Rp4.000.000 |
+| Diamond | 8 | 200 : 200 | 8 | 2 Emerald, kaki berbeda (disponsori langsung) | 80% per kaki | Rp7.500.000 |
+| Double Diamond | 10 | 400 : 400 | 9 | 2 Diamond, kaki berbeda (disponsori langsung) | 80% per kaki | Rp12.500.000 |
+| Crown Diamond | 12 | 750 : 750 | 10 | 2 Double Diamond, kaki berbeda (disponsori langsung) | 80% per kaki | Rp20.000.000 |
+| Ambassador | 15 | 1.500 : 1.500 | 12 | 2 Crown Diamond, kaki berbeda (disponsori langsung) | 80% per kaki | Rp35.000.000 |
+| Royal Crown | 20 | 3.000 : 3.000 | 15 | 2 Ambassador, kaki berbeda (disponsori langsung) | 80% per kaki | Rp50.000.000 |
 
 \* **Tafsiran yang perlu dikonfirmasi:** kolom Excel "PV: transaksi konsumen / bln" dibaca sebagai jumlah transaksi pribadi per bulan (Lisensi atau Langganan pertama Pelanggan).
 
@@ -251,6 +251,17 @@ Asumsi: setiap orang menjual 1 Lisensi di kaki kiri dan 1 di kaki kanan per bula
 | 2 | Kolom Excel "PV: transaksi konsumen / bln" = jumlah transaksi pribadi per bulan | Disetujui |
 | 3 | Syarat aktif setelah 90 hari tetap 2 penjualan per bulan | Disetujui |
 | 4 | Biaya operasional dan workshop bulanan | Masih memakai asumsi 15% + cadangan 4%; angka nyata belum diberikan. Laba ≥15% belum terbukti sampai angka ini ada. |
+
+### 14.1 Keputusan lanjutan (29 Oktober 2026, setelah simulasi engine)
+
+| # | Hal | Keputusan Coach |
+|---|---|---|
+| 5 | Pool Aktif | Pengisian sampai 55% tetap, tetapi bagian Pool **paling banyak Rp500.000 per penjualan**. Bila ada penerima, sisanya kembali ke perusahaan dan tidak dibawa ke bulan berikutnya. |
+| 6 | Syarat kaki Balik Modal | Dari penjualan pribadi: minimal 1 Mitra baru yang dijual pribadi ditempatkan di kaki kiri dan 1 di kaki kanan. Limpahan tim tidak mengisi syarat kaki. |
+| 7 | "2 pemimpin di kaki berbeda" | Dari garis sponsor: pemimpin adalah Mitra yang disponsori langsung, satu berada di kaki kiri dan satu di kaki kanan. |
+| 8 | Bonus pada akun struktural | Tidak dihitung menuju target pengisian Pool. |
+
+Dampak simulasi (skala 1): Plan A dibayar turun dari 55% menjadi 16,5–19,5% omzet bersih Lisensi pada skenario organik 5 tahun (bulan tertinggi sekitar 30%); Pool Aktif 3–7%; Mitra pertama skenario headline Rp9.375.000 dari 90 hari pertama (Rp7.375.000 tanpa Pool). Ada ruang anggaran besar di bawah plafon 60% yang belum dialokasikan.
 
 ## 15. Tahapan sebelum Go Live
 

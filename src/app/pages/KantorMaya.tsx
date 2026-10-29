@@ -152,8 +152,8 @@ function Program90({ engine, accId }: { engine: MitransEngine; accId: string }) 
   const rows: { label: string; value: string; done: boolean }[] = [
     { label: "Lisensi pribadi", value: `${p.personal} / ${PLAN.balikModalPersonal}`, done: p.personal >= PLAN.balikModalPersonal },
     { label: "Lisensi tim", value: `${p.team} / ${PLAN.balikModalTeam}`, done: p.team >= PLAN.balikModalTeam },
-    { label: "Kaki kiri berisi", value: p.legs.L ? "Ya" : "Belum", done: p.legs.L },
-    { label: "Kaki kanan berisi", value: p.legs.R ? "Ya" : "Belum", done: p.legs.R },
+    { label: "Mitra baru pribadi di kaki kiri", value: p.legs.L ? "Ya" : "Belum", done: p.legs.L },
+    { label: "Mitra baru pribadi di kaki kanan", value: p.legs.R ? "Ya" : "Belum", done: p.legs.R },
   ];
   return (
     <Panel

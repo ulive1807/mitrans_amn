@@ -186,3 +186,22 @@ describe("Perbaikan tinjauan akhir: pembatalan dan jendela 90 hari", () => {
     expect(w.engine.program90Progress("A").achieved).toBe(false);
   });
 });
+
+describe("Keputusan Coach: syarat kaki Balik Modal dari penjualan pribadi", () => {
+  it("pembatalan satu-satunya penjualan pribadi di kaki kanan menarik Balik Modal walau kaki kanan masih berisi tim", () => {
+    w.mitra("B", "A", at("2027-01-05"), { leg: "L" });
+    w.mitra("C", "A", at("2027-01-05"), { leg: "R" });
+    w.customer("P1", "A", at("2027-01-06"));
+    w.customer("P2", "A", at("2027-01-06"));
+    w.customer("P3", "A", at("2027-01-06"));
+    w.mitra("B1", "B", at("2027-01-10"));
+    w.mitra("C1", "C", at("2027-01-10"));
+    w.mitra("B11", "B1", at("2027-01-11"));
+    w.mitra("C11", "C1", at("2027-01-11"));
+    const bm = w.entries("A", "BALIK_MODAL")[0];
+    expect(bm).toBeDefined();
+    w.engine.refundSale("L-C", at("2027-01-12"));
+    expect(w.engine.program90Progress("A")).toMatchObject({ personal: 4, legs: { L: true, R: false } });
+    expect(bm.status).toBe("clawback");
+  });
+});
