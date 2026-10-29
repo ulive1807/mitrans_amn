@@ -1,5 +1,5 @@
 /**
- * Parameter Rencana Pemasaran Mitrans-Astra v1.2 (27 Oktober 2026).
+ * Parameter Rencana Pemasaran Mitrans-Astra v1.4 (27 Oktober 2026).
  * Setiap angka di sini dirujuk ke bab dokumen sumbernya. Ubah angka hanya
  * bila dokumen resmi berubah, lalu jalankan ulang `npm test` dan `npm run simulate`.
  *
@@ -9,7 +9,7 @@
  * - persentase disimpan dalam basis poin (1% = 100 bp).
  */
 export const PLAN = {
-  version: "1.2",
+  version: "1.4",
 
   // Bab 3.1 Produk dan harga
   license: {
@@ -17,10 +17,15 @@ export const PLAN = {
     netPrice: 6_756_757, // dasar pengenaan pajak (omzet bersih)
     vat: 743_243,
     pvTenths: 675, // 67,5 PV
-    accessMonths: 3,
+    /** Lisensi tanpa batas waktu (lifetime): tidak perlu dibeli ulang. Keputusan Coach 27 Oktober 2026 (v1.3: akses 3 bulan). */
+    lifetime: true,
+    /** Akses yang sudah termasuk harga Lisensi: 30 hari sejak aktivasi. */
+    accessDays: 30,
   },
+  /** Langganan (RO): setiap pembayaran memperpanjang akses 30 hari; tagihan pertama 30 hari setelah aktivasi Lisensi. */
   subscription: {
     price: 399_000,
+    periodDays: 30,
     netPrice: 359_459,
     vat: 39_541,
     pvTenths: 35, // 3,5 PV
@@ -74,19 +79,29 @@ export const PLAN = {
   identityMonthlyCap: 1_000_000_000,
 
   // Bab 9
-  activeMinPersonalSales: 2,
+  activeMinPersonalSales: 1, // Keputusan Coach 27 Oktober 2026 (dokumen v1.2: 2)
   holdMonths: 2,
-  subscriptionRequiredFromMonth: 4, // bulan ke-4 sejak aktivasi Lisensi
 
   // Bab 5.5 Konversi Lisensi Pelanggan
   conversionWindowDays: 60,
+
+  // Bab 13 / S&K Pasal 7: piutang penarikan bonus yang tidak terpotong (dari transfer bonus maupun hak lain)
+  // dihapus setelah 12 bulan sejak tanggal penarikan. Keputusan Coach 28 Oktober 2026.
+  clawbackWriteOffMonths: 12,
+  /**
+   * Bonus penjualan (Sponsor, Berkah, Level, Pasangan, Pembinaan) yang timbul kurang dari 14 hari lalu belum dihitung
+   * sebagai saldo yang aman dipakai membayar Langganan, karena pembeliannya masih dapat dibatalkan (masa pertimbangan
+   * 10 hari kerja ≈ 14 hari kalender). Mencegah transfer minus akibat penarikan sesudah potongan dijadwalkan.
+   */
+  bonusSafetyDays: 14,
 
   // Bab 12.1 Plafon
   planACapBp: 5000, // 50% omzet bersih Lisensi
   planBCapBp: 4000, // 40% omzet bersih Langganan
 
-  // Bab 12.2 butir 4
-  serviceFundPerLicense: 426_000,
+  // Keputusan A10 (27 Oktober 2026): bonus tim dibayar mingguan dengan cadangan ditahan sampai tutup bulan
+  teamWeeklyAdvanceBp: 8000, // 80% dibayar Jumat, 20% ditahan sampai faktor plafon diketahui
+
 } as const;
 
 export type RankName = (typeof PLAN.ranks)[number]["name"];
@@ -99,7 +114,7 @@ export interface EngineOptions {
    */
   placement: "weaker-leg" | "left-first";
   /**
-   * Plan B mensyaratkan "Langganan sendiri aktif". Bila false, masa akses 3 bulan Lisensi juga dianggap aktif.
+   * Plan B mensyaratkan "Langganan sendiri aktif". Bila false, akses 30 hari pertama yang termasuk Lisensi juga dianggap aktif.
    */
   planBRequiresPaidSubscription: boolean;
   /**
@@ -107,6 +122,8 @@ export interface EngineOptions {
    */
   planACapBp: number;
   planBCapBp: number;
+  /** Jumlah penjualan baru pribadi per bulan untuk status aktif (Bab 9.1). Dokumen: 2. */
+  activeMinPersonalSales: number;
 }
 
 export const DEFAULT_OPTIONS: EngineOptions = {
@@ -114,4 +131,5 @@ export const DEFAULT_OPTIONS: EngineOptions = {
   planBRequiresPaidSubscription: false,
   planACapBp: PLAN.planACapBp,
   planBCapBp: PLAN.planBCapBp,
+  activeMinPersonalSales: PLAN.activeMinPersonalSales,
 };

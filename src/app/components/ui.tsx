@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { Link, NavLink } from "react-router-dom";
 import type { EntryStatus } from "../../engine";
+import { useAuthState } from "../auth";
 
 export function Logo({ small }: { small?: boolean }) {
   return (
@@ -55,8 +56,10 @@ export function TopBar() {
           </NavLink>
           <NavLink to="/aturan">Aturan</NavLink>
           <NavLink to="/daftar">Daftar Mitra PLS</NavLink>
+          <NavLink to="/ebook-saya">E-book saya</NavLink>
           <NavLink to="/mitra">Kantor Maya</NavLink>
           <NavLink to="/admin">Admin</NavLink>
+          <AuthLink />
         </nav>
       </div>
     </header>
@@ -135,4 +138,15 @@ export function Badge({
   children: ReactNode;
 }) {
   return <span className={`badge b-${tone}`}>{children}</span>;
+}
+
+function AuthLink() {
+  const auth = useAuthState();
+  if (auth.mode === "clerk" && auth.signedIn)
+    return (
+      <button className="nav-out" onClick={() => void auth.signOut()} title={auth.contact}>
+        Keluar
+      </button>
+    );
+  return <NavLink to="/masuk">Masuk</NavLink>;
 }

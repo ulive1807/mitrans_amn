@@ -3,14 +3,25 @@ import {
   useContext,
   useMemo,
   useReducer,
+  useState,
   type ReactNode,
 } from "react";
 import {
+  type ControlDetector,
+  CaseManager,
+  AccessControl,
+  PayoutApprovals,
+  EbookStore,
+  Funnel,
+  upcomingSessions,
+  demoStaff,
+  atWib,
   demoScenario,
   runScenario,
   type MitransEngine,
   type MonthReport,
 } from "../engine";
+import { useAuthState } from "./auth";
 
 /**
  * Prototipe: seluruh data berjalan di peramban dari simulasi sintetis yang deterministik.
@@ -19,6 +30,21 @@ import {
  */
 interface DemoState {
   engine: MitransEngine;
+  detector: ControlDetector;
+  cases: CaseManager;
+  access: AccessControl;
+  payouts: PayoutApprovals;
+  /** E-book Mitra PLS (Agent Marketing) dan kunci Sponsor dari pembelian e-book. */
+  ebooks: EbookStore;
+  /** Asesmen, kelas RT3, dan antrean WhatsApp pembeli e-book. */
+  funnel: Funnel;
+  /** "clerk": staf = pengguna Clerk yang masuk, peran dari server; "demo": pemilih "masuk sebagai". */
+  authMode: "clerk" | "demo";
+  /** Staf yang sedang masuk. */
+  staffId: string;
+  setStaffId: (id: string) => void;
+  /** Waktu demo (09.00 WIB pada hari berjalan engine). */
+  now: number;
   reports: MonthReport[];
   lastMonth: string;
   /** Penanda perubahan agar komponen membaca ulang engine setelah aksi. */
@@ -30,16 +56,49 @@ const Ctx = createContext<DemoState | null>(null);
 
 export function DemoProvider({ children }: { children: ReactNode }) {
   const result = useMemo(() => runScenario(demoScenario()), []);
+  const access = useMemo(() => {
+    const ac = new AccessControl();
+    for (const u of demoStaff()) ac.addUser(u);
+    return ac;
+  }, []);
+  const payouts = useMemo(() => new PayoutApprovals(access), [access]);
+  const cases = useMemo(() => seedCases(result.engine, result.detector!, access), [result, access]);
+  const { ebooks, funnel } = useMemo(() => seedEbooks(result.engine), [result]);
+  const [demoStaffId, setStaffIdRaw] = useState("u-budi");
+  const auth = useAuthState();
+  // Mode Clerk: pengguna Clerk dicerminkan ke AccessControl dengan peran dari publicMetadata (sumber kebenaran: server).
+  const clerkStaff = auth.mode === "clerk" && auth.signedIn && auth.userId ? auth.userId : undefined;
+  const roleKey = auth.roles.join(",");
+  useMemo(() => {
+    if (!clerkStaff) return;
+    const first = !access.users.has(clerkStaff);
+    access.addUser({ id: clerkStaff, name: auth.name ?? "Pengguna", title: "Akun Clerk", roles: [...auth.roles], active: true });
+    if (first) access.record(clerkStaff, "Masuk (OTP Clerk)", atWib(result.engine.today, 9));
+  }, [access, clerkStaff, roleKey, auth.name]);
+  const staffId = clerkStaff ?? (auth.mode === "clerk" ? "" : demoStaffId);
   const [version, bump] = useReducer((x: number) => x + 1, 0);
   const value = useMemo<DemoState>(
     () => ({
       engine: result.engine,
+      detector: result.detector!,
+      cases,
+      access,
+      payouts,
+      ebooks,
+      funnel,
+      authMode: auth.mode,
+      staffId,
+      setStaffId: (id: string) => {
+        access.record(id, "Masuk (demo)", atWib(result.engine.today, 9));
+        setStaffIdRaw(id);
+      },
+      now: atWib(result.engine.today, 9),
       reports: result.engine.reports,
       lastMonth: result.engine.reports[result.engine.reports.length - 1].month,
       version,
       bump,
     }),
-    [result, version],
+    [result, cases, access, payouts, ebooks, funnel, staffId, version, auth.mode],
   );
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
@@ -67,4 +126,80 @@ export function currentRank(
   const acc = engine.accounts.get(accountId);
   const r = acc?.ranksAchieved;
   return r && r.length ? r[r.length - 1].rank : null;
+}
+
+/** Kasus contoh untuk demo: satu dari tanda kuat yang belum diperiksa, satu pelanggaran pesan massal yang sudah diputus. */
+function seedCases(engine: MitransEngine, detector: ControlDetector, access: AccessControl): CaseManager {
+  const cm = new CaseManager(engine);
+  const now = atWib(engine.today, 9);
+  const flag = detector.scan(engine).find((f) => f.level === "kuat" && !engine.sales.get(f.saleId)!.review);
+  if (flag) {
+    cm.openCase({
+      accountId: flag.sellerId,
+      violations: [12],
+      allegation: `Penjualan ${flag.saleId} diduga dibeli oleh akun yang dikendalikan penjual untuk memenuhi status aktif.`,
+      evidence: [...flag.reasons.map((r) => `${r} antara akun penjual dan pembeli`), `Skor keterkaitan ${Math.round(flag.score * 100)}% (deteksi otomatis)`],
+      saleIds: [flag.saleId],
+      actor: access.actorName("u-rina"),
+      at: now,
+    });
+  }
+  const other = [...engine.accounts.values()].find((a) => a.role === "mitra" && a.nodeId && a.id !== flag?.sellerId && a.quizPassed);
+  if (other) {
+    const c = cm.openCase({
+      accountId: other.id,
+      violations: [19],
+      allegation: "Mengirim pesan promosi WhatsApp ke grup warga tanpa persetujuan penerima.",
+      evidence: ["Pengaduan Pelanggan melalui layanan pengaduan", "Tangkapan layar pesan grup"],
+      actor: access.actorName("u-rina"),
+      at: now,
+    });
+    cm.submitExplanation(c.id, "Saya mengira grup warga boleh untuk promosi. Saya sudah menghapus pesan dan meminta maaf di grup.", now);
+    cm.decide(c.id, {
+      by: access.actorName("u-budi"),
+      sanctions: ["teguran"],
+      reasons: "Pesan massal tanpa persetujuan melanggar Pasal 18 angka 19; Mitra PLS mengakui dan sudah memperbaiki, sehingga cukup teguran.",
+      at: now,
+    });
+  }
+  return cm;
+}
+
+/** E-book contoh (data sintetis) untuk Mitra PLS demo teratas: satu tayang dengan pembeli, satu menunggu pemeriksaan, satu perlu revisi. */
+function seedEbooks(engine: MitransEngine): { ebooks: EbookStore; funnel: Funnel } {
+  const store = new EbookStore(engine);
+  const funnel = new Funnel(store);
+  const pdf = (name: string) => ({ name, size: 2_400_000, sha256: "0".repeat(56) + "5eed5eed" });
+  const now = atWib(engine.today, 9);
+  const totals = paidTotals(engine);
+  const owners = [...engine.accounts.values()]
+    .filter((a) => a.role === "mitra" && a.quizPassed && !a.terminated && !(a.frozenUntil && a.frozenUntil > now))
+    .sort((a, b) => (totals.get(b.id) ?? 0) - (totals.get(a.id) ?? 0))
+    .slice(0, 3);
+  if (owners.length < 3) return { ebooks: store, funnel };
+  const base = {
+    summary: "Panduan dasar untuk keluarga: istilah penting, cara membaca laporan keuangan, dan risiko yang perlu dipahami sebelum berinvestasi.",
+    webinarOffer: true,
+  };
+  const a = store.create(owners[0].id, { ...base, title: "Mengenal Saham Syariah untuk Keluarga", price: 49_000, lpHeadline: "Belajar saham syariah dari nol, bertahap dan jujur soal risiko", lpBody: "E-book 60 halaman: istilah dasar, cara memilih emiten syariah, dan latihan membaca laporan keuangan. Setelah membeli, Anda dapat memilih kelas webinar RT3 Selasa, Rabu, atau Kamis pukul 19.00 WIB." }, now);
+  store.attachFile(a.id, owners[0].id, pdf(`${a.slug}.pdf`), now);
+  store.submit(a.id, owners[0].id, now);
+  store.review(a.id, "u-rina", "setujui", undefined, now);
+  for (const [i, name] of ["Pembeli Contoh 1", "Pembeli Contoh 2", "Pembeli Contoh 3"].entries()) {
+    const o = store.order(a.slug, { userId: `user_demo_cub_${i + 1}`, name, email: `pembeli${i + 1}@contoh.test`, whatsapp: `08123456780${i}`, waConsent: i !== 1 }, now);
+    if (i < 2) {
+      store.markPaid(o.id, o.price, now);
+      funnel.onPaid(o.id, now);
+      funnel.submitAssessment(o.id, o.userId, { dana_darurat: 1, pengalaman: i, laporan_keuangan: 1, waktu_belajar: 1, risiko: 2 }, now);
+      if (i === 0) funnel.chooseClass(o.id, o.userId, upcomingSessions(now)[0].id, now);
+    }
+  }
+  const b = store.create(owners[1].id, { ...base, title: "Rahasia Cuan dari Saham Syariah", price: 99_000, lpHeadline: "Pasti untung 5% per bulan dengan sinyal beli harian", lpBody: "Ikuti sinyal beli dari kami dan raih passive income. Diawasi OJK." }, now);
+  store.attachFile(b.id, owners[1].id, pdf(`${b.slug}.pdf`), now);
+  store.submit(b.id, owners[1].id, now);
+  const c = store.create(owners[2].id, { ...base, title: "Anggaran Keluarga dan Dana Darurat", price: 25_000, lpHeadline: "Mulai dari dana darurat sebelum berinvestasi", lpBody: "Langkah praktis menyusun anggaran bulanan keluarga." }, now);
+  store.attachFile(c.id, owners[2].id, pdf(`${c.slug}.pdf`), now);
+  store.submit(c.id, owners[2].id, now);
+  store.review(c.id, "u-rina", "revisi", "Tambahkan penjelasan bahwa e-book ini edukasi, bukan nasihat investasi pribadi, dan cantumkan nama penulis.", now);
+  return { ebooks: store, funnel };
 }

@@ -1,6 +1,6 @@
 # Ringkasan Aturan Mitra PLS Mitrans-Astra
 
-Sumber: Rencana Pemasaran v1.2, Kode Etik Mitra PLS v1.2, Syarat dan Ketentuan mitrans.id v1.2 (draf 27 Oktober 2026), dan Catatan untuk Konsultan Hukum v1.1.
+Sumber: Rencana Pemasaran v1.4, Kode Etik Mitra PLS v1.4, Syarat dan Ketentuan mitrans.id v1.4 (draf 27 Oktober 2026), dan Catatan untuk Konsultan Hukum v1.3.
 Seluruh dokumen sumber masih **draf**: belum ditinjau konsultan hukum dan belum diverifikasi asosiasi penjualan langsung.
 
 Kolom **Kode** menunjukkan tempat aturan dijalankan engine (`src/engine/`).
@@ -9,8 +9,8 @@ Kolom **Kode** menunjukkan tempat aturan dijalankan engine (`src/engine/`).
 
 | Produk | Harga (termasuk PPN) | Omzet bersih | PV | Kode |
 |---|---:|---:|---:|---|
-| Lisensi (akses 3 bulan) | Rp7.500.000 | Rp6.756.757 | 67,5 | `PLAN.license` |
-| Langganan (per bulan, mulai bulan ke-4) | Rp399.000 | Rp359.459 | 3,5 | `PLAN.subscription` |
+| Lisensi (tanpa batas waktu/lifetime; termasuk akses 30 hari pertama) | Rp7.500.000 | Rp6.756.757 | 67,5 | `PLAN.license` |
+| Langganan/RO (per 30 hari, mulai 30 hari setelah aktivasi) | Rp399.000 | Rp359.459 | 3,5 | `PLAN.subscription` |
 
 - Harga sama untuk Mitra PLS dan Pelanggan. Tidak ada opsi tahunan. Langganan tanpa Lisensi belum tersedia.
 - 1 PV = Rp100.000 omzet bersih, hanya untuk menghitung bonus.
@@ -34,7 +34,7 @@ Kolom **Kode** menunjukkan tempat aturan dijalankan engine (`src/engine/`).
 
 | Bonus | Nominal | Batas | Penerima | Kode |
 |---|---|---|---|---|
-| Sponsor | Rp750.000 per Lisensi dijual langsung | – | Penjual | `purchaseLicense` |
+| Sponsor | Rp750.000 per Lisensi dijual langsung | Selalu dibayar bila lunas (A4) | Penjual | `purchaseLicense` |
 | Layanan Berkah | Rp50.000 per Lisensi kepada Pelanggan (termasuk yang dikonversi) | Konfirmasi orientasi + 30 hari; tanpa konfirmasi 60 hari → Pool | Penjual | `closeMonth` langkah 1 |
 | Level | Rp750.000 sekali per kedalaman 1–10 saat kedua kaki pertama kali berisi Lisensi **Mitra PLS** | Rp7.500.000 seumur keanggotaan | Pemegang posisi | `markLevel` |
 | Pasangan | Rp150.000 per pasangan | 10 level; 20 pasangan/hari; sisa unit dibawa | Pemegang posisi | `pairDay`, `endOfDay` |
@@ -59,10 +59,13 @@ Syarat Plan B: Langganan sendiri aktif, pernah aktif, dan ≥1 kegiatan pembinaa
 
 ## 5. Status aktif dan masa tunggu
 
-- **Aktif** = ≥2 penjualan baru pribadi dalam bulan kalender: Lisensi Mitra PLS baru yang disponsori, Lisensi Pelanggan lewat tautannya, Langganan berbayar pertama Pelanggannya (sekali per Pelanggan).
+- **Aktif** = ≥1 penjualan baru pribadi dalam bulan kalender (keputusan Coach 27 Oktober 2026; v1.2: 2): Lisensi Mitra PLS baru yang disponsori, Lisensi Pelanggan lewat tautannya, Langganan berbayar pertama Pelanggannya (sekali per Pelanggan).
 - Tidak dihitung: pembelian sendiri, akun yang dikendalikan sendiri, pembelian yang dibatalkan.
 - Level, Pasangan, dan Pembinaan pada bulan tidak aktif **ditahan**; dibayar bila aktif dalam 2 bulan berikutnya; bila tidak, hangus ke Pool Aktif.
-- Mulai bulan ke-4 sejak aktivasi Lisensi, pemegang Lisensi wajib Langganan aktif untuk Bonus Sponsor, Berkah, dan bonus tim.
+- Sesudah 30 hari pertama sejak aktivasi Lisensi, pemegang Lisensi wajib memiliki akses aktif (Langganan) **pada akhir bulan** untuk **bonus tim** (Level, Pasangan, Pembinaan). Bonus Sponsor dan Berkah selalu dibayar (keputusan A4).
+- Pengingat tagihan Langganan: H-7, H-3, H-1, hari jatuh tempo, dan sehari sesudah akses berakhir. Mitra PLS dapat membayar Langganan dari bonus yang belum ditransfer, atas persetujuannya sendiri (`reminders.ts`, `paySubscriptionFromBonus`).
+- Bonus tim dibayar 80% setiap Jumat; 20% setelah tutup bulan sesuai faktor plafon (keputusan A10).
+- Pembatalan menarik otomatis semua bonus yang timbul dari Lisensi itu (keputusan A12).
 
 ## 6. Plafon dan batas
 

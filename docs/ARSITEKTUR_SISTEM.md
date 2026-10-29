@@ -1,18 +1,26 @@
 # Rancangan Sistem Mitrans-Astra Mitra PLS
 
-Status: **prototipe**. Yang ada di repositori ini adalah engine komisi yang teruji, antarmuka web yang berjalan di peramban dengan data sintetis, dan rancangan untuk tahap produksi. Belum ada backend, basis data, autentikasi, pembayaran, maupun data nyata.
+Status: **prototipe**. Yang ada di repositori ini adalah engine komisi yang teruji, antarmuka web yang berjalan di peramban dengan data sintetis, dan rancangan untuk tahap produksi. Belum ada backend, basis data, pembayaran, maupun data nyata. Masuk OTP lewat Clerk sudah dibangun di sisi peramban dan aktif bila publishable key diisi (Bab 9).
 
 ## 1. Yang sudah dibangun
 
 | Bagian | Lokasi | Status |
 |---|---|---|
-| Engine komisi/PV (Plan A + Plan B, plafon, masa tunggu, konversi, pembatalan) | `src/engine/` | Teruji 54 uji unit/integrasi |
+| Engine komisi/PV (Plan A + Plan B, plafon, masa tunggu, konversi, pembatalan) | `src/engine/` | Teruji (100 uji di `tests/`) |
 | Simulasi jaringan buatan (cermin Bab 12.3) | `src/engine/simulation.ts`, `scripts/simulate.ts` | Hasil di `docs/HASIL_SIMULASI.md` |
 | Halaman depan | `/` | Selesai (prototipe) |
 | Ringkasan aturan (dibangun dari konstanta engine) | `/aturan` | Selesai |
 | Pendaftaran Mitra PLS + kuis Kode Etik | `/daftar` | Selesai (data hanya di memori peramban) |
 | Kantor Maya Mitra PLS | `/mitra` | Selesai (data sintetis) |
 | Dasbor admin | `/admin` | Selesai (data sintetis, tanpa otorisasi) |
+| Hak akses per peran, pemisahan tugas, maker-checker, log audit | `src/engine/access.ts`, `/admin` (Masuk sebagai, Pengguna & peran, Log audit) | Teruji (prototipe) |
+| Pemberitahuan tertulis dan tata cara sanksi | `src/engine/sanctions.ts`, `/admin` tab Kasus & sanksi, Kantor Maya tab Pemberitahuan | Teruji (prototipe) |
+| Deteksi akun yang dikendalikan sendiri + alur pemeriksaan | `src/engine/fraud.ts`, `/admin` tab Akun terkendali | Teruji (prototipe) |
+| Penarikan bonus (clawback) dipotong dari transfer + rincian bukti potong PPh 21 per masa | `computeSchedule`, `clawbackStatus`, `buktiPotong`, `buktiPotongMasa`, Kantor Maya tab Pajak & penarikan, Admin tab PPh 21 & bukti potong, `/api/mitra/pajak`, `/api/admin/pph/:masa` | Teruji (prototipe) |
+| PPh 21 bukan pegawai atas bonus (per Jumat), saldo setelah pajak | `src/engine/tax.ts`, `payoutSchedule`, `payoutRuns().tax` | Teruji; rumus perlu dikonfirmasi konsultan pajak |
+| Pengingat tagihan Langganan + bayar Langganan dari bonus | `src/engine/reminders.ts`, `paySubscriptionFromBonus`, Kantor Maya tab Langganan & tagihan, Admin tab Pengingat Langganan, `/api/mitra/langganan` | Teruji (prototipe); belum mengirim surel/WhatsApp |
+| Pemeriksaan sesi Clerk di server + API berizin | `server/` (`npm run server`), `src/app/api.ts` | Teruji 13 uji dengan token bertanda tangan kunci uji; **belum diuji dengan aplikasi Clerk sungguhan** |
+| Masuk dengan kode OTP (Clerk), pengaman `/admin` dan `/mitra` | `src/app/auth.tsx`, `src/app/clerk.tsx`, `src/app/guard.tsx`, `/masuk`, `src/engine/claims.ts` | Mode demo teruji; mode Clerk teruji sampai pemuatan dan penanganan gagal, **belum diuji dengan akun Clerk sungguhan** |
 
 ## 2. Arsitektur engine
 
@@ -41,22 +49,37 @@ Prinsip implementasi:
 - **Waktu WIB**: tanggal, bulan, dan batas Jumat 07.00 WIB (= Jumat 00.00 UTC) dihitung di `time.ts`.
 - **Parameter terpusat** di `plan.ts`. Halaman `/aturan` membaca konstanta yang sama.
 
-## 3. Asumsi kerja (dokumen tidak mengatur; perlu keputusan Coach)
+## 3. Keputusan aturan yang tidak diatur dokumen
 
-| # | Hal | Pilihan di engine | Cara mengubah |
+Seluruh butir A1–A19 **diputuskan Coach pada 27–28 Oktober 2026**. Butir yang mengubah isi Rencana Pemasaran (terutama A1, A4, A10, A12) perlu dicantumkan di dokumen dan dikonfirmasi konsultan hukum sebelum diajukan.
+
+| # | Hal | Keputusan | Kode |
 |---|---|---|---|
-| A1 | Penempatan posisi baru di jaringan biner | Di bawah posisi Sponsor, pada kaki dengan Lisensi lebih sedikit, di ujung terluar kaki itu. Sponsor dapat memilih kiri/kanan | `options.placement`, `legPreference` |
-| A2 | Sponsor tanpa posisi (Mitra PLS tanpa Lisensi) mensponsori Mitra PLS yang membeli Lisensi | Posisi baru ditempatkan di bawah posisi terdekat pada garis Sponsor | `volumeNodeFor` |
+| A1 | Penempatan posisi baru di jaringan biner | Kaki Sponsor yang Lisensinya lebih sedikit, di ujung terluar kaki itu | `options.placement = 'weaker-leg'` |
+| A2 | Sponsor tanpa Lisensi mensponsori Mitra PLS yang membeli Lisensi | Posisi baru di bawah posisi terdekat pada garis Sponsor (aturan A1 tetap berlaku) | `volumeNodeFor` |
 | A3 | Volume Lisensi Pelanggan dari penjual tanpa posisi | Dicatat di posisi terdekat pada garis Sponsor penjual | `volumeNodeFor` |
-| A4 | Bonus Sponsor/Berkah pemegang Lisensi bulan ke-4+ tanpa Langganan | Ditahan 2 bulan seperti bonus tim, lalu hangus ke Pool Aktif | `closeMonth` langkah 2–3 |
-| A5 | "Langganan sendiri aktif" untuk Plan B pada bulan 1–3 | Masa akses Lisensi dianggap aktif | `options.planBRequiresPaidSubscription` |
-| A6 | Konversi: upline di antara posisi baru dan Sponsor | Ikut menghitung (belum pernah menghitung Lisensi itu) | `countedBy` |
+| A4 | Bonus Sponsor/Berkah pemegang Lisensi tanpa Langganan sesudah 30 hari pertama | **Selalu dibayar.** Syarat Langganan hanya untuk bonus jaringan (saran Catatan Hukum butir 4). Teks Bab 9.2 perlu diubah | `closeMonth` langkah 1–2 |
+| A5 | "Langganan sendiri aktif" untuk Plan B selama 30 hari pertama Lisensi | Akses 30 hari pertama dianggap aktif; dinilai pada akhir bulan (v1.3: bulan 1–3) | `options.planBRequiresPaidSubscription = false` |
+| A6 | Konversi: upline di antara posisi baru dan Sponsor | Ikut menghitung (setiap Lisensi dihitung sekali per upline) | `countedBy` |
 | A7 | Generasi Pembinaan melewati Mitra PLS tanpa Lisensi | Tanpa kompresi: bagian generasi itu tidak dibayarkan | `accruePembinaan` |
-| A8 | Klaim Prestasi yang tidak muat di dana bulan ini | Urutan ketat: klaim berikutnya ikut menunggu walau nominalnya lebih kecil | `closeMonth` langkah 5 |
-| A9 | Kelebihan batas Rp1 miliar dari Plan B, sisa Royalti RO, faktor Plan B | Tidak dibawa; tetap pada Perusahaan | `closeMonth` langkah 9 |
-| A10 | Faktor plafon vs pembayaran Jumat | Faktor ditetapkan saat tutup bulan. Bila faktor < 100%, bonus tim dibayar pada Jumat tutup bulan, bukan mingguan | `closeMonth` langkah 4 |
-| A11 | Pool Aktif melebihi ruang plafon Plan A | Sisanya dibawa ke bulan berikutnya | `poolCarry` |
-| A12 | Pembatalan setelah unit dipasangkan | Volume dan saldo dikurangi; bonus pasangan yang sudah timbul ditandai untuk ditinjau admin | `refundSale().needsReview` |
+| A8 | Klaim Prestasi yang tidak muat di dana bulan ini | Urutan ketat | `closeMonth` langkah 5 |
+| A9 | Kelebihan plafon Plan B, batas per identitas Plan B, sisa Royalti RO | Tetap pada Perusahaan | `closeMonth` langkah 9 |
+| A10 | Faktor plafon vs pembayaran Jumat | **Uang muka 80% setiap Jumat**, 20% ditahan sampai tutup bulan lalu dibayar sesuai faktor. Bila faktor < 80%, kelebihan uang muka dipotong dari pembayaran berikutnya | `PLAN.teamWeeklyAdvanceBp`, `advance`/`advanceDate` |
+| A11 | Pool Aktif melebihi ruang plafon Plan A | Dibawa ke bulan berikutnya | `poolCarry` |
+| A12 | Pembatalan setelah unit dipasangkan | **Tarik otomatis** Bonus Sponsor, Berkah, Level, Pasangan, dan Pembinaan dari Lisensi itu; unit pasangannya kembali menjadi sisa. Bila belum dibayar, entri dikurangi; bila sudah, dibuat entri penarikan negatif | `refundSale`, `reverseTeam` |
+| A13 | Syarat aktif (Bab 9.1) | **Paling sedikit 1 penjualan baru pribadi per bulan** (v1.2: 2), setelah perbandingan di `docs/VARIAN_AKTIF.md`. Perlu deteksi akun yang dikendalikan sendiri | `PLAN.activeMinPersonalSales`, `options.activeMinPersonalSales` |
+| A14 | Masa berlaku Lisensi | **Lisensi tanpa batas waktu (lifetime)**, Rp7.500.000 sekali bayar, tidak perlu dibeli ulang (v1.3: akses 3 bulan). Bila Langganan berhenti, Lisensi tetap dan Langganan dapat dilanjutkan kapan saja | `PLAN.license.lifetime` |
+| A15 | Awal dan periode Langganan (RO) | **30 hari pertama sejak aktivasi termasuk Lisensi; tagihan Langganan Rp399.000 pertama pada hari ke-30**, lalu setiap 30 hari. Bayar sebelum jatuh tempo menyambung dari akhir akses (paling banyak 1 periode di muka); bila sudah lewat, periode dimulai saat dibayar. Syarat Langganan bulanan (bonus tim, Plan B) = akses aktif pada akhir bulan (23.59 WIB) | `PLAN.license.accessDays`, `PLAN.subscription.periodDays`, `accessUntil`, `accessActiveAt` |
+| A16 | Rekening dana layanan Rp426.000 per Lisensi (Bab 12.2 butir 4) | **Dihapus**, karena biaya layanan sesudah 30 hari pertama sudah ditanggung Langganan | dihapus dari `PLAN` |
+| A17 | Bayar Langganan dari bonus | Atas persetujuan tegas per pembayaran, dari transfer setelah PPh, hanya Langganan milik sendiri | `paySubscriptionFromBonus`, S&K Pasal 21 angka 7 |
+| A18 | Piutang penarikan bonus yang tidak tertutup | **Dipotong dari hak lain** (pembelian kembali, pengembalian dana, pembayaran lain), **lalu dihapus 12 bulan** sejak tanggal penarikan | `recordOtherEntitlement`, `PLAN.clawbackWriteOffMonths`, `clawbackStatus` |
+| A19 | Hari libur dalam perhitungan sistem | **Tidak memakai kalender hari libur**; semua batas waktu sistem (saldo aman 14 hari, Langganan 30 hari, penghapusan piutang 12 bulan, pengingat) memakai hari kalender, karena bisnis tetap berjalan pada hari libur. Hak Mitra PLS dan Pelanggan yang di dokumen tertulis "hari kerja" tidak diubah | `PLAN.bonusSafetyDays` (hari kalender) |
+| A20 | Tiga domain, satu akun | **Satu badan hukum (PT Mitra Transformasi Inteligensi), satu instance Clerk dengan domain satelit.** affiliatemarketing.network memegang tautan rujukan dan halaman penawaran; mitrans.id memegang akun, Kantor Maya, dan dokumen resmi; atlastrade.io memegang checkout, pembayaran, pengembalian dana, dan akses Lisensi. Sponsor dibawa lewat tiket bertanda tangan dan dikunci saat akun pertama dibuat; pembayaran dan pengembalian dana dikirim lewat webhook bertanda tangan. Pembelian tanpa tiket sah = penjualan langsung Perusahaan | `server/integration.ts`, Bab 14 |
+| A21 | Lokasi akun dan Kantor Maya | **affiliatemarketing.network**: akun, pendaftaran Mitra PLS (gratis, tanpa kewajiban membeli Lisensi), Kantor Maya, Agent Marketing, tautan rujukan, halaman penawaran. **mitrans.id**: profil Perusahaan dan dokumen resmi saja | Bab 15 |
+| A22 | E-book buatan Mitra PLS | Dibuat di Agent Marketing (gratis), **wajib disetujui Kepatuhan sebelum tayang**, harga Rp25.000–Rp150.000, hasil penjualan ke rekening Mitra PLS, **tanpa PV, komisi, atau bonus** | `src/engine/ebook.ts`, izin `konten.tinjau` |
+| A23 | Sponsor dari e-book; tampilan bonus | **Sponsor dikunci saat pembelian e-book pertama lunas** dan tidak berubah; dipakai saat Lisensi dibeli (diutamakan di atas tiket). Kantor Maya menampilkan bonus sebagai tercatat, ditetapkan saat tutup bulan, ditransfer Jumat, dan dapat ditarik selama masa pembatalan 14 hari | `EbookStore.markPaid`, `engine.entryStage` |
+| A24 | Refund dan dana e-book; perjalanan pembeli | Pengembalian dana e-book diproses Perusahaan (≤ 7 hari kerja) dan **ditanggung Mitra PLS**; **penerusan dana e-book ditunda**; kunci Sponsor **permanen**. E-book wajib PDF; unduh setelah asesmen; kelas RT3 Selasa/Rabu/Kamis 19.00 WIB; WhatsApp hanya dengan persetujuan, jam tenang 21.00–07.00, berhenti dengan BERHENTI | `src/engine/funnel.ts` |
+| A25 | Kelas RT3, kehadiran, kuis, rekening | **Kapasitas 1.000 peserta per kelas**; **kehadiran otomatis dari CSV laporan peserta Zoom** (cocok lewat surel pesanan, durasi dijumlahkan, hadir bila ≥ 30 menit, asumsi), dengan tombol manual untuk koreksi. Kuis Kode Etik 7 pertanyaan (lulus bila semua benar) mengaktifkan tautan rujukan; rekening wajib atas nama sendiri; masa pertimbangan 10 hari kerja Senin–Jumat | `Funnel.importZoomAttendance`, `parseZoomParticipants`, `src/engine/quiz.ts` |
 
 ## 4. Temuan dari pengujian yang perlu dibahas
 
@@ -66,6 +89,13 @@ Prinsip implementasi:
    - **Pool Aktif menjadi komponen Plan A terbesar setelah Bonus Sponsor**, dan dinikmati sedikit Mitra PLS yang aktif. Ini perlu dicermati dari sisi keadilan dan pengungkapan penghasilan.
    Angka ini bergantung pada asumsi perilaku simulasi. Sebelum dokumen diajukan, sebaiknya asumsi uji internal yang dipakai di Bab 12.3 ditulis lengkap agar dapat direproduksi.
 3. Pada fase penjualan turun, Pool Aktif dari bonus hangus menekan Plan A sampai plafon 50%. Bila plafon diturunkan ke 40% (catatan hukum butir 1), Pool Aktif akan lebih sering dibawa ke bulan berikutnya.
+
+3. **Lisensi lifetime + Langganan 30 hari setelah aktivasi (A14–A15, v1.4)**, lihat `docs/BANDING_LISENSI_LIFETIME.md`:
+   - Plan A tidak berubah (harga, PV, dan bonus Lisensi sama). Pada skenario 5 tahun, omzet bersih Langganan naik 8,9–9,1% dan Plan B naik 8,6–9,7%, **dengan anggapan retensi tetap 80% per tagihan**. Bila retensi turun ke 60% karena tagihan datang lebih cepat, omzet Langganan justru turun sekitar 18% dibanding v1.3.
+   - Penghasilan tertinggi berubah tidak searah: turun pada dua skenario 70% (mis. Rp408 juta → Rp393 juta), naik pada skenario 30% (Rp1,77 miliar → Rp2,22 miliar). Median tetap Rp0.
+   - Syarat Langganan untuk bonus tim dinilai pada akhir bulan. Pembayaran yang terlambat melewati akhir bulan membuat bonus tim bulan itu ditahan (bukan hangus) dan dilepas bila syarat terpenuhi dalam 2 bulan.
+   - Satu periode 30 hari kadang menutup dua akhir bulan (mis. 31 Januari–2 Maret menutup akhir Januari dan Februari).
+   - Rekening dana layanan Rp426.000 per Lisensi dihapus (A16); biaya layanan sesudah 30 hari pertama ditanggung dari Langganan.
 
 ## 5. Rancangan produksi (usulan, belum dibangun)
 
@@ -78,7 +108,7 @@ Prinsip implementasi:
 | Antrean pekerjaan | Penjadwal untuk akhir hari, Jumat 07.00 WIB, dan tutup bulan | Proses berkala yang dapat diulang |
 | Pembayaran | Payment gateway berizin BI, rekening resmi Perusahaan | S&K Pasal 5 |
 | Verifikasi identitas | Penyedia e-KYC berizin | Satu NIK satu akun, usia ≥18 |
-| Domain | `mitrans.id` (akun, kantor maya), `affiliatemarketing.network` (tautan rujukan, halaman penawaran) | Rencana Pemasaran Bab 2 |
+| Domain | `mitrans.id` (akun, Kantor Maya, dokumen resmi), `affiliatemarketing.network` (tautan rujukan, halaman penawaran), `atlastrade.io` (checkout Lisensi dan Langganan, pengembalian dana, akses aplikasi) | Rencana Pemasaran Bab 2; keputusan A20 |
 
 ### 5.2 Model data inti
 
@@ -106,13 +136,310 @@ NIK disimpan terenkripsi dan di-hash untuk pencarian keunikan (UU 27/2022). Reke
 - **Tutup bulan dapat diulang (deterministik)**: hasil disimpan bersama versi engine dan versi Rencana Pemasaran. Perubahan Rencana Pemasaran berlaku ke depan (Bab 14 butir 5).
 - **Maker-checker** untuk berkas transfer Jumat.
 - **Peran**: Mitra PLS, Pelanggan, CS, Keuangan, Kepatuhan, Admin. NIK dan rekening tidak pernah tampil ke Mitra PLS lain.
-- **Deteksi akun yang dikendalikan sendiri**: rekening, perangkat, alamat, atau nomor telepon yang sama → ditandai untuk ditinjau (Rencana Pemasaran 9.1).
+- **Deteksi akun yang dikendalikan sendiri**: sudah dibangun dalam prototipe (lihat bagian 6). Pada produksi, hash sinyal memakai HMAC-SHA256 dengan kunci rahasia di server, dan sinyal perangkat berasal dari SDK sidik perangkat.
 - **Pengungkapan penghasilan tahunan** dari `ledger_entries` (median, sebaran, porsi tanpa bonus), seperti tabel di `HASIL_SIMULASI.md`.
 
 ### 5.4 Urutan kerja yang disarankan
 
-1. Keputusan konsultan hukum atas butir 1–9 Catatan Hukum dan keputusan Coach atas asumsi A1–A12.
+1. Keputusan konsultan hukum atas butir 1–9 Catatan Hukum, dan pencantuman keputusan A1–A12 ke Rencana Pemasaran.
 2. Backend + PostgreSQL + autentikasi, memindahkan engine ke server.
 3. Integrasi e-KYC dan payment gateway di **staging**.
 4. Uji paralel: tutup bulan dihitung engine dan dicek manual oleh Keuangan selama minimal 2 siklus.
 5. Produksi hanya setelah izin SIUPL terbit dan dokumen diverifikasi asosiasi.
+
+## 6. Deteksi akun yang dikendalikan sendiri
+
+Dasar: Rencana Pemasaran 9.1 (pembelian oleh akun yang dikendalikan sendiri tidak dihitung), Kode Etik Pasal 9 angka 2 (tunda bayar ≤30 hari), Pasal 18 angka 9, 12, 17, dan Pasal 21 (tata cara sanksi). Menjadi wajib setelah keputusan A13 (aktif = 1 penjualan).
+
+**Sinyal dan bobot.** Dua akun dibandingkan pada sinyal yang sama; skor = 1 − Π(1 − bobot).
+
+| Sinyal | Bobot | Catatan |
+|---|---:|---|
+| Rekening bank / sumber pembayaran | 95% | Rekening penerima bonus dan rekening pembayar dibandingkan silang |
+| Nomor telepon | 90% | Dinormalisasi (0812… = +62812…) |
+| Surel | 85% | |
+| Perangkat | 60% | |
+| Alamat | 30% | Tidak pernah cukup sendirian: keluarga serumah wajar |
+| Alamat IP | 20% | Tidak pernah cukup sendirian |
+
+**Tingkat.** Skor ≥85% = **kuat**: pemeriksaan dibuka. 50–85% = **sedang**: dipantau, tanpa tunda bayar. Alamat + IP saja = 44%, tidak ditandai.
+
+**Alur pemeriksaan di engine.**
+
+| Langkah | Akibat |
+|---|---|
+| `openReview` | Bonus Sponsor dan Berkah penjualan itu ditahan saat tutup bulan. Penjualan **tetap dihitung** untuk status aktif selama diperiksa (praduga tak bersalah) |
+| `dismissReview` | Bonus yang ditahan dibayar pada tutup bulan berikutnya |
+| Lewat 30 hari tanpa keputusan | Bonus otomatis dibayar (Kode Etik Pasal 9 angka 2) |
+| `confirmControlled` | Penjualan tidak dihitung; Bonus Sponsor, Berkah, Level, Pasangan, Pembinaan, dan volumenya ditarik. Bila status aktif penjual pada bulan itu hanya karena penjualan ini, bonus tim, Pool Aktif, Royalti, dan Prestasi yang ditetapkan bulan itu ikut ditarik |
+
+**Privasi.** Hanya hash yang disimpan; layar admin menampilkan jenis sinyal (mis. "Rekening bank sama"), bukan nilainya.
+
+**Hasil uji pada data demo sintetis** (`tests/fraud.test.ts`): semua pembelian oleh akun terkendali tertangkap sebagai kuat, dan tidak ada keluarga serumah yang ditandai kuat. Data nyata akan lebih bising; ambang perlu dievaluasi ulang setelah 3 bulan operasi dengan sampel yang diperiksa manual.
+
+**Belum dibangun:** sidik perangkat nyata dan pola waktu (mis. beli–batal berulang di sekitar tutup bulan). Pemberitahuan tertulis dan tata cara sanksi ada di bagian 7.
+
+## 7. Pemberitahuan tertulis dan tata cara sanksi
+
+Dasar: Kode Etik Pasal 7, 9 angka 2, 15, 18, 20, 21, 22.
+
+| Langkah | Aturan | Surat |
+|---|---|---|
+| 1. Kasus dibuka | Wajib menyebut dugaan Pasal 18 dan bukti (Ps. 21.1). Penjualan terkait ditunda bayar ≤30 hari (Ps. 9.2) | Surat Pemberitahuan Dugaan Pelanggaran (`PDP`); Pemberitahuan Penundaan Pembayaran (`PTB`) |
+| 2. Penjelasan | Mitra PLS mengirim lewat Kantor Maya paling lama 14 hari (Ps. 21.2); setelah itu admin dapat mencatat "tanpa penjelasan" | – |
+| 3. Keputusan | Paling lambat 14 hari setelah penjelasan, beralasan tertulis (Ps. 21.3); keterlambatan ditandai | Surat Keputusan (`KEP`) |
+| 4. Keberatan | Sekali, ≤14 hari setelah keputusan; diperiksa pejabat yang bukan pembuka kasus dan bukan pemutus pertama (Ps. 21.4) | Surat Keputusan atas Keberatan (`KKB`) |
+| 5. Final | Keberatan diputus, atau masa keberatan lewat (`tick`) | – |
+
+Nomor surat: `001/KEP-PLS/XI/2026` (urut per jenis per tahun). Surat dikirim ke Kantor Maya dan surel terdaftar; waktu dibaca tercatat saat Mitra PLS membuka halaman Pemberitahuan. Setiap langkah tercatat di jejak kasus.
+
+**Sanksi (Ps. 20) dan akibatnya di engine.**
+
+| Sanksi | Akibat | Kapan berlaku |
+|---|---|---|
+| Teguran tertulis | Tercatat | Saat keputusan |
+| Penarikan | `confirmControlled` untuk penjualan terkait: komisi, volume, dan bila perlu status aktif bulan itu ditarik | Saat keputusan |
+| Pembekuan ≤3 bulan | Tautan rujukan tidak dapat dipakai; komisi yang sudah menjadi hak tetap dihitung | Saat keputusan |
+| Pemutusan | Keanggotaan berakhir; komisi yang sudah menjadi hak tetap dibayar (Ps. 7); hak pembelian kembali (Ps. 15) | **Setelah final**, agar hak keberatan bermakna |
+
+Pemutusan langsung hanya untuk pelanggaran berat Pasal 18 angka 1, 2, 4, 9, 12, 15, 16, atau setelah 2 sanksi final sebelumnya. Bila keberatan mencabut pembekuan atau pemutusan, engine memulihkannya otomatis. Bila keberatan mencabut **penarikan**, pembayaran koreksi dicatat sebagai tindak lanjut manual untuk Keuangan.
+
+**Perlu dikonfirmasi konsultan hukum:** (a) penundaan berlaku pemutusan sampai final, sementara sanksi lain langsung berlaku; (b) ambang eskalasi 2 sanksi final; (c) surat elektronik melalui Kantor Maya dan surel cukup sebagai "pemberitahuan tertulis".
+
+**Belum dibangun:** pengiriman surel sungguhan, lampiran bukti berkas, dan tanda tangan elektronik pejabat. Hak akses per peran ada di bagian 8.
+
+## 8. Hak akses per peran
+
+Satu sumber aturan: `ROLE_PERMISSIONS` di `src/engine/access.ts`. Menu admin hanya menampilkan tab yang diizinkan, dan setiap tindakan diperiksa lagi saat dijalankan (`require`), sehingga tombol yang disembunyikan tidak menjadi satu-satunya pengaman.
+
+| Peran | Izin pokok | Tidak boleh |
+|---|---|---|
+| Admin Sistem | Kelola pengguna dan peran, log audit, simulasi | Memutus kasus, menyiapkan atau menyetujui pembayaran, melihat NIK |
+| Kepatuhan | Deteksi akun terkendali, buka kasus, catat penjelasan, NIK tersamar | Memutus sanksi, memeriksa keberatan |
+| Direksi | Putus sanksi; lihat keuangan, dana, kepatuhan | Memeriksa keberatan, melihat NIK |
+| Pemeriksa Keberatan | Putus keberatan, lihat kasus | Membuka kasus, memutus sanksi pertama |
+| Keuangan | Tutup bulan, siapkan dan setujui berkas transfer, NIK tersamar | Kasus dan sanksi |
+| Layanan Pelanggan | Lihat Mitra PLS dan kasus | Mengubah apa pun |
+
+**Pemisahan tugas.** Ditolak oleh sistem dan dicatat sebagai percobaan yang ditolak:
+- Direksi × Pemeriksa Keberatan (Kode Etik Pasal 21 angka 4), Kepatuhan × Pemeriksa Keberatan, Admin Sistem × Keuangan.
+- Penyiap berkas transfer Jumat tidak boleh menyetujuinya sendiri (maker-checker); nilai berkas dikunci saat disiapkan.
+- Tidak seorang pun dapat mengubah peran atau status dirinya sendiri.
+- Nama pelaku di jejak kasus dan surat diambil dari pengguna yang masuk, bukan diketik.
+
+**Data pribadi (UU 27/2022).** NIK hanya untuk Kepatuhan dan Keuangan, selalu tersamar (`3171********0012`), dan setiap penampilan dicatat. Nomor rekening tidak tampil di layar mana pun. Mitra PLS di Kantor Maya hanya melihat akunnya sendiri dan data jaringan menurut Syarat dan Ketentuan Pasal 23.
+
+**Log audit** mencatat masuk, tindakan berizin, perubahan peran (sebelum → sesudah), penampilan NIK, dan semua percobaan yang ditolak.
+
+**Belum dibangun (produksi):** pemeriksaan izin di server API (autentikasi OTP sisi peramban ada di Bab 9), log audit append-only di basis data, peninjauan hak akses berkala (mis. tiap 3 bulan), dan pemilihan "masuk sebagai" yang kini hanya tampil pada mode demo.
+
+## 9. Masuk dengan kode OTP (Clerk)
+
+**Dua mode, dipilih otomatis dari variabel lingkungan `VITE_CLERK_PUBLISHABLE_KEY`:**
+
+| | Mode demo (kunci kosong) | Mode Clerk (kunci diisi) |
+|---|---|---|
+| Cara masuk | Pemilih "masuk sebagai" (data sintetis) | Kode OTP 6 angka lewat surel atau SMS, tanpa kata sandi |
+| Sumber peran staf | `demoStaff()` | Clerk `publicMetadata.roles` |
+| Kantor Maya | Pilih Mitra PLS mana pun | Dikunci ke `publicMetadata.mitraId` (id atau kode Mitra PLS) |
+| Ubah peran dari layar | Ya (Admin Sistem) | Tidak; hanya dari server |
+| Pustaka Clerk diunduh | Tidak (dimuat terpisah) | Ya (±25 kB gzip + clerk-js dari Clerk) |
+
+**Alur `/masuk`.** Surel atau nomor HP (08…, 62…, +62… dinormalkan ke +62…) → `signIn.create` → kode dikirim (`prepareFirstFactor` `email_code`/`phone_code`) → 6 angka → `attemptFirstFactor` → bila akun mewajibkan faktor kedua: aplikasi autentikator (TOTP) atau SMS → `setActive` → kembali ke halaman asal. Kirim ulang dibatasi 60 detik. Pesan galat dalam bahasa Indonesia (kode salah, kedaluwarsa, terlalu banyak percobaan, belum terdaftar). Tujuan `?next=` hanya boleh jalur di situs ini (`safeNext`) untuk mencegah open redirect.
+
+**Pengaman halaman.** `/admin` memerlukan sesi dan minimal satu peran staf; `/mitra` memerlukan sesi dan `mitraId`. Tanpa sesi → dialihkan ke `/masuk?next=…`. Tanpa peran → halaman "Belum ada akses" beserta masalah metadata (mis. peran tidak dikenal). Bila Clerk gagal dimuat → pesan gagal, bukan layar kosong.
+
+**Peran dibaca secara fail-closed** (`claimsFromMetadata`): peran tidak dikenal diabaikan; rangkap terlarang (mis. Direksi + Pemeriksa Keberatan) membuat **semua** peran staf ditolak sampai diperbaiki. `publicMetadata` hanya dapat diubah dari server Clerk, bukan dari peramban pengguna. Contoh isi:
+
+```json
+{ "roles": ["kepatuhan"] }
+{ "mitraId": "M00042" }
+```
+
+**Yang perlu disiapkan Perusahaan di dasbor Clerk** (nama menu mengikuti dasbor Clerk saat itu; belum diverifikasi dari sesi ini karena situs Clerk tidak terjangkau jaringan sesi):
+1. Buat aplikasi Clerk terpisah untuk staging dan produksi; salin **publishable key** (`pk_test_…`/`pk_live_…`) ke pengaturan lingkungan hosting. **Secret key (`sk_…`) tidak pernah dimasukkan ke variabel `VITE_` atau kode peramban**, dan tidak ditempel di percakapan.
+2. Aktifkan masuk dengan kode verifikasi surel dan/atau SMS; matikan kata sandi bila ingin sepenuhnya tanpa kata sandi. SMS ke nomor Indonesia dapat dikenai biaya dan batasan negara oleh Clerk; periksa paket.
+3. Batasi pendaftaran (mode undangan/terbatas) agar staf tidak dapat mendaftar sendiri; peran hanya diberikan Admin Sistem lewat dasbor atau Backend API.
+4. Wajibkan faktor kedua untuk akun staf (terutama Keuangan dan Direksi) dan atur masa berlaku sesi yang pendek untuk staf.
+5. Tambahkan domain situs ke daftar domain yang diizinkan.
+
+**Batas yang harus diingat.** Pengaman di peramban hanya untuk pengalaman pengguna. Pemeriksaan yang menentukan ada di server (Bab 10).
+
+**Status pengujian.** Mode demo: seluruh uji peramban sebelumnya lulus tanpa perubahan. Mode Clerk dengan kunci sintetis: pengalihan `/admin` menunggu sesi, `/masuk` menolak `next=//situs-lain`, dan saat Clerk tidak terjangkau halaman menampilkan pesan gagal. Alur OTP penuh (kirim kode, verifikasi, faktor kedua) **belum diuji** karena memerlukan aplikasi Clerk sungguhan dan akses jaringan ke Clerk.
+
+## 10. Pemeriksaan sesi Clerk di server
+
+`server/` adalah API Node kecil (tanpa kerangka kerja tambahan) yang menjalankan engine yang sama dengan data sintetis. **Setiap rute `/api` kecuali `/api/kesehatan` menolak permintaan tanpa sesi Clerk yang sah.**
+
+**Urutan pemeriksaan per permintaan** (`server/session.ts`, `server/app.ts`):
+1. Ambil token dari `Authorization: Bearer …` atau cookie `__session`. Cookie hanya diterima untuk membaca (GET); perubahan data wajib lewat header agar tidak bisa dipicu dari situs lain (CSRF).
+2. Verifikasi dengan `verifyToken` dari `@clerk/backend` 2.33.7: tanda tangan RS256, `exp`/`nbf`/`iat` (toleransi jam 5 detik), dan `azp` harus salah satu `CLERK_AUTHORIZED_PARTIES`. Token sesi berstatus `pending` ditolak.
+3. Baca peran **hanya dari Clerk**, tidak pernah dari isi permintaan: klaim `metadata` di token (bila token sesi dikustomisasi berisi `{{user.public_metadata}}`), atau Clerk Backend API (`users.getUser`) dengan cache 60 detik. Bila Clerk API gagal → 503, bukan menebak. Tanpa sumber peran → tanpa peran.
+4. Saring peran fail-closed (`claimsFromMetadata`), cerminkan ke `AccessControl`, lalu `require` izin rute. Penolakan dicatat di log audit.
+5. Mitra PLS hanya mendapat data akun `mitraId` miliknya; meminta akun lain → 403 dan tercatat.
+
+**Rute yang tersedia (contoh pola, data sintetis):**
+
+| Rute | Syarat |
+|---|---|
+| `GET /api/kesehatan` | Terbuka |
+| `GET /api/saya` | Sesi sah (peran, izin, sumber peran) |
+| `GET /api/admin/ikhtisar` | `ikhtisar.lihat` |
+| `GET /api/admin/pembayaran` | `pembayaran.lihat` |
+| `POST /api/admin/pembayaran/:tanggal/siapkan` | `pembayaran.siapkan`; nilai dihitung server dari ledger |
+| `POST /api/admin/pembayaran/:tanggal/setujui` | `pembayaran.setujui`; penyiap tidak boleh menyetujui sendiri |
+| `GET /api/admin/audit` | `audit.lihat` |
+| `GET /api/mitra/ringkasan` | Sesi tertaut `mitraId`; hanya akun sendiri |
+
+**Konfigurasi server** (variabel lingkungan server, bukan `VITE_`; lihat `.env.example`). Server **menolak berjalan** bila tidak ada `CLERK_JWT_KEY`/`CLERK_SECRET_KEY`, bila `CLERK_AUTHORIZED_PARTIES` kosong atau salah format, bila produksi memakai `http://` atau `sk_test_`.
+- `CLERK_JWT_KEY` (disarankan): kunci publik PEM dari dasbor Clerk; verifikasi tanpa panggilan jaringan.
+- `CLERK_SECRET_KEY`: rahasia; hanya di server. Diperlukan bila peran dibaca lewat Backend API.
+- `CLERK_AUTHORIZED_PARTIES`: asal situs, mis. `https://mitrans.id`.
+
+Antarmuka memanggil API dengan `getToken()` Clerk di header (`src/app/api.ts`). Di dasbor Admin mode Clerk tampil penanda "Sesi & peran terverifikasi server", atau peringatan bila server menolak atau peran di server berbeda. Saat pengembangan, Vite meneruskan `/api` ke `127.0.0.1:8787`.
+
+**Hasil uji (`tests/server.test.ts`, 13 uji).** Kunci RSA dibuat saat uji, token ditandatangani dengan `signJwt` dan diverifikasi oleh `verifyToken` Clerk yang sama dengan produksi.
+- Diterima: token sah, dengan peran dari klaim.
+- Ditolak (`401`): tanpa token, kedaluwarsa, asal lain, kunci lain, isi diubah, `alg: none`, dan sesi `pending`.
+- Ditolak (`403`):
+  - peran tanpa izin, dan tercatat di audit;
+  - rangkap peran terlarang;
+  - peran yang diselipkan klien lewat parameter atau header;
+  - perubahan data lewat cookie;
+  - penyiap berkas yang menyetujui sendiri;
+  - Mitra PLS yang meminta akun lain.
+- Sumber peran: cache Backend API, `503` saat Clerk API gagal, dan konfigurasi tidak aman ditolak.
+
+**Belum dibangun / batas:**
+- Belum diuji dengan aplikasi Clerk sungguhan.
+- Sesi yang dicabut tetap lolos sampai token kedaluwarsa. Token sesi Clerk berumur pendek (umumnya sekitar 60 detik), dan pencabutan peran lewat Backend API berlaku paling lambat setelah cache 60 detik.
+- Belum ada pembatasan laju (rate limit), basis data, dan log audit permanen. Data server masih di memori dan hilang saat server dimulai ulang.
+- Belum ada HTTPS sendiri; server ini harus berada di belakang hosting/proxy HTTPS.
+- Pemindahan seluruh fitur Admin dan Kantor Maya ke API belum dilakukan. Halaman masih membaca data sintetis di peramban; baru penanda sesi yang memanggil server.
+
+## 11. Pemeriksaan keamanan dependensi (27 Okt 2026)
+
+- `react-router-dom` dinaikkan 6.28.0 → 6.30.6. Ini menutup 3 temuan tingkat tinggi `npm audit` (open redirect GHSA-2w69-qvjg-hvjx dan GHSA-2j2x-hqr9-3h42).
+- **Tersisa pada paket produksi (sedang), hanya tuntas di React Router 7.18+:**
+  - GHSA-wrjc-x8rr-h8h6: open redirect lewat garis miring terbalik pada `<Link>`/`useNavigate`. Diredam karena satu-satunya tujuan dari luar (`?next=`) disaring `safeNext`, yang menolak `//` dan `/\`.
+  - GHSA-337j-9hxr-rhxg: hanya berlaku pada SSR hydration, yang tidak dipakai aplikasi ini.
+- **Alat pengembangan diperbarui:** Vite 6.0.5 → 6.4.4, Vitest 2.1.8 → 5.0.3, tsx 4.19.2 → 4.23.13 (membawa esbuild baru), dan @vitejs/plugin-react 4.3.4 → 4.7.0. Semua temuan kritis, tinggi, sedang, dan rendah pada alat pengembangan tertutup; `npm audit` kini hanya menyisakan dua temuan React Router di atas.
+- **Catatan pemasangan:** npm 10.9.4 gagal menyusun dependensi Vitest ≥4 (galat `edgesOut`, bug pada peer dependency npm), sehingga `package-lock.json` disusun ulang dengan npm 11.21.0. `npm ci` dengan npm 10 tetap berjalan dari lockfile ini. Versi paket produksi tidak berubah, kecuali `csstype` yang hanya berisi definisi tipe. Bila menambah dependensi baru, pakai npm 11 (`npx npm@11 install …`).
+
+## 12. Pengingat tagihan dan bayar Langganan dari bonus
+
+**Pengingat** (`src/engine/reminders.ts`). Dihitung dari tanggal akhir akses (WIB) setiap pemegang Lisensi: **H-7, H-3, H-1, hari jatuh tempo, dan satu kali sehari sesudah akses berakhir**. Tidak ada pengingat berulang sesudahnya.
+- Isi pesan memuat tanggal, nominal Rp399.000 untuk 30 hari, cara bayar, saldo bonus bila cukup, catatan bahwa bonus tim dinilai pada akhir bulan sedangkan Bonus Sponsor tetap dibayar, dan bahwa Langganan bersifat pilihan.
+- Pesan tidak memakai bahasa menekan atau tenggat palsu; uji memeriksa kata seperti "segera" dan "kesempatan" tidak muncul.
+- Saluran: pemberitahuan di Kantor Maya selalu tampil. Surel dan WhatsApp hanya untuk penerima yang menyetujuinya, dengan pilihan berhenti. **Prototipe belum mengirim pesan apa pun**; pengiriman perlu penyedia pesan dan persetujuan Coach.
+- Staf melihat daftar pengingat hari ini di Admin, tab Pengingat Langganan (izin `mitra.lihat`).
+
+**Bayar dari bonus** (`paySubscriptionFromBonus`). Hanya atas tindakan Mitra PLS sendiri, dengan centang persetujuan di Kantor Maya atau `{"setuju": true}` di API.
+- Saldo yang dapat dipakai = bonus berstatus dibayar yang jadwal transfer Jumatnya belum lewat, dikurangi potongan yang sudah dijadwalkan. Penarikan bonus sejak awal bulan lalu ikut dikurangkan sebagai pengaman. Bonus yang belum ditetapkan pada tutup bulan tidak dihitung.
+- Rp399.000 dipotong dari transfer Jumat terdekat (bila perlu dari beberapa Jumat berurutan). Potongan dicatat terpisah (`payoutDeductions`), sehingga **bonus bruto tidak berubah**; daftar transfer Jumat menampilkan bonus, potongan, dan nilai yang ditransfer, dan berkas maker-checker memakai nilai yang ditransfer.
+- Bila berkas Jumat sudah disiapkan lalu nilainya berubah, Admin menampilkan peringatan untuk menyiapkan ulang.
+- Langganan yang dibayar dari bonus tetap menghasilkan Plan B bagi upline seperti pembayaran biasa. Pembatalan membatalkan potongan yang belum ditransfer.
+- Pembayaran di muka paling banyak satu periode; Pelanggan tidak dapat memakai fitur ini.
+
+**Hal yang perlu diputuskan sebelum produksi:**
+1. ~~Potongan harus diambil dari bonus setelah PPh~~ Sudah dibangun (Bab 13): saldo dan potongan memakai bonus setelah PPh 21.
+2. Klausul "potong bonus" sudah dicantumkan di S&K v1.4 Pasal 21 angka 7 (dirujuk dari Pasal 5), dan jadwal pengingat di Pasal 6. Konsultan hukum perlu menilai butir 19 Catatan Hukum v1.3: apakah fitur ini dapat dibaca sebagai dorongan membeli (Permendag 70/2019 Pasal 21 huruf f dan g), dasar perjumpaan utang, serta perlakuan PPN/PPh. Fitur dibuat pilihan dan tidak otomatis karena alasan itu.
+3. Penyedia surel/WhatsApp, teks persetujuan, dan cara berhenti berlangganan pesan.
+
+## 13. PPh 21 atas komisi dan bonus
+
+`src/engine/tax.ts`. Mitra PLS adalah penerima penghasilan **bukan pegawai** (PMK 168/2023 Pasal 3 ayat (2) huruf l: distributor perusahaan penjualan langsung).
+
+**Rumus:** PPh 21 = tarif Pasal 17 ayat (1) huruf a UU PPh × 50% bonus bruto. Lapisan tarifnya 5% sampai Rp60 juta, 15% sampai Rp250 juta, 25% sampai Rp500 juta, 30% sampai Rp5 miliar, dan 35% di atasnya. Tidak ada penghitungan kumulatif tahunan; PMK 168/2023 menghapus skema "berkesinambungan".
+
+**Penerapan di sistem:**
+- Setiap transfer Jumat adalah satu pembayaran.
+- Lapisan tarif dipakai atas bruto bulan kalender berjalan (masa pajak): pajak suatu Jumat = pajak atas bruto bulan itu sampai Jumat itu − pajak Jumat sebelumnya pada bulan yang sama.
+- Contoh: bruto Rp4.462.707 → DPP Rp2.231.353 → PPh Rp111.567.
+- `payoutSchedule` dan `pendingPayouts` memuat bruto, PPh 21, potongan Langganan, dan nilai transfer per Jumat. `bonusBalance` adalah saldo setelah PPh dan potongan, sehingga bayar dari bonus memakai sisa setelah pajak (S&K Pasal 21 angka 7). Potongan Langganan tidak mengubah PPh, karena dasar pajaknya tetap bonus bruto.
+- Daftar transfer Jumat (Admin, API) memuat kolom PPh 21; nilai yang ditransfer = bruto − PPh − potongan; berkas maker-checker memakai nilai itu.
+
+**Sumber dan batas:** Rangkuman ini diambil dari publikasi pajak sekunder, karena naskah resmi tidak dapat dibuka dari sesi ini. Yang perlu dikonfirmasi konsultan pajak sebelum dipakai dengan uang sungguhan:
+- masa pajak sebagai satuan lapisan tarif (dibanding per pembayaran);
+- tambahan 20% bagi penerima tanpa NPWP: tersedia per akun (`withoutNpwp`) tetapi tidak aktif secara bawaan, karena NIK kini berfungsi sebagai NPWP dan sumber yang ditemukan tidak seragam;
+- perlakuan pajak atas penarikan bonus (lihat di bawah);
+- pembulatan;
+- kode objek pajak 21-100-04 (menurut sumber sekunder) dan format unggah e-Bupot BP21 di Coretax.
+
+### 13.1 Penarikan bonus (clawback)
+
+Penarikan timbul bila pembelian dibatalkan sesudah bonusnya ditetapkan (S&K Pasal 7; keputusan A12). Prosesnya:
+1. Setiap penarikan dialokasikan, menurut urutan waktu, ke transfer Jumat berikutnya **sesudah** tanggal penarikan, sebanyak bonus bruto yang tersedia pada Jumat itu.
+2. Pada Jumat itu, **bruto kena pajak = bonus bruto − penarikan**, lalu PPh 21 dihitung dari sana. Penarikan mengoreksi pajak tanpa membuat PPh negatif.
+3. Bagian yang belum dapat dipotong menjadi **piutang penarikan** (keputusan A18). Piutang dipotong menurut urutan waktu:
+   - dari transfer bonus berikutnya;
+   - dari **hak lain** Mitra PLS yang dibayar Perusahaan (pembelian kembali Lisensi, pengembalian dana, atau pembayaran lain), yang dicatat Keuangan lewat `recordOtherEntitlement`: piutang ditutup lebih dulu, sisanya dibayarkan. Hak yang dibayar sebelum penarikan tidak dipakai untuk penarikan itu.
+
+   Sisa yang belum terpotong **12 bulan sejak tanggal penarikan dihapus** (`PLAN.clawbackWriteOffMonths`). Sesudah itu sisa tersebut tidak mengurangi saldo dan tidak dipotong dari bonus atau hak berikutnya. Selama piutang ada, saldo bayar-Langganan-dari-bonus ikut berkurang.
+4. Nilai yang ditransfer = bruto − penarikan − PPh 21 − potongan Langganan. Semua dihitung ulang dari ledger, sehingga tidak ada saldo tersimpan yang bisa tidak sinkron.
+
+Pajak: penarikan yang dipotong dari transfer bonus mengurangi bruto kena pajak transfer itu. Penarikan yang ditutup dari hak lain, maupun piutang yang dihapus, tidak mengubah PPh yang sudah dipotong; perlakuannya perlu dinilai konsultan pajak (Catatan Hukum butir 19 dan A18).
+
+**Pencegahan transfer minus** (keputusan Coach 28 Oktober 2026: tombol tidak aktif bila bonus tidak mencukupi):
+1. **Saldo aman** (`bonusBalanceDetail`) = bonus yang belum ditransfer setelah PPh dan potongan, **dikurangi bonus penjualan** (Sponsor, Berkah, Level, Pasangan, Pembinaan) **yang timbul kurang dari 14 hari lalu** (`PLAN.bonusSafetyDays`, karena pembeliannya masih dapat dibatalkan), dikurangi piutang penarikan, dan dikurangi kekurangan transfer sebelumnya. Potongan Langganan hanya dialokasikan dari bagian aman tiap Jumat.
+2. **Tombol "Bayar dari bonus" selalu tampil tetapi tidak aktif** bila saldo aman kurang dari Rp399.000, periode berikutnya sudah dibayar, atau keanggotaan diputus. Alasannya ditampilkan, termasuk berapa bonus yang tertahan masa pembatalan. Engine dan API menolak dengan aturan yang sama, sehingga tombol tidak dapat diakali.
+3. **Pengaman terakhir:** bila suatu Jumat tetap minus (mis. penarikan atas penjualan lama karena akun terkendali), nilai transfer Jumat itu menjadi Rp0 dan kekurangannya dipindah ke Jumat berikutnya (`carriedIn`). Kekurangan yang belum tertutup mengurangi saldo aman.
+
+Tampilan: Kantor Maya (tab Pajak & penarikan) menunjukkan sumber potongan (transfer atau hak lain) dan tanggal hapus. Admin (tab PPh 21 & bukti potong, panel Piutang penarikan & hak lain) menampilkan daftar piutang dan formulir pencatatan hak lain; hanya peran dengan izin `pembayaran.siapkan`, dan setiap pencatatan masuk log audit. API: `POST /api/admin/hak-lain`.
+
+### 13.2 Rincian bukti potong PPh 21
+
+`buktiPotong(akun, masa)` merangkum semua transfer pada masa pajak itu per Jumat: bruto, penarikan, bruto kena pajak, DPP 50%, dan PPh 21, beserta nomor internal `BP21/YYYYMM/kode`, kode objek pajak, dan penanda masa selesai atau sementara.
+- **Mitra PLS:** tab Pajak & penarikan di Kantor Maya (dapat dicetak), total tahun berjalan sebagai kredit pajak SPT Tahunan, dan daftar penarikan beserta Jumat tempat dipotong.
+- **Keuangan:** tab PPh 21 & bukti potong di Admin (izin `pembayaran.lihat`), rekap per masa dan ekspor CSV. NIK tersamar, dan setiap ekspor dicatat di log audit.
+- **Bukan bukti potong resmi.** Bukti potong BP21 diterbitkan melalui Coretax DJP; data ini bahan untuk mengisinya. Ekspor dengan NIK lengkap untuk pelaporan harus dari server, dengan izin khusus dan log audit (belum dibangun). Nomor resmi, NPWP/NITKU pemotong, dan penandatangan juga belum dibangun.
+
+## 14. Integrasi affiliatemarketing.network dan atlastrade.io (keputusan A20)
+
+Keputusan Coach (28 Oktober 2026): ketiga domain dikelola **PT Mitra Transformasi Inteligensi**; login memakai **Clerk dengan domain satelit**; **pembayaran, pembatalan, dan pengembalian dana terjadi di atlastrade.io**; S&K dan Kode Etik menyebut mitrans.id, affiliatemarketing.network, dan atlastrade.io sebagai domain resmi.
+
+**Alur pengguna:** klik tautan Mitra PLS → checkout atlastrade.io → daftar sekali dengan OTP → bayar lewat kanal resmi → Kantor Maya di mitrans.id tanpa daftar ulang. Ketiga domain memakai satu instance Clerk (satu domain utama, dua domain satelit).
+
+| Langkah | Yang terjadi | Kode |
+|---|---|---|
+| 1. Tautan rujukan | `GET /r/KODE` di affiliatemarketing.network. Bila Mitra PLS aktif (lulus kuis, tidak dibekukan atau diputus), server membuat **tiket rujukan** (kode sponsor, nomor unik, terbit, berakhir 72 jam) yang ditandatangani HMAC-SHA256, lalu mengarahkan (302) ke `ATLAS_CHECKOUT_URL?t=<tiket>`. Tiket tidak berisi data pribadi. Tautan tidak aktif → 404 | `referral`, `signTicket` |
+| 2. Checkout | atlastrade.io memeriksa tiket dengan rahasia yang sama (`RUJUKAN_TICKET_SECRET`) dan menyimpannya bersama pesanan. Pengguna masuk dengan Clerk (sesi berlaku di ketiga domain). Nama dan NIK diisi **sekali** di checkout | di atlastrade.io |
+| 3. Webhook | atlastrade.io mengirim `POST /api/integrasi/atlastrade` dengan header `X-Atlas-Signature: t=<detik>,v1=<HMAC-SHA256 hex atas "t.isi">`. Ditolak (401) bila tanda tangan salah, isi diubah, atau selisih waktu > 5 menit. Peristiwa bernomor sama hanya diproses sekali | `verifyWebhook`, `parseEvent` |
+| 4a. `license.activated` | Pengguna sudah dikenal (ID Clerk tertaut) → Lisensi dicatat untuk akun itu; **sponsor tidak berubah** walau membawa tiket lain. Pengguna baru → akun Pelanggan dibuat dengan sponsor dari tiket. Tiket tidak sah, kedaluwarsa, atau sponsornya tidak aktif → **penjualan langsung Perusahaan** (MITRANS-001), alasannya dicatat. Pengguna baru tanpa nama/NIK → 422 | `applyEvent` |
+| 4b. `subscription.paid` | Langganan Rp399.000 dicatat; akses diperpanjang 30 hari (aturan A15) | `paySubscription` |
+| 4c. `sale.refunded` | Pembatalan atau pengembalian dana dicatat; bonus ditarik (A12, Bab 13.1) | `refundSale` |
+
+**Konfigurasi** (`server/main.ts`, fail-closed): `RUJUKAN_TICKET_SECRET` dan `ATLAS_WEBHOOK_SECRET` masing-masing ≥ 32 karakter dan berbeda; `ATLAS_CHECKOUT_URL` wajib https di produksi; ketiganya diisi sekaligus atau tidak sama sekali (integrasi nonaktif). `CLERK_AUTHORIZED_PARTIES` perlu memuat asal ketiga domain. Rahasia disimpan di pengelola rahasia server, tidak pernah di repositori atau di aplikasi peramban.
+
+**Pengaturan Clerk (dikerjakan pemilik akun Clerk, belum dilakukan):** domain utama dan domain satelit ditambahkan di dasbor Clerk, DNS diverifikasi, lalu aplikasi satelit dijalankan dengan `isSatellite` dan `domain`/`signInUrl` sesuai dokumentasi Clerk terbaru. Ketersediaan fitur pada paket Clerk yang dipakai perlu diperiksa sebelum produksi.
+
+**Keterbatasan prototipe (belum dibangun):**
+- Tautan ID Clerk → akun disimpan di memori server; di produksi disimpan di basis data (dan `publicMetadata.mitraId`), termasuk untuk Pelanggan.
+- Daftar peristiwa yang sudah diproses juga di memori; di produksi berupa tabel dengan kunci unik nomor peristiwa, ditulis dalam transaksi yang sama dengan penjualan.
+- Waktu bayar dari atlastrade.io (`paidAt`) dipakai apa adanya; di produksi harus dibatasi (tidak di masa depan, tidak sebelum tutup bulan yang sudah final).
+- Rotasi rahasia (dua rahasia berlaku bersamaan selama pergantian) dan antrean ulang di sisi atlastrade.io belum ada.
+- Engine mewajibkan NIK untuk setiap pembeli (satu identitas satu akun); karena itu NIK diminta sekali di checkout dan diteruskan lewat webhook. Pembagian data di dalam PT yang sama tetap harus dijelaskan di Kebijakan Privasi (UU PDP).
+
+**Dokumen (draf v1.4, perubahan terlacak 28 Oktober 2026):** S&K Pasal 1, 2, 5, 7, dan 11; Kode Etik Pasal 1 (definisi Halaman Pembayaran), 12, 15, dan 18 angka 15 (penomoran larangan tidak berubah); Rencana Pemasaran Bab 2 dan Bab 6; Catatan Konsultan Hukum butir 20 Bagian 1 dan A20. Nama PT diisi "PT Mitra Transformasi Inteligensi" dengan tanda ejaan sesuai akta ●.
+
+**Spesifikasi untuk tim atlastrade.io:** `docs/SPESIFIKASI_INTEGRASI_ATLASTRADE.md` (format tiket, webhook, kode jawaban, vektor uji yang diperiksa otomatis oleh `tests/integration-spec.test.ts`, dan daftar uji staging).
+
+## 15. Agent Marketing, e-book Mitra PLS, dan alur flywheel (keputusan A21–A23)
+
+Keputusan Coach (28 Oktober 2026), berdasarkan alur: konten media sosial → pembelian e-book di halaman penawaran Mitra PLS → notifikasi WhatsApp, asesmen, unduh e-book, pilih kelas webinar RT3 (Selasa/Rabu/Kamis 19.00 WIB) → penawaran Lisensi di webinar → bayar di atlastrade.io → bonus tercatat di Kantor Maya → aktivasi afiliasi dan workshop 2 hari → Mitra PLS baru membuat e-book.
+
+| Bagian | Yang dibangun (prototipe) | Kode |
+|---|---|---|
+| Pengajuan e-book | Mitra PLS membuat e-book dan LP (judul, ringkasan, harga, isi LP, tawaran webinar RT3). Kata berisiko ditandai saat mengetik (janji untung, imbal hasil per periode, sinyal beli/jual, klaim izin OJK/MUI/BEI, Lisensi gratis). Status: draf → diajukan → disetujui / perlu revisi / ditolak; yang tayang dapat ditarik. Mengubah e-book yang tayang mengembalikannya ke draf | `EbookStore.create/update/submit`, `scanCompliance`, Kantor Maya → Agent Marketing |
+| Persetujuan | Peran Kepatuhan (izin `konten.tinjau`): antrean, pratinjau LP dengan kata berisiko ditandai, keputusan dengan catatan wajib untuk revisi/tolak/tarik; pembuat tidak dapat memeriksa e-book sendiri; setiap keputusan masuk log audit | `EbookStore.review/withdraw`, Admin → Pemeriksaan e-book, `POST /api/admin/ebook/:id/putuskan` |
+| LP dan pesanan | `GET /e/:slug` hanya untuk e-book yang disetujui (versi yang disetujui) dan pemilik yang masih boleh menjual. CUB masuk dengan OTP, mengisi nama, surel, WhatsApp, dan persetujuan WhatsApp | `EbookStore.live/order`, `POST /api/ebook/:slug/pesan` |
+| Pembayaran e-book | Kabar Xendit `POST /api/integrasi/xendit/ebook`, diverifikasi token callback (`XENDIT_CALLBACK_TOKEN`, ≥ 32 karakter, dibandingkan waktu-konstan). Nominal harus sama dengan harga. Lunas → Sponsor dikunci bila pembeli belum punya kunci dan belum punya akun | `EbookStore.markPaid` |
+| Lisensi | `license.activated` dari atlastrade.io: Sponsor dari kunci e-book → tiket → penjualan langsung Perusahaan | `server/app.ts` |
+| Tampilan bonus | Kolom tahap di Komisi & bonus: "Tercatat · ditetapkan saat tutup bulan", "Tercatat · ditransfer <Jumat>", "Ditransfer <Jumat>", dan "Dapat ditarik bila pembelian dibatalkan s.d. <tanggal>" | `engine.entryStage` |
+
+| Berkas e-book | PDF wajib sebelum diajukan (tanda awal `%PDF-`, ≤ 20 MB, SHA-256); mengganti berkas mengembalikan ke draf. Unduhan hanya untuk pembeli lunas yang sudah asesmen | `EbookStore.attachFile`, `Funnel.canDownload` |
+| Asesmen dan kelas RT3 | Asesmen 5 pertanyaan → tingkat belajar (dasar/menengah/lanjut; bukan profil risiko). Kelas Selasa/Rabu/Kamis 19.00 WIB, kapasitas 1.000, pemilihan ditutup 60 menit sebelum mulai; kehadiran dari laporan Zoom (CSV) atau manual setelah kelas dimulai (izin `kelas.kelola`). Halaman pembeli `/ebook-saya`: asesmen, unduh, pilih kelas, berhenti WhatsApp | `Funnel`, Admin → Kelas RT3 & WhatsApp |
+| WhatsApp | Antrean pesan: lunas, pengingat H-1 (19.00) dan 1 jam sebelum kelas. Hanya dengan persetujuan; jam tenang 21.00–07.00 WIB; mengganti kelas membatalkan pengingat lama; balasan BERHENTI membatalkan semua pesan | `WhatsAppQueue` |
+| Aktivasi afiliasi | `POST /api/aktivasi-afiliasi` (sesi Clerk yang sama dari tombol di atlastrade.io): Pelanggan pemegang Lisensi dikonversi dalam 60 hari (posisi di bawah Sponsor yang sama, Bonus Sponsor tidak dibayar lagi); pengguna tanpa akun didaftarkan gratis sebagai Mitra PLS dengan Sponsor dari e-book (atau MITRANS-001). Kantor Maya menampilkan batas 60 hari per Pelanggan | `server/app.ts`, Rujukan & orientasi |
+
+**Belum dibangun:** invoice Xendit dan penerusan dana e-book (ditunda, keputusan A24), penyimpanan berkas PDF dan tautan unduh bertanda tangan, penyedia WhatsApp dan penerima balasan masuk, tautan Zoom per kelas dan pengambilan laporan Zoom lewat API (sekarang unggah CSV), verifikasi rekening ke bank, penyimpanan permanen.

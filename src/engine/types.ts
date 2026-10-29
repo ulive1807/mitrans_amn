@@ -19,7 +19,7 @@ export interface Account {
   mitraSince?: number;
   /** Lulus kuis Kode Etik sehingga tautan rujukan aktif (Bab 6 butir 7). */
   quizPassed: boolean;
-  /** Aktivasi Lisensi pertama milik akun ini (untuk syarat Langganan bulan ke-4 dan masa akses). */
+  /** Aktivasi Lisensi pertama milik akun ini (akses 30 hari pertama dihitung dari sini). */
   licenseActivatedAt?: number;
   /** Id node jaringan biner. Hanya Mitra PLS pemegang Lisensi. */
   nodeId?: string;
@@ -28,6 +28,13 @@ export interface Account {
   /** Peringkat yang sudah tercapai (sekali per identitas). */
   ranksAchieved: { rank: RankName; at: number; claimed: boolean }[];
   terminated?: boolean;
+  terminatedAt?: number;
+  /** Pembekuan keanggotaan sebagai sanksi (Kode Etik Pasal 20 angka 4): tidak dapat menjual sampai waktu ini. */
+  frozenUntil?: number;
+  /** Penerima tanpa NPWP (NIK tidak dapat dipakai sebagai NPWP): tarif PPh 21 20% lebih tinggi. */
+  withoutNpwp?: boolean;
+  /** Rekening transfer bonus atas nama sendiri. */
+  bank?: { bank: string; number: string; holder: string; savedAt: number };
 }
 
 export interface BinaryNode {
@@ -69,10 +76,24 @@ export interface Sale {
   orientationConfirmedAt?: number;
   /** Langganan berbayar pertama Pelanggan ini (dihitung sebagai penjualan baru pribadi). */
   firstPaidSubscription?: boolean;
-  /** Langganan: bulan akses yang dibayar. */
-  forMonth?: string;
+  /** Periode akses yang dibayar Langganan ini: [mulai, akhir). */
+  periodStart?: number;
+  periodEnd?: number;
+  /** Cara bayar Langganan: kanal resmi Perusahaan atau potongan dari bonus yang belum ditransfer. */
+  paidFrom?: "kanal_resmi" | "bonus";
   cancelled?: boolean;
   cancelledAt?: number;
+  /** Pemeriksaan akun yang dikendalikan sendiri (Kode Etik Pasal 9 dan 21). */
+  review?: {
+    openedAt: number;
+    reason: string;
+    dismissedAt?: number;
+    confirmedAt?: number;
+    /** Tunda pembayaran berakhir karena lewat 30 hari tanpa keputusan. */
+    expiredAt?: number;
+  };
+  /** Terkonfirmasi dibeli oleh akun yang dikendalikan penjual: tidak dihitung dan bonusnya ditarik. */
+  controlled?: boolean;
   /** Node tempat volume Lisensi ini dicatat. */
   volumeNodeId?: string;
   /** Node yang sudah menghitung Lisensi ini (agar konversi tidak menghitung ulang). */
@@ -108,6 +129,8 @@ export const PLAN_B_TYPES: BonusType[] = [
   "ROYALTI_RO",
 ];
 export const TEAM_TYPES: BonusType[] = ["LEVEL", "PASANGAN", "PEMBINAAN"];
+/** Bonus yang timbul dari satu penjualan dan dapat ditarik bila penjualan itu dibatalkan. */
+export const SALE_DRIVEN_TYPES: BonusType[] = ["SPONSOR", "BERKAH", "LEVEL", "PASANGAN", "PEMBINAAN"];
 
 export const BONUS_LABEL: Record<BonusType, string> = {
   SPONSOR: "Bonus Sponsor",
@@ -139,6 +162,38 @@ export type EntryStatus =
   /** Ditarik kembali karena pembelian dibatalkan/dikembalikan. */
   | "clawback";
 
+/** Hak Mitra PLS selain bonus yang dibayar Perusahaan, dan dapat dipakai menutup piutang penarikan bonus. */
+export type OtherEntitlementKind = "pembelian_kembali" | "pengembalian_dana" | "lainnya";
+
+export const OTHER_ENTITLEMENT_LABEL: Record<OtherEntitlementKind, string> = {
+  pembelian_kembali: "Pembelian kembali Lisensi",
+  pengembalian_dana: "Pengembalian dana",
+  lainnya: "Pembayaran lain dari Perusahaan",
+};
+
+export interface OtherEntitlement {
+  id: string;
+  accountId: string;
+  kind: OtherEntitlementKind;
+  /** Nominal hak sebelum dipotong piutang penarikan. */
+  amount: number;
+  at: number;
+  note?: string;
+}
+
+/**
+ * Potongan transfer Jumat untuk membayar Langganan dari bonus.
+ * Dicatat terpisah dari ledger: bonus bruto (dasar pajak) tidak berubah, yang berkurang hanya nilai transfer.
+ */
+export interface PayoutDeduction {
+  saleId: string;
+  accountId: string;
+  /** Jumat transfer yang dipotong (YYYY-MM-DD). */
+  date: string;
+  amount: number;
+  cancelled?: boolean;
+}
+
 export interface LedgerEntry {
   id: number;
   accountId: string;
@@ -155,12 +210,17 @@ export interface LedgerEntry {
   /** Bulan penetapan (tutup bulan) atau Jumat mingguan. */
   settledMonth?: string;
   payoutDate?: string;
+  /** Uang muka bonus tim yang dibayar pada Jumat mingguan (keputusan A10). Sisanya dibayar pada `payoutDate`. */
+  advance?: number;
+  advanceDate?: string;
   saleId?: string;
   /** Untuk Bonus Pembinaan: generasi. Untuk Bonus Level: kedalaman. */
   ref?: number;
   note?: string;
   /** Bulan terakhir masa tunggu untuk bonus yang ditahan. */
   holdUntil?: string;
+  /** Ditahan karena pemeriksaan akun (bukan masa tunggu tidak aktif). */
+  reviewHold?: boolean;
 }
 
 export interface RankClaim {
@@ -227,6 +287,6 @@ export interface MonthReport {
   heldAmount: number;
   forfeitedAmount: number;
   companyStructural: number;
-  /** Bonus pemegang Lisensi bulan ke-4+ yang tertahan karena Langganan tidak aktif. */
+  /** Bonus pemegang Lisensi yang tertahan karena Langganan tidak aktif. */
   heldNoSubscription: number;
 }

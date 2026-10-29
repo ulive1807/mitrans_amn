@@ -25,15 +25,31 @@ import {
   wibDate,
   wibMonth,
 } from "./time";
+import { PPH21, dppOf, withholdBySchedule, type BuktiPotong, type ClawbackStatus, type PayoutScheduleLine } from "./tax";
+
+const DAY_MS = 86_400_000;
+/** Tanggal YYYY-MM-DD ditambah n bulan kalender (tanggal akhir bulan disesuaikan). */
+function addMonthsToDate(date: string, n: number): string {
+  const [y, m, d] = date.split("-").map(Number);
+  const idx = y * 12 + (m - 1) + n;
+  const ny = Math.floor(idx / 12);
+  const nm = (idx % 12) + 1;
+  const last = new Date(Date.UTC(ny, nm, 0)).getUTCDate();
+  return `${ny}-${String(nm).padStart(2, "0")}-${String(Math.min(d, last)).padStart(2, "0")}`;
+}
 import {
   PLAN_A_TYPES,
   PLAN_B_TYPES,
+  SALE_DRIVEN_TYPES,
   TEAM_TYPES,
   type Account,
   type BinaryNode,
   type BonusType,
   type LedgerEntry,
   type MonthReport,
+  type OtherEntitlement,
+  type OtherEntitlementKind,
+  type PayoutDeduction,
   type PoolSources,
   type RankClaim,
   type Sale,
@@ -112,15 +128,22 @@ export class MitransEngine {
   private readonly months = new Map<string, MonthState>();
   private readonly pendingByMonth = new Map<string, LedgerEntry[]>();
   private held: LedgerEntry[] = [];
+  private reviewHeld: LedgerEntry[] = [];
   private pendingBerkah: LedgerEntry[] = [];
   /** Kekurangan bayar bonus tim karena faktor plafon; dibayar lebih dulu bulan berikutnya. */
   private teamCarry: LedgerEntry[] = [];
   private poolCarry = 0;
   private touchedToday = new Set<string>();
-  private subscriptionsPaid = new Map<string, Set<string>>();
+  /** Periode akses dari Langganan per akun (Lisensi memberi 30 hari pertama sejak aktivasi). */
+  private subscriptionPeriods = new Map<string, Sale[]>();
+  /** Potongan transfer Jumat untuk Langganan yang dibayar dari bonus. */
+  readonly payoutDeductions: PayoutDeduction[] = [];
+  /** Hak lain Mitra PLS yang dibayar Perusahaan (bukan bonus). */
+  readonly otherEntitlements: OtherEntitlement[] = [];
   private customersWithPaidSubscription = new Set<string>();
   private licenseSalesByBuyer = new Map<string, string[]>();
   private entriesBySale = new Map<string, LedgerEntry[]>();
+  private entriesByAccount = new Map<string, LedgerEntry[]>();
   private activeByMonth = new Map<string, Set<string>>();
   private companyByMonth = new Map<string, number>();
   private clawbackByMonth = new Map<string, LedgerEntry[]>();
@@ -361,20 +384,25 @@ export class MitransEngine {
     return acc;
   }
 
-  /** Pembayaran Langganan bulanan (mulai bulan ke-4). */
+  /**
+   * Pembayaran Langganan (RO): memperpanjang akses 30 hari. Tagihan pertama 30 hari setelah aktivasi Lisensi.
+   * Bila dibayar sebelum akses berakhir, periode baru menyambung dari akhir akses; bila sudah lewat, dimulai saat dibayar.
+   * Paling banyak satu periode dibayar di muka.
+   */
   paySubscription(input: {
     saleId: string;
     accountId: string;
-    forMonth: string;
     at: number;
   }): Sale {
     this.advance(input.at);
     const acc = this.mustAccount(input.accountId);
     if (!acc.licenseActivatedAt)
       throw new EngineError("Langganan tanpa Lisensi belum tersedia");
-    const paid = this.subscriptionsPaid.get(acc.id) ?? new Set<string>();
-    if (paid.has(input.forMonth))
-      throw new EngineError("Langganan bulan itu sudah dibayar");
+    const period = PLAN.subscription.periodDays * DAY_MS;
+    const until = this.accessUntil(acc.id) ?? input.at;
+    if (until - input.at > period)
+      throw new EngineError("Langganan periode berikutnya sudah dibayar");
+    const periodStart = Math.max(until, input.at);
     const month = wibMonth(input.at);
     const firstPaid =
       acc.role === "pelanggan" &&
@@ -387,15 +415,17 @@ export class MitransEngine {
       at: input.at,
       month,
       toCustomer: acc.role === "pelanggan",
-      forMonth: input.forMonth,
+      periodStart,
+      periodEnd: periodStart + period,
       firstPaidSubscription: firstPaid,
     };
     this.sales.set(sale.id, sale);
-    paid.add(input.forMonth);
-    this.subscriptionsPaid.set(acc.id, paid);
+    const periods = this.subscriptionPeriods.get(acc.id) ?? [];
+    periods.push(sale);
+    this.subscriptionPeriods.set(acc.id, periods);
     const ms = this.month(month);
     ms.subscriptionSaleIds.push(sale.id);
-    this.month(input.forMonth).subscribed.add(acc.id);
+    ms.subscribed.add(acc.id);
     if (firstPaid) {
       this.customersWithPaidSubscription.add(acc.id);
       this.countPersonalSale(sale.sellerId, input.at);
@@ -433,13 +463,33 @@ export class MitransEngine {
     if (sale.cancelled) throw new EngineError("Penjualan sudah dibatalkan");
     sale.cancelled = true;
     sale.cancelledAt = at;
+    // Penjualan akun terkendali sudah ditarik saat konfirmasi; jangan ditarik dua kali.
+    const clawedBack = sale.controlled ? 0 : this.voidSaleBonuses(sale, at, "pembatalan");
+    if (sale.kind === "subscription" && sale.paidFrom === "bonus") {
+      // Potongan yang belum ditransfer dibatalkan; yang sudah dipotong dikembalikan lewat pengembalian dana biasa.
+      for (const d of this.payoutDeductions)
+        if (d.saleId === sale.id && d.date > this.currentDay) d.cancelled = true;
+    }
+    if (sale.kind === "license") {
+      const buyer = this.accounts.get(sale.buyerId)!;
+      const stillHolds = (this.licenseSalesByBuyer.get(buyer.id) ?? []).some(
+        (id) => !this.sales.get(id)!.cancelled,
+      );
+      if (!stillHolds) buyer.licenseActivatedAt = undefined;
+    }
+    return { clawedBack, needsReview: false };
+  }
+
+  /** Tarik semua komisi dan volume yang timbul dari satu penjualan (pembatalan atau akun terkendali). */
+  private voidSaleBonuses(sale: Sale, at: number, label: string): number {
+    const saleId = sale.id;
     let clawedBack = 0;
     for (const e of [...(this.entriesBySale.get(saleId) ?? [])]) {
       if (e.gross <= 0) continue;
       if (e.status === "pending" || e.status === "held") {
         e.status = "clawback";
         e.amount = 0;
-        e.note = "Dibatalkan sebelum dibayar";
+        e.note = `Ditarik sebelum dibayar (${label})`;
       } else if (e.status === "payable" && e.amount > 0) {
         clawedBack += e.amount;
         this.pushEntry({
@@ -452,29 +502,131 @@ export class MitransEngine {
           month: wibMonth(at),
           accruedAt: at,
           saleId,
-          note: `Penarikan ${e.type} atas pembatalan ${saleId}`,
+          note: `Penarikan ${e.type} atas ${label} ${saleId}`,
         });
       }
     }
     this.pendingBerkah = this.pendingBerkah.filter((e) => e.saleId !== saleId);
-    if (sale.kind === "license") {
-      const buyer = this.accounts.get(sale.buyerId)!;
-      const stillHolds = (this.licenseSalesByBuyer.get(buyer.id) ?? []).some(
-        (id) => !this.sales.get(id)!.cancelled,
-      );
-      if (!stillHolds) buyer.licenseActivatedAt = undefined;
-    }
-    let needsReview = false;
+    this.reviewHeld = this.reviewHeld.filter((e) => e.saleId !== saleId);
+    // Keputusan A12: bonus tim dari Lisensi yang dibatalkan ditarik otomatis.
     if (sale.kind === "license" && sale.volumeNodeId && sale.countedBy) {
       this.walkUp(sale.volumeNodeId, (anc, side) => {
         if (!sale.countedBy!.has(anc.id)) return;
         anc.cumLicenses[side] = Math.max(0, anc.cumLicenses[side] - 1);
         if (anc.todayIn[side] > 0) anc.todayIn[side]--;
         else if (anc.carry[side] > 0) anc.carry[side]--;
-        else needsReview = true; // unit sudah dipasangkan
+        else {
+          // Unit sudah dipasangkan: batalkan satu pasangan, unit pasangannya kembali menjadi sisa.
+          const other: Side = side === "L" ? "R" : "L";
+          anc.carry[other]++;
+          this.touchedToday.add(anc.id);
+          clawedBack += this.reverseTeam(anc.accountId, "PASANGAN", PLAN.pairBonus, at, saleId);
+          let cur = this.accounts.get(anc.accountId)!;
+          for (let gen = 1; gen <= PLAN.pembinaanRatesBp.length && cur.sponsorId; gen++) {
+            const sponsor = this.accounts.get(cur.sponsorId)!;
+            if (sponsor.nodeId) {
+              clawedBack += this.reverseTeam(sponsor.id, "PEMBINAAN", applyBp(PLAN.pairBonus, pembinaanRateBp(gen)), at, saleId);
+            }
+            cur = sponsor;
+          }
+        }
       });
     }
-    return { clawedBack, needsReview };
+    return clawedBack;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Pemeriksaan akun yang dikendalikan sendiri
+
+  /** Buka pemeriksaan: Bonus Sponsor dan Berkah penjualan ini ditunda paling lama 30 hari (Kode Etik Pasal 9). */
+  openReview(saleId: string, at: number, reason: string): void {
+    this.advance(at);
+    const sale = this.mustSale(saleId);
+    if (sale.cancelled || sale.controlled) throw new EngineError("Penjualan sudah dibatalkan atau dikonfirmasi");
+    if (sale.review && !sale.review.dismissedAt && !sale.review.expiredAt) throw new EngineError("Pemeriksaan sudah terbuka");
+    sale.review = { openedAt: at, reason };
+  }
+
+  /** Pemeriksaan selesai tanpa pelanggaran: bonus yang ditunda dibayar pada tutup bulan berikutnya. */
+  dismissReview(saleId: string, at: number): void {
+    this.advance(at);
+    const sale = this.mustSale(saleId);
+    if (!sale.review || sale.review.confirmedAt) throw new EngineError("Tidak ada pemeriksaan terbuka");
+    sale.review.dismissedAt = at;
+  }
+
+  /**
+   * Pelanggaran terkonfirmasi (setelah tata cara Kode Etik Pasal 21): penjualan tidak dihitung,
+   * komisi dan volumenya ditarik. Bila status aktif penjual pada bulan penjualan hanya karena penjualan ini,
+   * bonus tim, Pool Aktif, Royalti, dan Prestasi bulan itu ikut ditarik.
+   */
+  confirmControlled(saleId: string, at: number): { clawedBack: number; activeRevoked: boolean } {
+    this.advance(at);
+    const sale = this.mustSale(saleId);
+    if (!sale.review || sale.review.dismissedAt) throw new EngineError("Buka pemeriksaan sebelum mengonfirmasi");
+    if (sale.controlled) throw new EngineError("Sudah dikonfirmasi");
+    if (sale.cancelled) throw new EngineError("Penjualan sudah dibatalkan; komisinya sudah ditarik");
+    sale.review.confirmedAt = at;
+    sale.controlled = true;
+    let clawedBack = this.voidSaleBonuses(sale, at, "akun terkendali");
+    let activeRevoked = false;
+    const closed = this.activeByMonth.get(sale.month);
+    if (closed?.has(sale.sellerId)) {
+      const left = this.personalSales(sale.month).get(sale.sellerId) ?? 0;
+      if (left < this.options.activeMinPersonalSales) {
+        closed.delete(sale.sellerId);
+        activeRevoked = true;
+        const types: BonusType[] = ["LEVEL", "PASANGAN", "PEMBINAAN", "POOL_AKTIF", "ROYALTI", "PRESTASI"];
+        for (const e of [...this.entriesFor(sale.sellerId)]) {
+          if (e.status !== "payable" || e.settledMonth !== sale.month || !types.includes(e.type) || e.amount <= 0) continue;
+          clawedBack += e.amount;
+          this.pushEntry({
+            accountId: e.accountId,
+            nik: e.nik,
+            type: e.type,
+            gross: -e.amount,
+            amount: -e.amount,
+            status: "clawback",
+            month: wibMonth(at),
+            accruedAt: at,
+            saleId,
+            note: `Status aktif ${sale.month} dicabut: penjualan ${saleId} oleh akun terkendali`,
+          });
+        }
+      }
+    }
+    return { clawedBack, activeRevoked };
+  }
+
+  /** Pembekuan keanggotaan (sanksi). Komisi yang sudah menjadi hak tetap dihitung. */
+  freezeAccount(accountId: string, until: number): void {
+    this.mustAccount(accountId).frozenUntil = until;
+  }
+
+  unfreezeAccount(accountId: string): void {
+    this.mustAccount(accountId).frozenUntil = undefined;
+  }
+
+  /**
+   * Pemutusan keanggotaan (Kode Etik Pasal 7 dan 20). Komisi yang sudah menjadi hak tetap dibayarkan,
+   * kecuali yang diperoleh dari pelanggaran (ditarik melalui confirmControlled).
+   */
+  terminateAccount(accountId: string, at: number): void {
+    this.advance(at);
+    const acc = this.mustAccount(accountId);
+    acc.terminated = true;
+    acc.terminatedAt = at;
+  }
+
+  reinstateAccount(accountId: string): void {
+    const acc = this.mustAccount(accountId);
+    acc.terminated = false;
+    acc.terminatedAt = undefined;
+  }
+
+  /** Penjualan dengan pemeriksaan terbuka. */
+  openReviews(): Sale[] {
+    return [...this.sales.values()].filter((s) => s.review && !s.review.dismissedAt && !s.review.confirmedAt && !s.review.expiredAt);
   }
 
   // ---------------------------------------------------------------------------
@@ -500,7 +652,9 @@ export class MitransEngine {
 
   /** Tutup bulan berjalan dan semua bulan sebelum `month` (inklusif). */
   closeThrough(month: string): void {
-    this.advance(monthCloseAt(month));
+    const t = monthCloseAt(month);
+    if (wibDate(t) <= this.currentDay) return; // bulan itu sudah ditutup
+    this.advance(t);
   }
 
   // ---------------------------------------------------------------------------
@@ -509,7 +663,7 @@ export class MitransEngine {
   isActive(accountId: string, month: string): boolean {
     const closed = this.activeByMonth.get(month);
     if (closed) return closed.has(accountId);
-    return (this.personalSales(month).get(accountId) ?? 0) >= PLAN.activeMinPersonalSales;
+    return (this.personalSales(month).get(accountId) ?? 0) >= this.options.activeMinPersonalSales;
   }
 
 
@@ -522,22 +676,44 @@ export class MitransEngine {
     const bump = (id: string) => result.set(id, (result.get(id) ?? 0) + 1);
     for (const id of ms.licenseSaleIds) {
       const s = this.sales.get(id)!;
-      if (s.cancelled) continue;
+      if (s.cancelled || s.controlled) continue;
       const seller = this.accounts.get(s.sellerId)!;
       if (seller.role !== "mitra" || s.buyerId === s.sellerId) continue;
       bump(s.sellerId);
     }
     for (const id of ms.subscriptionSaleIds) {
       const s = this.sales.get(id)!;
-      if (s.cancelled || !s.firstPaidSubscription) continue;
+      if (s.cancelled || s.controlled || !s.firstPaidSubscription) continue;
       if (this.accounts.get(s.sellerId)!.role !== "mitra") continue;
       bump(s.sellerId);
     }
     return result;
   }
 
+  /** Akhir akses (Lisensi 30 hari pertama atau Langganan terakhir yang belum dibatalkan); undefined bila tidak memegang Lisensi. */
+  accessUntil(accountId: string): number | undefined {
+    const acc = this.mustAccount(accountId);
+    if (!acc.licenseActivatedAt) return undefined;
+    let end = acc.licenseActivatedAt + PLAN.license.accessDays * DAY_MS;
+    for (const s of this.subscriptionPeriods.get(accountId) ?? [])
+      if (!s.cancelled && s.periodEnd! > end) end = s.periodEnd!;
+    return end;
+  }
+
+  /** Akses aktif pada waktu t. paidOnly: hanya dari Langganan berbayar, tidak termasuk 30 hari pertama Lisensi. */
+  accessActiveAt(accountId: string, t: number, paidOnly = false): boolean {
+    const acc = this.mustAccount(accountId);
+    const act = acc.licenseActivatedAt;
+    if (act === undefined || t < act) return false;
+    if (!paidOnly && t < act + PLAN.license.accessDays * DAY_MS) return true;
+    return (this.subscriptionPeriods.get(accountId) ?? []).some(
+      (s) => !s.cancelled && s.periodStart! <= t && t < s.periodEnd!,
+    );
+  }
+
+  /** Langganan berbayar menutup akhir bulan itu (23.59 WIB hari terakhir). */
   hasPaidSubscription(accountId: string, month: string): boolean {
-    return this.subscriptionsPaid.get(accountId)?.has(month) ?? false;
+    return this.accessActiveAt(accountId, monthCloseAt(month) - 1, true);
   }
 
   /** Bulan ke berapa sejak aktivasi Lisensi; undefined bila belum memegang Lisensi. */
@@ -547,20 +723,23 @@ export class MitransEngine {
     return monthNumberSince(wibMonth(acc.licenseActivatedAt), month);
   }
 
-  /** Syarat Langganan aktif mulai bulan ke-4 sejak aktivasi Lisensi (Bab 9.2). */
+  /**
+   * Syarat Langganan untuk bonus tim (Bab 9.2): akses aktif pada akhir bulan bonus.
+   * 30 hari pertama setelah aktivasi termasuk Lisensi; sesudahnya akses aktif hanya dengan Langganan.
+   */
   subscriptionConditionMet(accountId: string, month: string): boolean {
-    const n = this.licenseMonthNumber(accountId, month);
-    if (n === undefined || n < PLAN.subscriptionRequiredFromMonth) return true;
-    return this.hasPaidSubscription(accountId, month);
+    const acc = this.mustAccount(accountId);
+    const end = monthCloseAt(month) - 1;
+    if (acc.licenseActivatedAt === undefined || acc.licenseActivatedAt > end) return true;
+    return this.accessActiveAt(accountId, end);
   }
 
+  /** "Langganan sendiri aktif" untuk Plan B: akses aktif pada akhir bulan. */
   accessActive(accountId: string, month: string): boolean {
-    const n = this.licenseMonthNumber(accountId, month);
-    if (n === undefined) return false;
-    if (this.hasPaidSubscription(accountId, month)) return true;
-    return (
-      !this.options.planBRequiresPaidSubscription &&
-      n <= PLAN.license.accessMonths
+    return this.accessActiveAt(
+      accountId,
+      monthCloseAt(month) - 1,
+      this.options.planBRequiresPaidSubscription,
     );
   }
 
@@ -582,7 +761,7 @@ export class MitransEngine {
   }
 
   entriesFor(accountId: string): LedgerEntry[] {
-    return this.ledger.filter((e) => e.accountId === accountId);
+    return this.entriesByAccount.get(accountId) ?? [];
   }
 
   report(month: string): MonthReport | undefined {
@@ -590,11 +769,287 @@ export class MitransEngine {
   }
 
   /** Daftar transfer per Jumat (Bab 11.1). */
+  /** Bonus bruto per Jumat transfer (semua tanggal) untuk satu akun. */
+  private grossByDate(accountId: string): Map<string, number> {
+    const by = new Map<string, number>();
+    const add = (date: string, x: number) => by.set(date, (by.get(date) ?? 0) + x);
+    for (const e of this.entriesFor(accountId)) {
+      if (e.status !== "payable" || !e.payoutDate || e.amount === 0) continue;
+      if (e.advance && e.advanceDate) add(e.advanceDate, e.advance);
+      add(e.payoutDate, e.amount - (e.advance ?? 0));
+    }
+    return by;
+  }
+
+  /**
+   * Hitungan inti per akun: penarikan bonus (clawback) dialokasikan ke Jumat transfer berikutnya, lalu PPh 21 dihitung
+   * atas bruto setelah penarikan (tax.ts), lalu potongan Langganan. Murni dari ledger, tanpa keadaan tersimpan.
+   */
+  private computeSchedule(accountId: string): {
+    lines: PayoutScheduleLine[];
+    clawbacks: ClawbackStatus[];
+    /** Kekurangan transfer minus yang belum tertutup Jumat berikutnya. */
+    shortfall: number;
+  } {
+    const acc = this.mustAccount(accountId);
+    const gross = this.grossByDate(accountId);
+    const dates = [...gross.keys()].sort();
+    const room = new Map(gross);
+    const offsetByDate = new Map<string, number>();
+    const clawbacks: ClawbackStatus[] = [];
+    // Sumber pemotongan menurut urutan waktu: transfer bonus Jumat dan hak lain (pembelian kembali, pengembalian dana, dll.).
+    const ents = this.otherEntitlements.filter((e) => e.accountId === accountId);
+    const entRoom = new Map(ents.map((e) => [e.id, e.amount]));
+    const sources = [
+      ...dates.map((d) => ({ date: d, entitlement: undefined as OtherEntitlement | undefined })),
+      ...ents.map((e) => ({ date: wibDate(e.at), entitlement: e as OtherEntitlement | undefined })),
+    ].sort((a, b) => a.date.localeCompare(b.date) || (a.entitlement ? 1 : 0) - (b.entitlement ? 1 : 0));
+    const claws = this.entriesFor(accountId)
+      .filter((e) => e.status === "clawback" && e.amount < 0)
+      .sort((a, b) => a.accruedAt - b.accruedAt || a.id - b.id);
+    for (const c of claws) {
+      let left = -c.amount;
+      const after = wibDate(c.accruedAt);
+      const writeOffDate = addMonthsToDate(after, PLAN.clawbackWriteOffMonths);
+      const offsets: ClawbackStatus["offsets"] = [];
+      for (const src of sources) {
+        if (left <= 0) break;
+        if (src.date >= writeOffDate) break;
+        if (src.entitlement) {
+          if (src.entitlement.at < c.accruedAt) continue;
+          const take = Math.min(left, entRoom.get(src.entitlement.id)!);
+          if (take <= 0) continue;
+          entRoom.set(src.entitlement.id, entRoom.get(src.entitlement.id)! - take);
+          offsets.push({ date: src.date, amount: take, source: "hak_lain", entitlementId: src.entitlement.id });
+          left -= take;
+        } else {
+          const d = src.date;
+          if (d <= after) continue;
+          const take = Math.min(left, Math.max(0, room.get(d)!));
+          if (take <= 0) continue;
+          room.set(d, room.get(d)! - take);
+          offsetByDate.set(d, (offsetByDate.get(d) ?? 0) + take);
+          offsets.push({ date: d, amount: take, source: "transfer" });
+          left -= take;
+        }
+      }
+      const expired = left > 0 && this.currentDay >= writeOffDate;
+      clawbacks.push({
+        entry: c,
+        amount: -c.amount,
+        offsets,
+        outstanding: expired ? 0 : left,
+        writeOffDate,
+        writtenOff: expired ? left : 0,
+      });
+    }
+    const taxable = new Map<string, number>();
+    for (const d of dates) taxable.set(d, gross.get(d)! - (offsetByDate.get(d) ?? 0));
+    const deducted = new Map<string, number>();
+    for (const d of this.payoutDeductions)
+      if (d.accountId === accountId && !d.cancelled) deducted.set(d.date, (deducted.get(d.date) ?? 0) + d.amount);
+    // Bonus penjualan yang belum lewat masa pembatalan: masih dapat ditarik, sehingga belum aman dipakai.
+    const riskFrom = Date.parse(`${this.currentDay}T00:00:00+07:00`) - PLAN.bonusSafetyDays * DAY_MS;
+    const atRisk = new Map<string, number>();
+    for (const e of this.entriesFor(accountId)) {
+      if (e.status !== "payable" || !e.payoutDate || e.amount <= 0) continue;
+      if (!SALE_DRIVEN_TYPES.includes(e.type) || e.accruedAt < riskFrom) continue;
+      if (e.advance && e.advanceDate) atRisk.set(e.advanceDate, (atRisk.get(e.advanceDate) ?? 0) + e.advance);
+      atRisk.set(e.payoutDate, (atRisk.get(e.payoutDate) ?? 0) + e.amount - (e.advance ?? 0));
+    }
+    // Transfer tidak pernah negatif: kekurangan dipindah ke Jumat berikutnya; sisanya menjadi kekurangan terbuka.
+    let carry = 0;
+    const lines = withholdBySchedule(taxable, acc.withoutNpwp).map((l) => {
+      const g = gross.get(l.date)!;
+      const clawback = offsetByDate.get(l.date) ?? 0;
+      const ded = deducted.get(l.date) ?? 0;
+      const carriedIn = carry;
+      const raw = g - clawback - l.tax - ded - carriedIn;
+      carry = raw < 0 ? -raw : 0;
+      return { date: l.date, gross: g, clawback, taxable: l.gross, tax: l.tax, deducted: ded, carriedIn, net: Math.max(0, raw), atRisk: atRisk.get(l.date) ?? 0 };
+    });
+    return { lines, clawbacks, shortfall: carry };
+  }
+
+  /**
+   * Jadwal transfer satu Mitra PLS per Jumat: bonus bruto, penarikan bonus, bruto kena pajak, PPh 21, potongan
+   * Langganan, dan nilai yang ditransfer. Potongan Langganan diambil dari sisa setelah PPh (S&K Pasal 21 angka 7).
+   */
+  payoutSchedule(accountId: string): PayoutScheduleLine[] {
+    return this.computeSchedule(accountId).lines;
+  }
+
+  /** Bonus yang belum ditransfer (Jumat setelah hari ini). Hanya entri berstatus payable; bonus tim yang belum ditetapkan tidak dihitung. */
+  pendingPayouts(accountId: string): PayoutScheduleLine[] {
+    return this.payoutSchedule(accountId).filter((r) => r.date > this.currentDay);
+  }
+
+  /**
+   * Catat pembayaran hak lain kepada Mitra PLS (pembelian kembali Lisensi, pengembalian dana, atau pembayaran lain).
+   * Piutang penarikan bonus yang masih ada dipotong lebih dulu; sisanya dibayarkan. Hak ini bukan bonus, sehingga
+   * tidak dikenai PPh 21 bonus dan tidak masuk bukti potong.
+   */
+  recordOtherEntitlement(input: { id: string; accountId: string; kind: OtherEntitlementKind; amount: number; at: number; note?: string }): {
+    offset: number;
+    paid: number;
+  } {
+    this.advance(input.at);
+    const acc = this.mustAccount(input.accountId);
+    if (acc.role !== "mitra") throw new EngineError("Hak lain hanya dicatat untuk Mitra PLS");
+    if (!Number.isInteger(input.amount) || input.amount <= 0) throw new EngineError("Nominal hak harus bilangan bulat positif");
+    if (this.otherEntitlements.some((e) => e.id === input.id)) throw new EngineError("Nomor hak sudah dipakai");
+    this.otherEntitlements.push({ ...input });
+    return this.otherEntitlementStatus(input.id);
+  }
+
+  /** Berapa dari satu hak lain yang dipakai menutup piutang penarikan, dan berapa yang dibayarkan. */
+  otherEntitlementStatus(id: string): { offset: number; paid: number } {
+    const e = this.otherEntitlements.find((x) => x.id === id);
+    if (!e) throw new EngineError("Hak tidak ditemukan");
+    const offset = this.clawbackStatus(e.accountId)
+      .flatMap((c) => c.offsets)
+      .filter((o) => o.entitlementId === id)
+      .reduce((a, o) => a + o.amount, 0);
+    return { offset, paid: e.amount - offset };
+  }
+
+  /** Penarikan bonus satu akun: nominal, tempat dipotong, sisa piutang, dan penghapusan setelah 12 bulan. */
+  clawbackStatus(accountId: string): ClawbackStatus[] {
+    return this.computeSchedule(accountId).clawbacks;
+  }
+
+  /** Piutang penarikan bonus yang belum dapat dipotong dari transfer mana pun. */
+  clawbackOutstanding(accountId: string): number {
+    return this.clawbackStatus(accountId).reduce((a, c) => a + c.outstanding, 0);
+  }
+
+  /**
+   * Rincian saldo bonus untuk bayar Langganan. `available` hanya memakai bagian yang aman per Jumat: transfer mendatang
+   * setelah penarikan, PPh, dan potongan, dikurangi bonus yang penjualannya masih dapat dibatalkan, dikurangi piutang
+   * penarikan dan kekurangan transfer minus.
+   */
+  bonusBalanceDetail(accountId: string): { pending: number; atRisk: number; outstanding: number; shortfall: number; available: number } {
+    const { lines, clawbacks, shortfall } = this.computeSchedule(accountId);
+    const future = lines.filter((r) => r.date > this.currentDay);
+    const pending = future.reduce((a, r) => a + r.net, 0);
+    const safe = future.reduce((a, r) => a + Math.max(0, r.net - r.atRisk), 0);
+    const outstanding = clawbacks.reduce((a, c) => a + c.outstanding, 0);
+    return { pending, atRisk: pending - safe, outstanding, shortfall, available: Math.max(0, safe - outstanding - shortfall) };
+  }
+
+  /**
+   * Tahap pembayaran satu entri untuk tampilan Kantor Maya: bonus tercatat seketika, tetapi baru ditransfer pada Jumat
+   * jadwalnya (setelah PPh 21), dan bonus penjualan masih dapat ditarik bila pembelian dibatalkan dalam masa pembatalan.
+   */
+  entryStage(e: LedgerEntry): {
+    stage: "tercatat" | "sebagian" | "ditransfer" | "ditarik" | "tidak_dibayar";
+    transferDate?: string;
+    cancellableUntil?: string;
+    /** Untuk bonus yang belum ditetapkan: menunggu tutup bulan, atau menunggu syarat (Bonus Layanan Berkah). */
+    awaiting?: "tutup_bulan" | "syarat";
+  } {
+    if (e.status === "clawback") return { stage: "ditarik", transferDate: e.payoutDate };
+    const sale = e.saleId ? this.sales.get(e.saleId) : undefined;
+    const until = sale && SALE_DRIVEN_TYPES.includes(e.type) && !sale.cancelled
+      ? wibDate(sale.at + PLAN.bonusSafetyDays * DAY_MS)
+      : undefined;
+    const cancellableUntil = until && until > this.currentDay ? until : undefined;
+    // Belum ditetapkan: ditetapkan saat tutup bulan; Bonus Layanan Berkah juga menunggu 30 hari dan konfirmasi orientasi.
+    if (e.status === "pending")
+      return { stage: "tercatat", awaiting: e.type === "BERKAH" ? "syarat" : "tutup_bulan", cancellableUntil };
+    if (e.status !== "payable" || !e.payoutDate) return { stage: "tidak_dibayar" };
+    if (e.payoutDate <= this.currentDay) return { stage: "ditransfer", transferDate: e.payoutDate };
+    if (e.advance && e.advanceDate && e.advanceDate <= this.currentDay)
+      return { stage: "sebagian", transferDate: e.payoutDate, cancellableUntil };
+    return { stage: "tercatat", transferDate: e.advance && e.advanceDate ? e.advanceDate : e.payoutDate, cancellableUntil };
+  }
+
+  /** Saldo bonus yang aman dipakai membayar Langganan (lihat bonusBalanceDetail). */
+  bonusBalance(accountId: string): number {
+    return this.bonusBalanceDetail(accountId).available;
+  }
+
+  /**
+   * Rincian pemotongan PPh 21 satu Mitra PLS untuk satu masa pajak (bulan kalender transfer), bahan bukti potong
+   * BP21 yang diterbitkan resmi melalui Coretax DJP. Undefined bila tidak ada transfer pada masa itu.
+   */
+  buktiPotong(accountId: string, month: string): BuktiPotong | undefined {
+    const acc = this.mustAccount(accountId);
+    const lines = this.payoutSchedule(accountId)
+      .filter((l) => l.date.startsWith(month))
+      .map((l) => ({ date: l.date, gross: l.gross, clawback: l.clawback, taxable: l.taxable, dpp: dppOf(l.taxable), tax: l.tax }));
+    if (!lines.length) return undefined;
+    const sum = (f: (l: (typeof lines)[number]) => number) => lines.reduce((a, l) => a + f(l), 0);
+    return {
+      number: `BP21/${month.replace("-", "")}/${acc.code}`,
+      month,
+      accountId,
+      name: acc.name,
+      nik: acc.nik,
+      withoutNpwp: !!acc.withoutNpwp,
+      objectCode: PPH21.objectCode,
+      lines,
+      gross: sum((l) => l.gross),
+      clawback: sum((l) => l.clawback),
+      taxable: sum((l) => l.taxable),
+      dpp: sum((l) => l.dpp),
+      tax: sum((l) => l.tax),
+      final: month < this.currentDay.slice(0, 7),
+    };
+  }
+
+  /** Semua rincian pemotongan pada satu masa pajak (rekap Keuangan untuk e-Bupot). */
+  buktiPotongMasa(month: string): BuktiPotong[] {
+    const out: BuktiPotong[] = [];
+    for (const [id] of this.entriesByAccount) {
+      if (!this.accounts.has(id)) continue;
+      const b = this.buktiPotong(id, month);
+      if (b) out.push(b);
+    }
+    return out.sort((a, b) => b.tax - a.tax || a.accountId.localeCompare(b.accountId));
+  }
+
+  /**
+   * Bayar Langganan dari bonus yang belum ditransfer (atas permintaan Mitra PLS sendiri).
+   * Nominal dipotong dari transfer Jumat terdekat yang cukup, berurutan. Plan B atas Langganan ini tetap dihitung
+   * seperti pembayaran biasa karena Langganan tetap dibeli dengan uang Mitra PLS.
+   */
+  paySubscriptionFromBonus(input: { saleId: string; accountId: string; at: number }): Sale {
+    this.advance(input.at);
+    const acc = this.mustAccount(input.accountId);
+    if (acc.role !== "mitra") throw new EngineError("Bayar dari bonus hanya untuk Mitra PLS");
+    const price = PLAN.subscription.price;
+    if (this.bonusBalance(acc.id) < price)
+      throw new EngineError("Saldo bonus yang belum ditransfer tidak cukup untuk membayar Langganan");
+    const sale = this.paySubscription(input);
+    sale.paidFrom = "bonus";
+    let left = price;
+    for (const r of this.pendingPayouts(acc.id)) {
+      if (left <= 0) break;
+      const take = Math.min(left, Math.max(0, r.net - r.atRisk));
+      if (take <= 0) continue;
+      this.payoutDeductions.push({ saleId: sale.id, accountId: acc.id, date: r.date, amount: take });
+      left -= take;
+    }
+    if (left > 0) throw new EngineError("Alokasi potongan bonus gagal");
+    return sale;
+  }
+
   payoutRuns(): {
     date: string;
     total: number;
     count: number;
     byType: Record<BonusType, number>;
+    /** Penarikan bonus (clawback) yang dipotong pada Jumat itu. */
+    clawback: number;
+    /** Kekurangan transfer minus Jumat sebelumnya yang dipindah ke Jumat ini. */
+    carried: number;
+    /** PPh 21 yang dipotong pada Jumat itu (atas bruto setelah penarikan). */
+    tax: number;
+    /** Potongan Langganan dari bonus pada Jumat itu. */
+    deducted: number;
+    /** Nilai yang ditransfer: total bonus dikurangi penarikan, PPh 21, dan potongan Langganan. */
+    transfer: number;
   }[] {
     const runs = new Map<
       string,
@@ -603,20 +1058,55 @@ export class MitransEngine {
         total: number;
         count: number;
         byType: Record<BonusType, number>;
+        clawback: number;
+        carried: number;
+        tax: number;
+        deducted: number;
+        transfer: number;
       }
     >();
     for (const e of this.ledger) {
       if (e.status !== "payable" || !e.payoutDate || e.amount === 0) continue;
+      if (e.advance && e.advanceDate) {
+        const a = runs.get(e.advanceDate) ?? { date: e.advanceDate, total: 0, count: 0, byType: emptyByType(), clawback: 0, carried: 0, tax: 0, deducted: 0, transfer: 0 };
+        a.total += e.advance;
+        a.count++;
+        a.byType[e.type] += e.advance;
+        runs.set(e.advanceDate, a);
+      }
+      const rest = e.amount - (e.advance ?? 0);
       const r = runs.get(e.payoutDate) ?? {
         date: e.payoutDate,
         total: 0,
         count: 0,
         byType: emptyByType(),
+        clawback: 0,
+        carried: 0,
+        tax: 0,
+        deducted: 0,
+        transfer: 0,
       };
-      r.total += e.amount;
+      r.total += rest;
       r.count++;
-      r.byType[e.type] += e.amount;
+      r.byType[e.type] += rest;
       runs.set(e.payoutDate, r);
+    }
+    for (const d of this.payoutDeductions) {
+      if (d.cancelled) continue;
+      const r = runs.get(d.date);
+      if (r) r.deducted += d.amount;
+    }
+    // Penarikan bonus dan PPh 21 dihitung per Mitra PLS per Jumat, lalu dijumlahkan.
+    for (const [id] of this.entriesByAccount) {
+      if (!this.accounts.has(id)) continue;
+      for (const l of this.computeSchedule(id).lines) {
+        const r = runs.get(l.date);
+        if (!r) continue;
+        r.clawback += l.clawback;
+        r.tax += l.tax;
+        r.carried += l.carriedIn;
+        r.transfer += l.net;
+      }
     }
     return [...runs.values()].sort((a, b) => a.date.localeCompare(b.date));
   }
@@ -674,6 +1164,8 @@ export class MitransEngine {
       throw new EngineError("Penjual harus Mitra PLS");
     if (seller.terminated)
       throw new EngineError("Keanggotaan penjual sudah berakhir");
+    if (seller.frozenUntil !== undefined && this.currentDayEnd - 86_400_000 < seller.frozenUntil)
+      throw new EngineError("Keanggotaan penjual sedang dibekukan (sanksi Kode Etik Pasal 20)");
     if (!seller.quizPassed)
       throw new EngineError(
         "Tautan rujukan penjual belum aktif (kuis Kode Etik belum lulus)",
@@ -817,7 +1309,7 @@ export class MitransEngine {
     const ms = this.month(wibMonth(at));
     const n = (ms.runningSales.get(sellerId) ?? 0) + 1;
     ms.runningSales.set(sellerId, n);
-    if (n === PLAN.activeMinPersonalSales) ms.becameActiveAt.set(sellerId, at);
+    if (n === this.options.activeMinPersonalSales) ms.becameActiveAt.set(sellerId, at);
   }
 
   // ---------------------------------------------------------------------------
@@ -864,6 +1356,9 @@ export class MitransEngine {
   private pushEntry(e: Omit<LedgerEntry, "id">): LedgerEntry {
     const entry: LedgerEntry = { id: this.nextEntryId++, ...e };
     this.ledger.push(entry);
+    const byAcc = this.entriesByAccount.get(entry.accountId) ?? [];
+    byAcc.push(entry);
+    this.entriesByAccount.set(entry.accountId, byAcc);
     if (entry.saleId) {
       const list = this.entriesBySale.get(entry.saleId) ?? [];
       list.push(entry);
@@ -979,6 +1474,37 @@ export class MitransEngine {
     }
   }
 
+  /**
+   * Kurangi bonus tim karena pembatalan: potong dulu entri sejenis yang belum dibayar (menunggu/ditahan);
+   * bila sudah dibayar, buat entri penarikan negatif. Mengembalikan nominal yang ditarik dari yang sudah dibayar.
+   */
+  private reverseTeam(accountId: string, type: BonusType, amount: number, at: number, saleId: string): number {
+    const acc = this.accounts.get(accountId)!;
+    if (acc.role === "struktural" || amount <= 0) return 0;
+    const list = this.entriesByAccount.get(accountId) ?? [];
+    for (let k = list.length - 1; k >= 0; k--) {
+      const e = list[k];
+      if (e.type !== type || e.gross < amount || (e.status !== "pending" && e.status !== "held")) continue;
+      e.gross -= amount;
+      e.note = `${e.note ? e.note + "; " : ""}dikurangi ${amount} atas pembatalan ${saleId}`;
+      if (e.gross === 0) e.status = "clawback";
+      return 0;
+    }
+    this.pushEntry({
+      accountId,
+      nik: acc.nik,
+      type,
+      gross: -amount,
+      amount: -amount,
+      status: "clawback",
+      month: wibMonth(at),
+      accruedAt: at,
+      saleId,
+      note: `Penarikan ${type} atas pembatalan ${saleId}`,
+    });
+    return amount;
+  }
+
   // ---------------------------------------------------------------------------
   // Tutup bulan
 
@@ -989,7 +1515,7 @@ export class MitransEngine {
     const sales = this.personalSales(month);
     const active = new Set<string>();
     for (const [id, n] of sales) {
-      if (n >= PLAN.activeMinPersonalSales) {
+      if (n >= this.options.activeMinPersonalSales) {
         active.add(id);
         this.accounts.get(id)!.everActive = true;
       }
@@ -1021,22 +1547,47 @@ export class MitransEngine {
       this.held.push(e);
     };
 
+    // Pemeriksaan akun: tunda paling lama 30 hari sejak dibuka (Kode Etik Pasal 9 angka 2).
+    const underReview = (sale: Sale) => {
+      const r = sale.review;
+      if (!r || r.dismissedAt || r.confirmedAt || r.expiredAt) return false;
+      if (closeAt - r.openedAt > 30 * 86_400_000) {
+        r.expiredAt = closeAt;
+        return false;
+      }
+      return true;
+    };
+    const reviewHold = (e: LedgerEntry) => {
+      e.status = "held";
+      e.reviewHold = true;
+      e.note = "Ditunda: pemeriksaan akun (Kode Etik Pasal 9, paling lama 30 hari)";
+      this.reviewHeld.push(e);
+    };
+    const stillReview: LedgerEntry[] = [];
+    for (const e of this.reviewHeld) {
+      if (e.status !== "held") continue;
+      const sale = this.sales.get(e.saleId!)!;
+      if (underReview(sale)) {
+        stillReview.push(e);
+        continue;
+      }
+      e.reviewHold = false;
+      settle(e, e.gross, closeFriday);
+      e.note = sale.review?.expiredAt
+        ? "Dibayar: batas tunda pemeriksaan 30 hari lewat tanpa keputusan"
+        : "Dibayar setelah pemeriksaan selesai tanpa pelanggaran";
+    }
+    this.reviewHeld = stillReview;
+
     // 1. Bonus Layanan Berkah: cair bila dikonfirmasi dan lewat 30 hari; tanpa konfirmasi 60 hari -> Pool Aktif.
     const stillPending: LedgerEntry[] = [];
     for (const e of this.pendingBerkah) {
       const sale = this.sales.get(e.saleId!)!;
       const due = addDays(sale.at, PLAN.berkahMaturityDays);
       if (sale.orientationConfirmedAt !== undefined && due <= closeAt) {
-        if (this.subscriptionConditionMet(e.accountId, month)) {
-          settle(
-            e,
-            e.gross,
-            payoutFriday(Math.max(due, sale.orientationConfirmedAt)),
-          );
-        } else {
-          heldNoSubscription += e.gross;
-          hold(e, "Langganan penjual tidak aktif (bulan ke-4+)");
-        }
+        // Keputusan A4: Berkah selalu dibayar tanpa syarat Langganan penjual.
+        if (underReview(sale)) reviewHold(e);
+        else settle(e, e.gross, payoutFriday(Math.max(due, sale.orientationConfirmedAt)));
       } else if (
         sale.orientationConfirmedAt === undefined &&
         addDays(sale.at, PLAN.berkahConfirmDeadlineDays) < closeAt
@@ -1056,12 +1607,10 @@ export class MitransEngine {
     for (const e of this.pendingByMonth.get(month) ?? []) {
       if (e.status !== "pending") continue;
       if (e.type === "SPONSOR") {
-        if (this.subscriptionConditionMet(e.accountId, month)) {
-          settle(e, e.gross, payoutFriday(e.accruedAt));
-        } else {
-          heldNoSubscription += e.gross;
-          hold(e, "Langganan penjual tidak aktif (bulan ke-4+)");
-        }
+        // Keputusan A4: Bonus Sponsor selalu dibayar; syarat Langganan hanya untuk bonus jaringan.
+        const sale = e.saleId ? this.sales.get(e.saleId) : undefined;
+        if (sale && underReview(sale)) reviewHold(e);
+        else settle(e, e.gross, payoutFriday(e.accruedAt));
       } else if (TEAM_TYPES.includes(e.type)) {
         const ok =
           isActive(e.accountId) &&
@@ -1072,7 +1621,7 @@ export class MitransEngine {
           hold(
             e,
             isActive(e.accountId)
-              ? "Langganan tidak aktif (bulan ke-4+)"
+              ? "Langganan tidak aktif pada akhir bulan"
               : "Tidak aktif pada bulan bonus",
           );
         }
@@ -1152,11 +1701,15 @@ export class MitransEngine {
       const pay = teamFactor >= 1 ? e.gross : Math.floor(e.gross * teamFactor);
       const becameActive = ms.becameActiveAt.get(e.accountId) ?? e.accruedAt;
       const weekly = payoutFriday(Math.max(e.accruedAt, becameActive));
-      settle(
-        e,
-        pay,
-        teamFactor >= 1 && e.month === month ? weekly : closeFriday,
-      );
+      settle(e, pay, closeFriday);
+      if (e.month === month) {
+        // Keputusan A10: uang muka mingguan, sisanya setelah faktor plafon diketahui.
+        e.advance = Math.min(applyBp(e.gross, PLAN.teamWeeklyAdvanceBp), e.gross);
+        e.advanceDate = weekly;
+        if (pay < e.advance) {
+          e.note = `Uang muka melebihi hak setelah faktor plafon; selisih ${e.advance - pay} dipotong dari pembayaran berikutnya`;
+        }
+      }
       if (pay < e.gross) {
         e.note = `Faktor plafon ${(teamFactor * 100).toFixed(2)}%`;
         this.teamCarry.push(this.carryEntry(e, e.gross - pay, month));

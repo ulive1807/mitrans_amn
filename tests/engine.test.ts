@@ -188,20 +188,35 @@ describe("Sisa unit pasangan dipakai hari berikutnya (Lampiran B.2)", () => {
 });
 
 describe("Status aktif dan masa tunggu 2 bulan (Bab 9.1 dan 9.3)", () => {
+  // Keputusan Coach: aktif = paling sedikit 1 penjualan baru pribadi per bulan.
+  const feb = (type: BonusType) => entries("A", type).filter((e) => e.month === "2027-02");
   beforeEach(() => {
-    mitra("B", "A", jan(5), { leg: "L" }); // Januari: hanya 1 penjualan -> tidak aktif
-    mitra("C", "A", at("2027-02-05"), { leg: "R" }); // Februari: pasangan terbentuk, 1 penjualan -> tidak aktif
+    mitra("B", "A", jan(5), { leg: "L" });
+    mitra("C", "A", jan(5), { leg: "R" }); // Januari: A aktif
+    // Februari: A tidak menjual, tetapi jaringannya tumbuh di kedua kaki.
+    mitra("D", "B", at("2027-02-05"), { leg: "L" });
+    mitra("E", "C", at("2027-02-05"), { leg: "R" });
+  });
+
+  it("satu penjualan baru pribadi sudah membuat aktif", () => {
+    expect(engine.personalSales("2027-01").get("A")).toBe(2);
+    engine.closeThrough("2027-01");
+    expect(engine.isActive("A", "2027-01")).toBe(true);
+    expect(engine.isActive("B", "2027-01")).toBe(false);
   });
 
   it("bonus tim ditahan saat tidak aktif lalu dibayar bila aktif dalam 2 bulan berikutnya", () => {
+    // Syarat Langganan (mulai bulan ke-2) dipenuhi agar yang diuji hanya status aktif.
+    engine.paySubscription({ saleId: "S-A-02", accountId: "A", at: at("2027-02-06") });
     engine.closeThrough("2027-02");
-    const pair = entries("A", "PASANGAN")[0];
-    const level = entries("A", "LEVEL")[0];
+    expect(engine.isActive("A", "2027-02")).toBe(false);
+    const [pair] = feb("PASANGAN");
+    const [level] = feb("LEVEL");
     expect(pair.status).toBe("held");
     expect(level.status).toBe("held");
     expect(pair.holdUntil).toBe("2027-04");
+    engine.paySubscription({ saleId: "S-A-03", accountId: "A", at: at("2027-03-02") });
     customer("P1", "A", at("2027-03-03"));
-    customer("P2", "A", at("2027-03-04"));
     engine.closeThrough("2027-03");
     expect(engine.isActive("A", "2027-03")).toBe(true);
     expect(pair.status).toBe("payable");
@@ -211,23 +226,14 @@ describe("Status aktif dan masa tunggu 2 bulan (Bab 9.1 dan 9.3)", () => {
 
   it("bonus hangus pada akhir bulan ke-2 dan masuk Pool Aktif", () => {
     engine.closeThrough("2027-04");
-    const pair = entries("A", "PASANGAN")[0];
-    expect(pair.status).toBe("forfeited");
-    const april = engine.report("2027-04")!;
-    expect(april.pool.forfeitedTeam).toBe(PLAN.pairBonus + PLAN.levelBonus);
+    expect(feb("PASANGAN")[0].status).toBe("forfeited");
+    expect(engine.report("2027-04")!.pool.forfeitedTeam).toBe(PLAN.pairBonus + PLAN.levelBonus);
   });
 
   it("pembelian untuk diri sendiri tidak dihitung", () => {
-    expect(engine.personalSales("2027-01").get("A")).toBe(1);
-    expect(() =>
-      engine.purchaseLicense({
-        saleId: "self",
-        buyerId: "A",
-        at: at("2027-02-10"),
-      }),
-    ).not.toThrow();
+    engine.purchaseLicense({ saleId: "self", buyerId: "A", at: at("2027-02-10") });
     // Lisensi kedua A dibeli lewat Sponsor-nya (struktural) dan tidak dihitung sebagai penjualan A.
-    expect(engine.personalSales("2027-02").get("A")).toBe(1);
+    expect(engine.personalSales("2027-02").get("A")).toBe(0);
   });
 });
 
@@ -288,27 +294,49 @@ describe("Konversi Lisensi Pelanggan (Bab 5.5)", () => {
   });
 });
 
-describe("Syarat Langganan bulan ke-4 (Bab 9.2)", () => {
-  it("pemegang Lisensi Januari wajib Langganan aktif mulai April", () => {
-    expect(engine.licenseMonthNumber("A", "2027-04")).toBe(4);
-    expect(engine.subscriptionConditionMet("A", "2027-03")).toBe(true);
-    expect(engine.subscriptionConditionMet("A", "2027-04")).toBe(false);
-    engine.paySubscription({
-      saleId: "S-A-04",
-      accountId: "A",
-      forMonth: "2027-04",
-      at: at("2027-04-01"),
-    });
-    expect(engine.subscriptionConditionMet("A", "2027-04")).toBe(true);
+describe("Lisensi lifetime, Langganan 30 hari setelah aktivasi (Bab 3.1 dan 9.2, v1.4)", () => {
+  const DAY = 86_400_000;
+  it("30 hari pertama termasuk Lisensi; tagihan pertama jatuh tempo pada hari ke-30", () => {
+    expect(engine.accessUntil("A")).toBe(jan(2) + 30 * DAY);
+    expect(engine.accessActiveAt("A", jan(2) + 29 * DAY)).toBe(true);
+    expect(engine.accessActiveAt("A", jan(2) + 30 * DAY)).toBe(false);
+    expect(engine.subscriptionConditionMet("A", "2027-01")).toBe(true);
+    expect(engine.subscriptionConditionMet("A", "2027-02")).toBe(false);
+    engine.paySubscription({ saleId: "S-A-1", accountId: "A", at: jan(2) + 30 * DAY });
+    expect(engine.accessUntil("A")).toBe(jan(2) + 60 * DAY);
+    expect(engine.subscriptionConditionMet("A", "2027-02")).toBe(true);
   });
-  it("Bonus Sponsor bulan ke-4 tanpa Langganan ditahan (asumsi kerja)", () => {
-    customer("P1", "A", at("2027-04-05"));
+  it("pembeli di akhir bulan tetap mendapat 30 hari penuh", () => {
+    mitra("Z", "A", at("2027-01-28"));
+    expect(engine.accessActiveAt("Z", at("2027-02-20"))).toBe(true);
+    expect(engine.accessActiveAt("Z", at("2027-02-28"))).toBe(false);
+  });
+  it("bayar sebelum jatuh tempo menyambung dari akhir akses; paling banyak satu periode di muka", () => {
+    engine.paySubscription({ saleId: "S-A-1", accountId: "A", at: jan(5) });
+    expect(engine.accessUntil("A")).toBe(jan(2) + 60 * DAY);
+    expect(() => engine.paySubscription({ saleId: "S-A-2", accountId: "A", at: jan(6) })).toThrow(/sudah dibayar/);
+  });
+  it("Lisensi tidak kedaluwarsa: berhenti Langganan lalu lanjut lagi tanpa membeli Lisensi ulang", () => {
+    expect(engine.accessActive("A", "2027-05")).toBe(false);
+    engine.paySubscription({ saleId: "S-A-06", accountId: "A", at: at("2027-06-01") });
+    expect(engine.accessUntil("A")).toBe(at("2027-06-01") + 30 * DAY);
+    expect(engine.accessActive("A", "2027-06")).toBe(true);
+    expect(engine.subscriptionConditionMet("A", "2027-06")).toBe(true);
+    expect([...engine.sales.values()].filter((x) => x.kind === "license" && x.buyerId === "A")).toHaveLength(1);
+  });
+  it("Langganan yang dibatalkan tidak lagi memberi akses", () => {
+    engine.paySubscription({ saleId: "S-A-1", accountId: "A", at: at("2027-03-05") });
+    expect(engine.accessActive("A", "2027-03")).toBe(true);
+    engine.refundSale("S-A-1", at("2027-03-07"));
+    expect(engine.accessActive("A", "2027-03")).toBe(false);
+  });
+  it("keputusan A4: Bonus Sponsor bulan ke-2+ tanpa Langganan tetap dibayar, bonus tim tetap mensyaratkan Langganan", () => {
+    mitra("B", "A", at("2027-04-05"), { leg: "L" });
+    mitra("C", "A", at("2027-04-05"), { leg: "R" });
     engine.closeThrough("2027-04");
-    const e = entries("A", "SPONSOR")[0];
-    expect(e.status).toBe("held");
-    expect(engine.report("2027-04")!.heldNoSubscription).toBe(
-      PLAN.sponsorBonus,
-    );
+    expect(entries("A", "SPONSOR").every((e) => e.status === "payable")).toBe(true);
+    expect(entries("A", "PASANGAN")[0].status).toBe("held");
+    expect(entries("A", "PASANGAN")[0].note).toMatch(/Langganan/);
   });
 });
 
@@ -320,13 +348,11 @@ describe("Plan B (Bab 8.5 dan 9.2)", () => {
       engine.paySubscription({
         saleId: `S-A-${m}`,
         accountId: "A",
-        forMonth: m,
         at: at(`${m}-01`),
       });
       engine.paySubscription({
         saleId: `S-P1-${m}`,
         accountId: "P1",
-        forMonth: m,
         at: at(`${m}-02`),
       });
     }
@@ -379,5 +405,56 @@ describe("Waktu", () => {
   it("menolak peristiwa mundur", () => {
     engine.advance(jan(20));
     expect(() => customer("P", "A", jan(10))).toThrow(/mundur/);
+  });
+});
+
+describe("Keputusan A10: uang muka mingguan bonus tim", () => {
+  it("80% dibayar Jumat mingguan, 20% setelah tutup bulan", () => {
+    mitra("B", "A", jan(5), { leg: "L" });
+    mitra("C", "A", jan(5), { leg: "R" });
+    engine.closeThrough("2027-01");
+    const p = entries("A", "PASANGAN")[0];
+    expect(p).toMatchObject({ status: "payable", amount: 150_000, advance: 120_000, advanceDate: "2027-01-08", payoutDate: "2027-02-05" });
+    const runs = engine.payoutRuns();
+    expect(runs.find((r) => r.date === "2027-01-08")!.byType.PASANGAN).toBe(120_000);
+    expect(runs.find((r) => r.date === "2027-02-05")!.byType.PASANGAN).toBe(30_000);
+  });
+});
+
+describe("Keputusan A12: pembatalan menarik bonus tim otomatis", () => {
+  beforeEach(() => {
+    mitra("B", "A", jan(5), { leg: "L" });
+    mitra("C", "A", jan(5), { leg: "R" });
+    engine.advance(jan(6)); // pasangan A terbentuk
+  });
+  it("sebelum dibayar: Pasangan dan Level dari Lisensi itu dibatalkan, unit pasangannya kembali menjadi sisa", () => {
+    engine.refundSale("L-C", jan(9));
+    const pair = entries("A", "PASANGAN")[0];
+    expect(pair.status).toBe("clawback");
+    expect(pair.gross).toBe(0);
+    expect(entries("A", "LEVEL")[0].status).toBe("clawback");
+    const node = engine.nodes.get(engine.accounts.get("A")!.nodeId!)!;
+    expect(node.carry).toEqual({ L: 1, R: 0 });
+    expect(node.cumLicenses).toEqual({ L: 1, R: 0 });
+  });
+  it("sesudah dibayar: dibuat entri penarikan negatif", () => {
+    engine.closeThrough("2027-01");
+    const r = engine.refundSale("L-C", at("2027-02-03"));
+    expect(r.clawedBack).toBe(PLAN.sponsorBonus + PLAN.levelBonus + PLAN.pairBonus);
+    expect(entries("A", "PASANGAN").some((e) => e.status === "clawback" && e.amount === -PLAN.pairBonus)).toBe(true);
+  });
+});
+
+describe("Varian syarat aktif (parameter activeMinPersonalSales)", () => {
+  it("dengan syarat 1 penjualan, satu penjualan baru pribadi sudah membuat aktif", () => {
+    const e1 = new MitransEngine(atWib("2027-01-01", 0, 1), { activeMinPersonalSales: 1 });
+    e1.registerMitra({ id: "X", name: "X", nik: syntheticNik(500), sponsorId: "MITRANS-002", at: jan(2) });
+    e1.passQuiz("X");
+    e1.purchaseLicense({ saleId: "LX", buyerId: "X", at: jan(2) });
+    e1.registerPelanggan({ id: "P", name: "P", nik: syntheticNik(501), sellerId: "X", at: jan(3) });
+    e1.purchaseLicense({ saleId: "LP", buyerId: "P", at: jan(3) });
+    e1.closeThrough("2027-01");
+    expect(e1.isActive("X", "2027-01")).toBe(true);
+    expect(engine.isActive("A", "2027-01")).toBe(false); // bawaan dokumen tetap 2
   });
 });

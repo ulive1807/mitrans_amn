@@ -1,39 +1,78 @@
 import { useMemo, useState } from "react";
+import { TinjauEbook } from "./AdminEbook";
+import { KelasWhatsApp } from "./AdminKelas";
 import { Link } from "react-router-dom";
 import {
   BONUS_LABEL,
   PLAN,
+  atWib,
   runScenario,
   type BonusType,
   type MonthReport,
   type SimulationSummary,
+  ROLE_LABEL,
+  ROLE_PERMISSIONS,
+  PERMISSION_LABEL,
+  CONFLICTING_ROLES,
+  maskNik,
+  REMINDER_LABEL,
+  remindersDue,
+  type ReminderStage,
+  OTHER_ENTITLEMENT_LABEL,
+  type OtherEntitlementKind,
+  type Permission,
+  type Role,
 } from "../../engine";
 import { BarChart, LineChart } from "../components/Chart";
 import { Badge, Kpi, Panel, ProtoRibbon, TopBar } from "../components/ui";
 import { dateLabel, monthLabel, num, pct, rp, rpShort } from "../format";
 import { currentRank, paidTotals, useDemo } from "../store";
+import { KasusSanksi } from "./AdminKasus";
+import { BuktiPotongView, printBuktiPotong } from "../components/BuktiPotong";
+import { useServerCheck } from "../api";
 
 type Tab =
+  | "terkendali"
+  | "kasus"
   | "ikhtisar"
   | "tutup"
   | "jumat"
   | "mitra"
   | "dana"
   | "kepatuhan"
-  | "simulasi";
-const TABS: { id: Tab; label: string }[] = [
-  { id: "ikhtisar", label: "Ikhtisar" },
-  { id: "tutup", label: "Tutup bulan & plafon" },
-  { id: "jumat", label: "Pembayaran Jumat" },
-  { id: "mitra", label: "Mitra PLS" },
-  { id: "dana", label: "Pool & Prestasi" },
-  { id: "kepatuhan", label: "Kepatuhan" },
-  { id: "simulasi", label: "Simulasi engine" },
+  | "simulasi"
+  | "pengguna"
+  | "pengingat"
+  | "pph"
+  | "audit"
+  | "ebook"
+  | "kelas";
+/** Setiap tab hanya tampil bagi peran yang memiliki izinnya. */
+const TABS: { id: Tab; label: string; perm: Permission }[] = [
+  { id: "ikhtisar", label: "Ikhtisar", perm: "ikhtisar.lihat" },
+  { id: "tutup", label: "Tutup bulan & plafon", perm: "tutup_bulan.lihat" },
+  { id: "jumat", label: "Pembayaran Jumat", perm: "pembayaran.lihat" },
+  { id: "mitra", label: "Mitra PLS", perm: "mitra.lihat" },
+  { id: "dana", label: "Pool & Prestasi", perm: "dana.lihat" },
+  { id: "kepatuhan", label: "Kepatuhan", perm: "kepatuhan.lihat" },
+  { id: "terkendali", label: "Akun terkendali", perm: "deteksi.lihat" },
+  { id: "kasus", label: "Kasus & sanksi", perm: "kasus.lihat" },
+  { id: "ebook", label: "Pemeriksaan e-book", perm: "konten.tinjau" },
+  { id: "kelas", label: "Kelas RT3 & WhatsApp", perm: "kelas.kelola" },
+  { id: "pengingat", label: "Pengingat Langganan", perm: "mitra.lihat" },
+  { id: "pph", label: "PPh 21 & bukti potong", perm: "pembayaran.lihat" },
+  { id: "simulasi", label: "Simulasi engine", perm: "simulasi.jalankan" },
+  { id: "pengguna", label: "Pengguna & peran", perm: "pengguna.kelola" },
+  { id: "audit", label: "Log audit", perm: "audit.lihat" },
 ];
 
 export function Admin() {
-  const { reports, lastMonth } = useDemo();
-  const [tab, setTab] = useState<Tab>("ikhtisar");
+  const { reports, lastMonth, access, staffId, setStaffId, authMode } = useDemo();
+  const [want, setTab] = useState<Tab>("ikhtisar");
+  const visible = TABS.filter((t) => access.can(staffId, t.perm));
+  const tab = visible.some((t) => t.id === want) ? want : visible[0]?.id;
+  const me = access.user(staffId);
+  const server = useServerCheck();
   return (
     <>
       <ProtoRibbon />
@@ -41,11 +80,41 @@ export function Admin() {
       <div className="dash">
         <aside className="side">
           <div className="who">
-            <b>Admin PT MITRANS</b>
-            <span>Peran demo · tanpa otorisasi nyata</span>
+            <b>{me.name}</b>
+            <span>{me.roles.map((r) => ROLE_LABEL[r]).join(" · ")}</span>
           </div>
-          <div className="sec">Operasional</div>
-          {TABS.map((t) => (
+          {server.state !== "demo" && (
+            <div className={`srv srv-${server.state === "ok" && server.cocok ? "ok" : server.state === "memeriksa" ? "wait" : "bad"}`} role="status">
+              {server.state === "memeriksa"
+                ? "Memeriksa sesi di server…"
+                : server.state === "gagal"
+                  ? `Server: ${server.pesan}`
+                  : server.cocok
+                    ? "Sesi & peran terverifikasi server"
+                    : "Peran di server berbeda; muat ulang halaman"}
+            </div>
+          )}
+{authMode === "demo" && (
+            <>
+                    <label className="sec" htmlFor="staff">
+            Demo: masuk sebagai
+          </label>
+          <select
+            id="staff"
+            value={staffId}
+            onChange={(e) => setStaffId(e.target.value)}
+            style={{ margin: "0 8px 8px", padding: 8, borderRadius: 8, background: "#0b2a22", color: "#e7ece9", border: "1px solid rgba(212,175,106,.3)" }}
+          >
+            {[...access.users.values()].map((u) => (
+              <option key={u.id} value={u.id}>
+                {u.name} · {u.roles.map((r) => ROLE_LABEL[r]).join(", ") || "tanpa peran"}
+              </option>
+            ))}
+          </select>
+            </>
+          )}
+          <div className="sec">Menu sesuai peran</div>
+          {visible.map((t) => (
             <button
               key={t.id}
               className={tab === t.id ? "on" : ""}
@@ -58,7 +127,7 @@ export function Admin() {
         <main className="main">
           <div className="main-head">
             <div>
-              <h1>{TABS.find((t) => t.id === tab)!.label}</h1>
+              <h1>{TABS.find((t) => t.id === tab)?.label ?? "Tidak ada akses"}</h1>
               <p>
                 Data sintetis {monthLabel(reports[0].month)} –{" "}
                 {monthLabel(lastMonth)} · plafon Plan A{" "}
@@ -73,7 +142,16 @@ export function Admin() {
           {tab === "mitra" && <DaftarMitra />}
           {tab === "dana" && <Dana reports={reports} />}
           {tab === "kepatuhan" && <Kepatuhan />}
+          {tab === "terkendali" && <AkunTerkendali />}
+          {tab === "kasus" && <KasusSanksi />}
+          {tab === "ebook" && <TinjauEbook />}
+          {tab === "kelas" && <KelasWhatsApp />}
           {tab === "simulasi" && <Simulasi />}
+          {tab === "pengguna" && <PenggunaPeran />}
+          {tab === "pengingat" && <PengingatLangganan />}
+          {tab === "pph" && <RekapPph />}
+          {tab === "audit" && <LogAudit />}
+          {!tab && <div className="callout warn">Akun ini tidak memiliki peran aktif. Hubungi Admin Sistem.</div>}
         </main>
       </div>
     </>
@@ -108,7 +186,7 @@ function Ikhtisar({ reports }: { reports: MonthReport[] }) {
         <Kpi
           label="Mitra PLS aktif"
           value={`${num(last.activeMitra)} / ${num(last.totalMitra)}`}
-          sub={`${pct(last.totalMitra ? last.activeMitra / last.totalMitra : 0)} memenuhi 2 penjualan`}
+          sub={`${pct(last.totalMitra ? last.activeMitra / last.totalMitra : 0)} memenuhi syarat aktif`}
         />
       </div>
       <div className="row2">
@@ -257,8 +335,18 @@ function TutupBulan({ reports }: { reports: MonthReport[] }) {
 }
 
 function Jumat() {
-  const { engine } = useDemo();
-  const runs = useMemo(() => engine.payoutRuns(), [engine]);
+  const { engine, payouts, access, staffId, now, version, bump } = useDemo();
+  const runs = useMemo(() => engine.payoutRuns(), [engine, version]);
+  const [msg, setMsg] = useState("");
+  const act = (fn: () => string) => {
+    try {
+      setMsg(fn());
+      bump();
+    } catch (err) {
+      setMsg(err instanceof Error ? err.message : "Gagal");
+    }
+  };
+  const name = (id?: string) => (id ? access.user(id).name : "");
   return (
     <Panel
       title="Daftar transfer Jumat"
@@ -274,6 +362,11 @@ function Jumat() {
               <th className="r">Bonus tim</th>
               <th className="r">Bulanan (Prestasi, Royalti, Pool, Plan B)</th>
               <th className="r">Total bruto</th>
+              <th className="r">Penarikan</th>
+              <th className="r">PPh 21</th>
+              <th className="r">Potongan Langganan</th>
+              <th className="r">Ditransfer</th>
+              <th>Persetujuan</th>
             </tr>
           </thead>
           <tbody>
@@ -291,8 +384,39 @@ function Jumat() {
                     <td className="r num">{rp(direct)}</td>
                     <td className="r num">{rp(team)}</td>
                     <td className="r num">{rp(r.total - team - direct)}</td>
+                    <td className="r num">{rp(r.total)}</td>
+                    <td className="r num">{r.clawback ? `−${rp(r.clawback)}` : "–"}</td>
+                    <td className="r num">−{rp(r.tax)}</td>
+                    <td className="r num">{r.deducted ? `−${rp(r.deducted)}` : "–"}</td>
                     <td className="r num">
-                      <b>{rp(r.total)}</b>
+                      <b>{rp(r.transfer)}</b>
+                    </td>
+                    <td style={{ whiteSpace: "nowrap" }}>
+                      {(() => {
+                        const b = payouts.get(r.date, r.transfer, r.count);
+                        if (b.status !== "draf" && b.total !== r.transfer)
+                          return <Badge tone="bad">Nilai berubah setelah disiapkan ({rp(b.total)} → {rp(r.transfer)}); siapkan ulang</Badge>;
+                        if (b.status === "disetujui")
+                          return <Badge tone="good">✓ {name(b.preparedBy)} → {name(b.approvedBy)}</Badge>;
+                        if (b.status === "disiapkan")
+                          return (
+                            <>
+                              <Badge tone="warn">Disiapkan {name(b.preparedBy)}</Badge>{" "}
+                              {access.can(staffId, "pembayaran.setujui") && (
+                                <button className="btn-secondary" onClick={() => act(() => (payouts.approve(r.date, staffId, now), `Berkas ${dateLabel(r.date)} disetujui.`))}>
+                                  Setujui
+                                </button>
+                              )}
+                            </>
+                          );
+                        return access.can(staffId, "pembayaran.siapkan") ? (
+                          <button className="btn-secondary" onClick={() => act(() => (payouts.prepare(r.date, r.transfer, r.count, staffId, now), `Berkas ${dateLabel(r.date)} disiapkan; menunggu persetujuan Keuangan lain.`))}>
+                            Siapkan
+                          </button>
+                        ) : (
+                          <span className="muted">Draf</span>
+                        );
+                      })()}
                     </td>
                   </tr>
                 );
@@ -300,17 +424,20 @@ function Jumat() {
           </tbody>
         </table>
       </div>
+      {msg && <div className="callout info" style={{ marginTop: 10 }}>{msg}</div>}
       <p className="muted" style={{ fontSize: 13 }}>
-        Bruto sebelum PPh. Pada produksi, daftar ini menjadi berkas transfer
-        bank yang disetujui dua orang (maker-checker) sebelum dikirim.
+        Bruto sebelum PPh. Berkas transfer disiapkan satu orang Keuangan dan disetujui orang Keuangan lain (maker-checker); nilai berkas dikunci saat
+        disiapkan.
       </p>
     </Panel>
   );
 }
 
 function DaftarMitra() {
-  const { engine, lastMonth, version } = useDemo();
+  const { engine, lastMonth, version, access, staffId, now } = useDemo();
   const [q, setQ] = useState("");
+  const [showNik, setShowNik] = useState(false);
+  const canNik = access.can(staffId, "mitra.lihat_identitas");
   const totals = useMemo(() => paidTotals(engine), [engine, version]);
   const rows = useMemo(
     () =>
@@ -332,6 +459,17 @@ function DaftarMitra() {
           onChange={(e) => setQ(e.target.value)}
           aria-label="Cari Mitra PLS"
         />
+        {canNik && (
+          <button
+            className="btn-secondary"
+            onClick={() => {
+              if (!showNik) access.require(staffId, "mitra.lihat_identitas", "Tampilkan NIK tersamar", now, "Daftar Mitra PLS");
+              setShowNik(!showNik);
+            }}
+          >
+            {showNik ? "Sembunyikan NIK" : "Tampilkan NIK tersamar (dicatat)"}
+          </button>
+        )}
       </div>
       <div className="table-wrap">
         <table className="t">
@@ -339,6 +477,7 @@ function DaftarMitra() {
             <tr>
               <th>Kode</th>
               <th>Nama</th>
+              {showNik && canNik && <th>NIK</th>}
               <th>Sponsor</th>
               <th>Lisensi</th>
               <th>Kuis</th>
@@ -355,6 +494,7 @@ function DaftarMitra() {
                   <Link to={`/mitra?id=${a.id}`}>{a.code}</Link>
                 </td>
                 <td>{a.name}</td>
+                {showNik && canNik && <td className="num muted">{maskNik(a.nik)}</td>}
                 <td className="muted">
                   {engine.accounts.get(a.sponsorId!)?.code}
                 </td>
@@ -376,8 +516,8 @@ function DaftarMitra() {
         </table>
       </div>
       <p className="muted" style={{ fontSize: 13 }}>
-        Data identitas (NIK) dan rekening tidak ditampilkan di daftar ini. Akses
-        ke data tersebut dibatasi per peran dan tercatat di log audit.
+        NIK hanya untuk peran Kepatuhan dan Keuangan, selalu tersamar, dan setiap kali ditampilkan tercatat di log audit. Nomor rekening tidak
+        ditampilkan di layar mana pun.
       </p>
     </Panel>
   );
@@ -491,7 +631,7 @@ function Dana({ reports }: { reports: MonthReport[] }) {
   );
 }
 
-/** Butir dari Catatan untuk Konsultan Hukum v1.1 Bagian 1, yang memengaruhi sistem. */
+/** Butir dari Catatan untuk Konsultan Hukum v1.3 Bagian 1, yang memengaruhi sistem. */
 const LEGAL = [
   [
     "Plafon komisi",
@@ -509,9 +649,14 @@ const LEGAL = [
     "Fitur pengalihan perlu dibangun (S&K Ps. 9)",
   ],
   [
-    "Syarat Langganan bulan ke-4 vs larangan wajib beli",
+    "Syarat Langganan 30 hari setelah aktivasi vs larangan wajib beli",
     "Permendag 70/2019 Ps. 21 f, g",
-    "Engine memisahkan syarat Bonus Sponsor agar mudah diubah",
+    "v1.4 memajukan syarat dari bulan ke-4 ke 30 hari setelah aktivasi; perlu kajian ulang konsultan hukum",
+  ],
+  [
+    "Istilah Lisensi tanpa batas waktu (lifetime)",
+    "UU 8/1999 Ps. 7 b, 9, 10",
+    "Akses sesudah 30 hari pertama hanya dengan Langganan; teks penawaran wajib menjelaskannya",
   ],
   [
     "Akun struktural Mitrans 001–003",
@@ -557,7 +702,7 @@ function Kepatuhan() {
         <Kpi
           label="Tertahan karena Langganan"
           value={rpShort(last.heldNoSubscription)}
-          sub={`${monthLabel(lastMonth)} · bulan ke-4+`}
+          sub={`${monthLabel(lastMonth)} · akses tidak aktif di akhir bulan`}
         />
         <Kpi
           label="Orientasi belum dikonfirmasi"
@@ -572,7 +717,7 @@ function Kepatuhan() {
       </div>
       <Panel
         title="Butir hukum yang memengaruhi sistem"
-        hint="Dari Catatan untuk Konsultan Hukum v1.1 · bukan pendapat hukum"
+        hint="Dari Catatan untuk Konsultan Hukum v1.3 · bukan pendapat hukum"
       >
         <table className="t">
           <thead>
@@ -614,15 +759,16 @@ function Kepatuhan() {
             Pembatalan menarik komisi terkait dan mengurangi volume jaringan.
           </li>
           <li>Bonus yang jatuh pada akun struktural tidak dibayarkan.</li>
+          <li>Pembelian oleh akun yang dikendalikan penjual ditandai dari sinyal yang di-hash; pemeriksaan menunda bonus langsung paling lama 30 hari.</li>
           <li>
             Plafon Plan A dan Plan B diperiksa setiap tutup bulan dengan faktor
             yang sama untuk semua klaim.
           </li>
         </ul>
         <p className="muted" style={{ fontSize: 13 }}>
-          Belum dibangun: deteksi akun yang dikendalikan sendiri (rekening,
-          perangkat, alamat sama), verifikasi e-KTP, dan alur sanksi Pasal
-          20–21.
+          Deteksi akun yang dikendalikan sendiri ada di tab Akun terkendali;
+          surat dan tata cara sanksi Pasal 20–21 ada di tab Kasus & sanksi.
+          Belum dibangun: verifikasi e-KTP dan pengiriman surel sungguhan.
         </p>
       </Panel>
     </>
@@ -762,5 +908,680 @@ function Simulasi() {
         </>
       )}
     </>
+  );
+}
+
+const DAY = 86_400_000;
+
+/** Deteksi akun yang dikendalikan sendiri (Rencana Pemasaran 9.1; Kode Etik Pasal 9, 18, 21). */
+function AkunTerkendali() {
+  const { engine, detector, cases, version, bump, access, staffId } = useDemo();
+  const [level, setLevel] = useState<"kuat" | "sedang" | "semua">("kuat");
+  const [msg, setMsg] = useState("");
+  const flags = useMemo(() => detector.scan(engine), [engine, detector, version]);
+  const clusters = useMemo(() => detector.clusters(), [detector, version]);
+  const now = atWib(engine.today, 9);
+  const rows = flags.filter((f) => level === "semua" || f.level === level);
+  const name = (id: string) => {
+    const a = engine.accounts.get(id)!;
+    return `${a.name} (${a.code})`;
+  };
+  const statusOf = (saleId: string) => {
+    const s = engine.sales.get(saleId)!;
+    const r = s.review;
+    if (s.controlled) return <Badge tone="bad">✕ Pelanggaran terkonfirmasi</Badge>;
+    if (s.cancelled) return <Badge tone="mute">↩ Dibatalkan</Badge>;
+    if (!r) return <Badge tone="mute">Belum diperiksa</Badge>;
+    if (r.dismissedAt) return <Badge tone="good">✓ Tidak terbukti</Badge>;
+    if (r.expiredAt) return <Badge tone="warn">⏱ Tunda 30 hari lewat</Badge>;
+    return <Badge tone="warn">⏸ Diperiksa sejak {dateLabel(r.openedAt)}</Badge>;
+  };
+  const act = (fn: () => string) => {
+    try {
+      setMsg(fn());
+      bump();
+    } catch (err) {
+      setMsg(err instanceof Error ? err.message : "Gagal");
+    }
+  };
+  const open = engine.openReviews();
+  return (
+    <>
+      <div className="kpis">
+        <Kpi label="Tanda kuat" value={num(flags.filter((f) => f.level === "kuat").length)} sub="Skor ≥ 85%: pemeriksaan dibuka" />
+        <Kpi label="Tanda sedang" value={num(flags.filter((f) => f.level === "sedang").length)} sub="Skor 50–85%: dipantau, tanpa tunda bayar" />
+        <Kpi label="Pemeriksaan terbuka" value={num(open.length)} sub="Bonus langsung ditunda ≤ 30 hari" />
+        <Kpi label="Terkonfirmasi" value={num([...engine.sales.values()].filter((x) => x.controlled).length)} sub={`${num(clusters.length)} klaster akun terkait kuat`} />
+      </div>
+      <div className="callout info" style={{ marginBottom: 16 }}>
+        Deteksi hanya menjadi dasar membuka kasus, bukan sanksi. Tata cara Kode Etik Pasal 21: pemberitahuan tertulis beserta bukti, penjelasan Mitra PLS paling lama 14 hari,
+        lalu keputusan dengan alasan tertulis. Selama diperiksa, penjualan tetap dihitung untuk status aktif; hanya Bonus Sponsor dan Berkah penjualan itu yang ditunda,
+        paling lama 30 hari (Pasal 9 angka 2).
+      </div>
+      {msg && <div className="callout warn" style={{ marginBottom: 16 }}>{msg}</div>}
+      <Panel
+        title="Penjualan yang ditandai"
+        hint="Pembeli kemungkinan akun yang dikendalikan penjual"
+        actions={
+          <div className="seg" role="group" aria-label="Tingkat">
+            {(["kuat", "sedang", "semua"] as const).map((l) => (
+              <button key={l} className={level === l ? "on" : ""} onClick={() => setLevel(l)}>
+                {l[0].toUpperCase() + l.slice(1)}
+              </button>
+            ))}
+          </div>
+        }
+      >
+        <div className="table-wrap">
+          <table className="t">
+            <thead>
+              <tr>
+                <th>Tanggal</th>
+                <th>Penjual</th>
+                <th>Pembeli</th>
+                <th className="r">Skor</th>
+                <th>Sinyal yang sama</th>
+                <th>Status</th>
+                <th>Tenggat</th>
+                <th>Tindakan</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.slice(0, 200).map((f) => {
+                const s = engine.sales.get(f.saleId)!;
+                const r = s.review;
+                const openNow = r && !r.dismissedAt && !r.confirmedAt && !r.expiredAt;
+                return (
+                  <tr key={f.saleId}>
+                    <td className="num">{dateLabel(f.at)}</td>
+                    <td>{name(f.sellerId)}</td>
+                    <td>{name(f.buyerId)}</td>
+                    <td className="r num">
+                      <Badge tone={f.level === "kuat" ? "bad" : "warn"}>{pct(f.score, 0)}</Badge>
+                    </td>
+                    <td style={{ fontSize: 12.5 }}>{f.reasons.join(" · ")}</td>
+                    <td>{statusOf(f.saleId)}</td>
+                    <td className="muted" style={{ fontSize: 12.5 }}>
+                      {openNow ? (
+                        <>
+                          Penjelasan s.d. {dateLabel(r.openedAt + 14 * DAY)}
+                          <br />
+                          Tunda s.d. {dateLabel(r.openedAt + 30 * DAY)}
+                        </>
+                      ) : (
+                        "–"
+                      )}
+                    </td>
+                    <td style={{ whiteSpace: "nowrap" }}>
+                      {(() => {
+                        const kasus = cases.cases.find((c) => c.saleIds.includes(f.saleId));
+                        if (kasus) return <Badge tone="info">Kasus {kasus.id}</Badge>;
+                        if (s.controlled || s.cancelled) return null;
+                        if (!access.can(staffId, "kasus.buka")) return <span className="muted">Kepatuhan</span>;
+                        return (
+                          <button
+                            className="btn-secondary"
+                            onClick={() =>
+                              act(() => {
+                                access.require(staffId, "kasus.buka", "Buka kasus", now, f.saleId);
+                                const c = cases.openCase({
+                                  accountId: f.sellerId,
+                                  violations: [12],
+                                  allegation: `Penjualan ${f.saleId} diduga dibeli oleh akun yang dikendalikan penjual untuk memenuhi status aktif.`,
+                                  evidence: [...f.reasons.map((x) => `${x} antara akun penjual dan pembeli`), `Skor keterkaitan ${Math.round(f.score * 100)}% (deteksi otomatis)`],
+                                  saleIds: [f.saleId],
+                                  actor: access.actorName(staffId),
+                                  at: now,
+                                });
+                                return `Kasus ${c.id} dibuka; surat pemberitahuan dan penundaan dikirim. Lanjutkan di tab Kasus & sanksi.`;
+                              })
+                            }
+                          >
+                            Buka kasus
+                          </button>
+                        );
+                      })()}
+                    </td>
+                  </tr>
+                );
+              })}
+              {rows.length === 0 && (
+                <tr>
+                  <td colSpan={8} className="muted">
+                    Tidak ada penjualan pada tingkat ini.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </Panel>
+      <Panel title="Klaster akun terkait kuat" hint="Akun yang saling berbagi rekening, telepon, surel, atau kombinasi sinyal kuat">
+        <div className="table-wrap" style={{ maxHeight: 320 }}>
+          <table className="t">
+            <thead>
+              <tr>
+                <th className="r">Akun</th>
+                <th>Anggota</th>
+              </tr>
+            </thead>
+            <tbody>
+              {clusters.slice(0, 100).map((c, i) => (
+                <tr key={i}>
+                  <td className="r num">{c.length}</td>
+                  <td style={{ fontSize: 12.5 }}>{c.map((id) => `${engine.accounts.get(id)!.code} (${engine.accounts.get(id)!.role === "mitra" ? "Mitra PLS" : "Pelanggan"})`).join(" · ")}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <p className="muted" style={{ fontSize: 13 }}>
+          Nilai sinyal (nomor rekening, telepon, alamat) disimpan sebagai hash dan tidak ditampilkan. Alamat atau IP yang sama saja tidak pernah menimbulkan tanda,
+          karena wajar bagi anggota keluarga serumah.
+        </p>
+      </Panel>
+    </>
+  );
+}
+
+/** Pengguna & peran: hanya Admin Sistem; tidak dapat mengubah diri sendiri; pasangan peran terlarang ditolak. */
+function PenggunaPeran() {
+  const { access, staffId, now, bump, authMode } = useDemo();
+  const readOnly = authMode === "clerk";
+  const [msg, setMsg] = useState("");
+  const roles = Object.keys(ROLE_LABEL) as Role[];
+  const toggle = (uid: string, r: Role) => {
+    const u = access.user(uid);
+    const next = u.roles.includes(r) ? u.roles.filter((x) => x !== r) : [...u.roles, r];
+    try {
+      access.setRoles(staffId, uid, next, now);
+      setMsg(`Peran ${u.name} diubah.`);
+    } catch (err) {
+      setMsg(err instanceof Error ? err.message : "Gagal");
+    }
+    bump();
+  };
+  return (
+    <>
+      {msg && <div className="callout info" style={{ marginBottom: 12 }}>{msg}</div>}
+      {readOnly && (
+        <div className="callout info" style={{ marginBottom: 12 }}>
+          Mode Clerk: peran dibaca dari <code>publicMetadata.roles</code> dan hanya dapat diubah dari server (dasbor Clerk
+          atau Backend API oleh Admin Sistem), bukan dari peramban. Tabel ini hanya untuk dilihat.
+        </div>
+      )}
+      <Panel title="Pengguna staf" hint={readOnly ? "Hanya-baca" : "Centang untuk memberi atau mencabut peran"}>
+        <div className="table-wrap">
+          <table className="t">
+            <thead>
+              <tr>
+                <th>Nama</th>
+                <th>Jabatan</th>
+                {roles.map((r) => (
+                  <th key={r} style={{ textAlign: "center" }}>
+                    {ROLE_LABEL[r]}
+                  </th>
+                ))}
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {[...access.users.values()].map((u) => (
+                <tr key={u.id}>
+                  <td>
+                    {u.name}
+                    {u.id === staffId ? <span className="muted"> (Anda)</span> : null}
+                  </td>
+                  <td className="muted">{u.title}</td>
+                  {roles.map((r) => (
+                    <td key={r} style={{ textAlign: "center" }}>
+                      <input type="checkbox" aria-label={`${u.name} ${ROLE_LABEL[r]}`} checked={u.roles.includes(r)} disabled={readOnly || u.id === staffId} onChange={() => toggle(u.id, r)} />
+                    </td>
+                  ))}
+                  <td>
+                    <button
+                      className="btn-secondary"
+                      disabled={readOnly || u.id === staffId}
+                      onClick={() => {
+                        try {
+                          access.setActive(staffId, u.id, !u.active, now);
+                        } catch (err) {
+                          setMsg(err instanceof Error ? err.message : "Gagal");
+                        }
+                        bump();
+                      }}
+                    >
+                      {u.active ? "Aktif" : "Nonaktif"}
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </Panel>
+      <Panel title="Matriks izin">
+        <div className="table-wrap">
+          <table className="t">
+            <thead>
+              <tr>
+                <th>Izin</th>
+                {roles.map((r) => (
+                  <th key={r} style={{ textAlign: "center" }}>
+                    {ROLE_LABEL[r]}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {(Object.keys(PERMISSION_LABEL) as Permission[]).map((p) => (
+                <tr key={p}>
+                  <td>{PERMISSION_LABEL[p]}</td>
+                  {roles.map((r) => (
+                    <td key={r} style={{ textAlign: "center" }}>
+                      {ROLE_PERMISSIONS[r].includes(p) ? "✓" : <span className="muted">–</span>}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </Panel>
+      <Panel title="Pemisahan tugas">
+        <ul style={{ margin: 0 }}>
+          {CONFLICTING_ROLES.map(([a, b, why]) => (
+            <li key={a + b}>
+              <b>
+                {ROLE_LABEL[a]} ✕ {ROLE_LABEL[b]}
+              </b>
+              : {why}
+            </li>
+          ))}
+          <li>
+            <b>Maker-checker pembayaran</b>: penyiap berkas transfer tidak boleh menyetujuinya sendiri.
+          </li>
+          <li>
+            <b>Perubahan peran</b>: tidak seorang pun dapat mengubah peran atau status dirinya sendiri.
+          </li>
+        </ul>
+      </Panel>
+    </>
+  );
+}
+
+/** Log audit: semua tindakan berizin dan percobaan yang ditolak. */
+function LogAudit() {
+  const { access, version } = useDemo();
+  const [onlyDenied, setOnlyDenied] = useState(false);
+  const rows = useMemo(() => [...access.audit].reverse().filter((a) => !onlyDenied || !a.allowed), [access, version, onlyDenied]);
+  return (
+    <Panel
+      title="Log audit"
+      hint={`${num(access.audit.length)} catatan`}
+      actions={
+        <label className="check" style={{ padding: 0 }}>
+          <input type="checkbox" checked={onlyDenied} onChange={(e) => setOnlyDenied(e.target.checked)} />
+          <span>Hanya yang ditolak</span>
+        </label>
+      }
+    >
+      <div className="table-wrap">
+        <table className="t">
+          <thead>
+            <tr>
+              <th>Waktu</th>
+              <th>Pengguna</th>
+              <th>Tindakan</th>
+              <th>Hasil</th>
+              <th>Keterangan</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.slice(0, 300).map((a, i) => (
+              <tr key={i}>
+                <td className="num">{dateLabel(a.at)}</td>
+                <td>{a.userName}</td>
+                <td>
+                  {a.action}
+                  {a.permission ? <span className="muted"> · {PERMISSION_LABEL[a.permission]}</span> : null}
+                </td>
+                <td>{a.allowed ? <Badge tone="good">✓ Diizinkan</Badge> : <Badge tone="bad">✕ Ditolak</Badge>}</td>
+                <td className="muted" style={{ fontSize: 12.5 }}>
+                  {a.detail ?? ""}
+                </td>
+              </tr>
+            ))}
+            {rows.length === 0 && (
+              <tr>
+                <td colSpan={5} className="muted">
+                  Belum ada catatan.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+      <p className="muted" style={{ fontSize: 13 }}>
+        Pada produksi, log audit disimpan append-only di server dan tidak dapat dihapus melalui aplikasi.
+      </p>
+    </Panel>
+  );
+}
+
+/** Pengingat tagihan Langganan yang berlaku hari ini (H-7 sampai sehari sesudah akses berakhir). */
+function PengingatLangganan() {
+  const { engine, now, version } = useDemo();
+  const [stage, setStage] = useState<ReminderStage | "kirim" | "semua">("kirim");
+  const all = useMemo(() => remindersDue(engine, now), [engine, now, version]);
+  const rows = all.filter((r) => (stage === "semua" ? true : stage === "kirim" ? r.sendToday : r.stage === stage));
+  const count = (s: ReminderStage) => all.filter((r) => r.stage === s).length;
+  return (
+    <>
+      <div className="kpis">
+        <Kpi label="Dikirim hari ini" value={num(all.filter((r) => r.sendToday).length)} sub={dateLabel(now)} />
+        <Kpi label="Jatuh tempo ≤ 7 hari" value={num(count("H-7") + count("H-3") + count("H-1") + count("H"))} sub="Mitra PLS dan Pelanggan" />
+        <Kpi label="Akses berakhir kemarin" value={num(count("berakhir"))} sub="Pemberitahuan terakhir" />
+        <Kpi label="Bisa bayar dari bonus" value={num(all.filter((r) => r.canPayFromBonus).length)} sub="Saldo bonus ≥ Rp399.000" />
+      </div>
+      <div className="callout info" style={{ marginBottom: 12 }}>
+        Pengingat tampil di Kantor Maya pemegang Lisensi. Surel dan WhatsApp hanya untuk penerima yang menyetujuinya, dengan pilihan
+        berhenti; prototipe ini belum mengirim pesan karena penyedia pesan belum disambungkan.
+      </div>
+      <Panel
+        title="Daftar pengingat"
+        hint={
+          <select value={stage} onChange={(e) => setStage(e.target.value as typeof stage)} aria-label="Saring pengingat">
+            <option value="kirim">Dikirim hari ini</option>
+            <option value="semua">Semua dalam jendela</option>
+            {(Object.keys(REMINDER_LABEL) as ReminderStage[]).map((s) => (
+              <option key={s} value={s}>
+                {REMINDER_LABEL[s]}
+              </option>
+            ))}
+          </select>
+        }
+      >
+        <div className="table-wrap">
+          <table className="t">
+            <thead>
+              <tr>
+                <th>Nama</th>
+                <th>Peran</th>
+                <th>Jatuh tempo</th>
+                <th>Tahap</th>
+                <th className="r">Saldo bonus</th>
+                <th>Isi pesan</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.slice(0, 200).map((r) => (
+                <tr key={r.accountId}>
+                  <td>{r.name}</td>
+                  <td>{r.role === "mitra" ? "Mitra PLS" : "Pelanggan"}</td>
+                  <td>{dateLabel(r.dueDate)}</td>
+                  <td>
+                    <Badge tone={r.stage === "berakhir" || r.stage === "H" ? "warn" : "info"}>{REMINDER_LABEL[r.stage]}</Badge>
+                  </td>
+                  <td className="r num">{r.role === "mitra" ? rp(r.bonusBalance) : "–"}</td>
+                  <td style={{ minWidth: 320, fontSize: 12.5 }}>{r.message}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        {!rows.length && <p className="muted">Tidak ada pengingat pada saringan ini.</p>}
+        {rows.length > 200 && <p className="muted">Menampilkan 200 dari {num(rows.length)}.</p>}
+      </Panel>
+    </>
+  );
+}
+
+/** Rekap PPh 21 per masa pajak (bahan e-Bupot BP21 di Coretax) dan piutang penarikan bonus. */
+function RekapPph() {
+  const { engine, access, staffId, now, version, bump } = useDemo();
+  const months = useMemo(() => {
+    const set = new Set<string>();
+    for (const r of engine.payoutRuns()) set.add(r.date.slice(0, 7));
+    return [...set].sort().reverse();
+  }, [engine, version]);
+  const [want, setMonth] = useState<string | undefined>();
+  const month = want && months.includes(want) ? want : months.find((m) => m < engine.today.slice(0, 7)) ?? months[0];
+  const [open, setOpen] = useState<string | null>(null);
+  const list = useMemo(() => (month ? engine.buktiPotongMasa(month) : []), [engine, month, version]);
+  const outstanding = useMemo(() => {
+    let total = 0;
+    let n = 0;
+    for (const acc of engine.accounts.values()) {
+      if (acc.role !== "mitra") continue;
+      const o = engine.clawbackOutstanding(acc.id);
+      if (o > 0) {
+        total += o;
+        n++;
+      }
+    }
+    return { total, n };
+  }, [engine, version]);
+  const sum = (f: (b: (typeof list)[number]) => number) => list.reduce((a, b) => a + f(b), 0);
+
+  const exportCsv = () => {
+    if (!month) return;
+    const head = ["nomor_internal", "masa_pajak", "nama", "nik_tersamar", "tanpa_npwp", "kode_objek", "bruto", "penarikan", "bruto_kena_pajak", "dpp", "pph21"];
+    const rows = list.map((b) => [b.number, b.month, b.name, maskNik(b.nik), b.withoutNpwp ? "ya" : "tidak", b.objectCode, b.gross, b.clawback, b.taxable, b.dpp, b.tax]);
+    const csv = [head, ...rows].map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+    a.download = `rekap-pph21-${month}.csv`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+    access.record(staffId, "Ekspor rekap PPh 21", now, `${month}: ${list.length} penerima`);
+    bump();
+  };
+
+  return (
+    <>
+      <div className="kpis">
+        <Kpi label="Penerima" value={num(list.length)} sub={month ? monthLabel(month, true) : "–"} />
+        <Kpi label="Bruto kena pajak" value={rpShort(sum((b) => b.taxable))} sub={`Penarikan ${rpShort(sum((b) => b.clawback))}`} />
+        <Kpi label="PPh 21 dipotong" value={rpShort(sum((b) => b.tax))} sub="Disetor dan dilaporkan di SPT Masa" />
+        <Kpi label="Piutang penarikan" value={rpShort(outstanding.total)} sub={`${num(outstanding.n)} Mitra PLS`} />
+      </div>
+      <div className="callout info" style={{ marginBottom: 12 }}>
+        Rumus: PPh 21 = 50% bruto × tarif Pasal 17 ayat (1) huruf a, lapisan tarif atas bruto bulan berjalan; penarikan bonus mengurangi
+        bruto kena pajak pada transfer tempat ia dipotong. Bukti potong resmi diterbitkan melalui Coretax DJP. Ekspor ini memakai NIK
+        tersamar; NIK lengkap untuk pelaporan hanya diambil dari server dengan log audit. Rumus perlu dikonfirmasi konsultan pajak.
+      </div>
+      <Panel
+        title="Rekap per penerima"
+        hint={
+          <span style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <select value={month} onChange={(e) => setMonth(e.target.value)} aria-label="Masa pajak">
+              {months.map((m) => (
+                <option key={m} value={m}>
+                  {monthLabel(m, true)}
+                </option>
+              ))}
+            </select>
+            <button className="btn-secondary" onClick={exportCsv} disabled={!list.length}>
+              Unduh CSV
+            </button>
+          </span>
+        }
+      >
+        <div className="table-wrap">
+          <table className="t">
+            <thead>
+              <tr>
+                <th>Nama</th>
+                <th>NIK</th>
+                <th className="r">Bruto</th>
+                <th className="r">Penarikan</th>
+                <th className="r">Bruto kena pajak</th>
+                <th className="r">PPh 21</th>
+                <th />
+              </tr>
+            </thead>
+            <tbody>
+              {list.slice(0, 200).map((b) => (
+                <tr key={b.accountId}>
+                  <td>{b.name}</td>
+                  <td className="num">{maskNik(b.nik)}</td>
+                  <td className="r num">{rp(b.gross)}</td>
+                  <td className="r num">{b.clawback ? `−${rp(b.clawback)}` : "–"}</td>
+                  <td className="r num">{rp(b.taxable)}</td>
+                  <td className="r num">{rp(b.tax)}</td>
+                  <td>
+                    <button className="btn-secondary" onClick={() => setOpen(open === b.accountId ? null : b.accountId)}>
+                      {open === b.accountId ? "Tutup" : "Rincian"}
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        {list.length > 200 && <p className="muted">Menampilkan 200 dari {num(list.length)}; unduh CSV untuk semua.</p>}
+      </Panel>
+      {open && month && (() => {
+        const b = engine.buktiPotong(open, month);
+        return b ? (
+          <Panel title={`Rincian ${b.name}`} hint={<button className="btn-secondary" onClick={() => printBuktiPotong(b)}>Cetak</button>}>
+            <BuktiPotongView b={b} />
+          </Panel>
+        ) : null;
+      })()}
+      <PiutangPenarikan />
+    </>
+  );
+}
+
+/**
+ * Piutang penarikan bonus: dipotong dari transfer bonus, lalu dari hak lain, lalu dihapus 12 bulan sejak penarikan.
+ * Keuangan mencatat pembayaran hak lain di sini; piutang dipotong lebih dulu, sisanya dibayarkan.
+ */
+function PiutangPenarikan() {
+  const { engine, access, staffId, now, version, bump } = useDemo();
+  const [form, setForm] = useState<{ accountId: string; kind: OtherEntitlementKind; amount: string }>({
+    accountId: "",
+    kind: "pembelian_kembali",
+    amount: "",
+  });
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const rows = useMemo(() => {
+    const out: { id: string; name: string; outstanding: number; writtenOff: number; nextWriteOff?: string }[] = [];
+    for (const acc of engine.accounts.values()) {
+      if (acc.role !== "mitra") continue;
+      const st = engine.clawbackStatus(acc.id);
+      if (!st.length) continue;
+      const outstanding = st.reduce((a, c) => a + c.outstanding, 0);
+      const writtenOff = st.reduce((a, c) => a + c.writtenOff, 0);
+      if (!outstanding && !writtenOff) continue;
+      const next = st.filter((c) => c.outstanding > 0).map((c) => c.writeOffDate).sort()[0];
+      out.push({ id: acc.id, name: acc.name, outstanding, writtenOff, nextWriteOff: next });
+    }
+    return out.sort((a, b) => b.outstanding - a.outstanding);
+  }, [engine, version]);
+  const canRecord = access.can(staffId, "pembayaran.siapkan");
+  const mitra = useMemo(
+    () => [...engine.accounts.values()].filter((a) => a.role === "mitra").sort((a, b) => a.name.localeCompare(b.name)),
+    [engine],
+  );
+
+  const submit = () => {
+    const amount = Number(form.amount.replace(/\D/g, ""));
+    try {
+      access.require(staffId, "pembayaran.siapkan", "Catat pembayaran hak lain", now, `${form.accountId}: ${amount}`);
+      const r = engine.recordOtherEntitlement({
+        id: `HAK-${engine.otherEntitlements.length + 1}`,
+        accountId: form.accountId,
+        kind: form.kind,
+        amount,
+        at: now,
+      });
+      setMsg({ ok: true, text: `${OTHER_ENTITLEMENT_LABEL[form.kind]} ${rp(amount)} dicatat: ${rp(r.offset)} menutup piutang penarikan, ${rp(r.paid)} dibayarkan.` });
+      setForm({ ...form, amount: "" });
+    } catch (err) {
+      setMsg({ ok: false, text: err instanceof Error ? err.message : "Gagal" });
+    }
+    bump();
+  };
+
+  return (
+    <Panel title="Piutang penarikan & hak lain" hint="Transfer bonus → hak lain → dihapus 12 bulan sejak penarikan">
+      {msg && (
+        <div className={`callout ${msg.ok ? "info" : "warn"}`} style={{ marginBottom: 12 }}>
+          {msg.text}
+        </div>
+      )}
+      {rows.length ? (
+        <div className="table-wrap">
+          <table className="t">
+            <thead>
+              <tr>
+                <th>Mitra PLS</th>
+                <th className="r">Piutang</th>
+                <th>Dihapus paling awal</th>
+                <th className="r">Sudah dihapus</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.slice(0, 100).map((r) => (
+                <tr key={r.id}>
+                  <td>{r.name}</td>
+                  <td className="r num">{r.outstanding ? rp(r.outstanding) : "–"}</td>
+                  <td>{r.nextWriteOff ? dateLabel(r.nextWriteOff) : "–"}</td>
+                  <td className="r num">{r.writtenOff ? rp(r.writtenOff) : "–"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <p className="muted">Tidak ada piutang penarikan bonus.</p>
+      )}
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "flex-end", marginTop: 14 }}>
+        <div className="field" style={{ minWidth: 220 }}>
+          <label>Mitra PLS</label>
+          <select value={form.accountId} onChange={(e) => setForm({ ...form, accountId: e.target.value })} aria-label="Mitra PLS penerima hak">
+            <option value="">Pilih…</option>
+            {rows.map((r) => (
+              <option key={`p-${r.id}`} value={r.id}>
+                {r.name} · piutang {rp(r.outstanding)}
+              </option>
+            ))}
+            {mitra
+              .filter((m) => !rows.some((r) => r.id === m.id))
+              .slice(0, 300)
+              .map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.name}
+                </option>
+              ))}
+          </select>
+        </div>
+        <div className="field">
+          <label>Jenis hak</label>
+          <select value={form.kind} onChange={(e) => setForm({ ...form, kind: e.target.value as OtherEntitlementKind })} aria-label="Jenis hak">
+            {(Object.keys(OTHER_ENTITLEMENT_LABEL) as OtherEntitlementKind[]).map((k) => (
+              <option key={k} value={k}>
+                {OTHER_ENTITLEMENT_LABEL[k]}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="field">
+          <label>Nominal (Rp)</label>
+          <input inputMode="numeric" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} aria-label="Nominal hak" />
+        </div>
+        <button className="btn-secondary" disabled={!canRecord || !form.accountId || !form.amount} onClick={submit}>
+          Catat pembayaran hak
+        </button>
+      </div>
+      <p className="muted" style={{ marginTop: 8, fontSize: 12.5 }}>
+        {canRecord ? "" : "Hanya peran Keuangan yang dapat mencatat pembayaran hak. "}
+        Hak lain bukan bonus, sehingga tidak dikenai PPh 21 bonus dan tidak masuk bukti potong. Penghapusan piutang tidak mengubah PPh
+        yang sudah dipotong.
+      </p>
+    </Panel>
   );
 }

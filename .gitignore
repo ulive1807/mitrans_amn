@@ -3,3 +3,9 @@ dist
 *.tsbuildinfo
 .DS_Store
 simulation-output
+.env
+.env.local
+.env.*.local
+
+# Log audit lokal dari plugin pemeriksa commit (bukan bagian proyek)
+vault/

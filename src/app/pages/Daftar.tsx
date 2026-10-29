@@ -6,12 +6,12 @@ import { useDemo } from "../store";
 import { ProtoRibbon, TopBar } from "../components/ui";
 
 const DOCS = [
-  { id: "rp", label: "Rencana Pemasaran Mitrans-Astra v1.2" },
-  { id: "ke", label: "Kode Etik Mitra PLS v1.2" },
+  { id: "rp", label: "Rencana Pemasaran Mitrans-Astra v1.4" },
+  { id: "ke", label: "Kode Etik Mitra PLS v1.4" },
   {
     id: "sk",
     label:
-      "Syarat dan Ketentuan mitrans.id v1.2, termasuk Ketentuan Kemitraan (Bagian B)",
+      "Syarat dan Ketentuan mitrans.id v1.4, termasuk Ketentuan Kemitraan (Bagian B)",
   },
 ];
 
@@ -205,7 +205,7 @@ export function Daftar() {
             <div className="callout info" style={{ margin: "12px 0" }}>
               Ringkasan: Mitra PLS adalah pelaku usaha mandiri, bukan karyawan
               Perusahaan. Penghasilan hanya dari penjualan nyata dan tidak
-              dijamin. Status aktif memerlukan 2 penjualan baru pribadi per
+              dijamin. Status aktif memerlukan paling sedikit 1 penjualan baru pribadi per
               bulan. <Link to="/aturan">Baca ringkasan aturan</Link>
             </div>
             {DOCS.map((d) => (

@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useAuthState } from "../auth";
 import { useSearchParams } from "react-router-dom";
 import {
   BONUS_LABEL,
@@ -20,21 +21,36 @@ import {
 } from "../components/ui";
 import { dateLabel, monthLabel, num, pct, rp, rpShort } from "../format";
 import { currentRank, paidTotals, useDemo } from "../store";
+import { Pemberitahuan, StatusBanner } from "./MitraPemberitahuan";
+import { Langganan, ReminderBanner } from "./MitraLangganan";
+import { Pajak } from "./MitraPajak";
+import { AgentMarketing } from "./MitraAgent";
+import { KuisRekening } from "./MitraKuis";
 
 type Tab =
   | "ringkasan"
+  | "agent"
+  | "kuis"
   | "jaringan"
   | "bonus"
   | "peringkat"
   | "planb"
-  | "rujukan";
+  | "rujukan"
+  | "langganan"
+  | "pajak"
+  | "pemberitahuan";
 const TABS: { id: Tab; label: string }[] = [
   { id: "ringkasan", label: "Ringkasan" },
+  { id: "agent", label: "Agent Marketing" },
+  { id: "kuis", label: "Kuis & rekening" },
   { id: "jaringan", label: "Jaringan biner" },
   { id: "bonus", label: "Komisi & bonus" },
   { id: "peringkat", label: "Peringkat & Royalti" },
   { id: "planb", label: "Plan B · Langganan" },
   { id: "rujukan", label: "Rujukan & orientasi" },
+  { id: "langganan", label: "Langganan & tagihan" },
+  { id: "pajak", label: "Pajak & penarikan" },
+  { id: "pemberitahuan", label: "Pemberitahuan" },
 ];
 
 export function KantorMaya() {
@@ -48,11 +64,22 @@ export function KantorMaya() {
         .sort((a, b) => (totals.get(b.id) ?? 0) - (totals.get(a.id) ?? 0)),
     [engine, totals, version],
   );
-  const id = params.get("id") ?? mitraList[0]?.id;
+  const auth = useAuthState();
+  // Mode Clerk: Kantor Maya dikunci ke akun yang ditautkan (publicMetadata.mitraId = id atau kode Mitra PLS).
+  const linked =
+    auth.mode === "clerk" && auth.mitraId
+      ? (engine.accounts.get(auth.mitraId) ?? mitraList.find((m) => m.code === auth.mitraId))
+      : undefined;
+  const id = auth.mode === "clerk" ? linked?.id : (params.get("id") ?? mitraList[0]?.id);
   const acc = id ? engine.accounts.get(id) : undefined;
   const [tab, setTab] = useState<Tab>("ringkasan");
 
-  if (!acc) return <div className="page">Akun tidak ditemukan.</div>;
+  if (!acc)
+    return (
+      <div className="page">
+        {auth.mode === "clerk" ? `Akun Mitra PLS ${auth.mitraId ?? ""} tidak ditemukan. Hubungi Admin Sistem.` : "Akun tidak ditemukan."}
+      </div>
+    );
   const entries = engine.entriesFor(acc.id);
 
   return (
@@ -77,6 +104,8 @@ export function KantorMaya() {
               {t.label}
             </button>
           ))}
+          {auth.mode === "demo" && (
+            <>
           <div className="sec">Demo</div>
           <select
             aria-label="Pilih Mitra PLS demo"
@@ -97,6 +126,8 @@ export function KantorMaya() {
               </option>
             ))}
           </select>
+            </>
+          )}
         </aside>
         <main className="main">
           <div className="main-head">
@@ -108,6 +139,8 @@ export function KantorMaya() {
               </p>
             </div>
           </div>
+          <StatusBanner accId={acc.id} onOpen={() => setTab("pemberitahuan")} />
+          <ReminderBanner accId={acc.id} onOpen={() => setTab("langganan")} />
           {tab === "ringkasan" && (
             <Ringkasan
               engine={engine}
@@ -117,8 +150,10 @@ export function KantorMaya() {
               lastMonth={lastMonth}
             />
           )}
+          {tab === "agent" && <AgentMarketing accId={acc.id} />}
+          {tab === "kuis" && <KuisRekening accId={acc.id} />}
           {tab === "jaringan" && <Jaringan engine={engine} accId={acc.id} />}
-          {tab === "bonus" && <BonusTable entries={entries} />}
+          {tab === "bonus" && <BonusTable engine={engine} entries={entries} />}
           {tab === "peringkat" && <Peringkat engine={engine} accId={acc.id} />}
           {tab === "planb" && (
             <PlanB
@@ -129,6 +164,9 @@ export function KantorMaya() {
             />
           )}
           {tab === "rujukan" && <Rujukan engine={engine} accId={acc.id} />}
+          {tab === "langganan" && <Langganan accId={acc.id} />}
+          {tab === "pajak" && <Pajak accId={acc.id} />}
+          {tab === "pemberitahuan" && <Pemberitahuan accId={acc.id} />}
         </main>
       </div>
     </>
@@ -252,11 +290,18 @@ function Ringkasan({
               </dd>
               <dt>Kedalaman Bonus Level terbayar</dt>
               <dd>{countBits(node.levelPaidMask)} dari 10</dd>
-              <dt>Langganan bulan {monthLabel(lastMonth)}</dt>
+              <dt>Akses aplikasi</dt>
+              <dd>
+                {(() => {
+                  const until = engine.accessUntil(accId);
+                  return until ? `Sampai ${dateLabel(until - 1)}` : "–";
+                })()}
+              </dd>
+              <dt>Syarat Langganan {monthLabel(lastMonth)}</dt>
               <dd>
                 {engine.subscriptionConditionMet(accId, lastMonth)
-                  ? "Syarat terpenuhi"
-                  : "Wajib aktif (bulan ke-4+)"}
+                  ? "Terpenuhi"
+                  : "Belum: akses tidak aktif pada akhir bulan"}
               </dd>
             </dl>
           ) : (
@@ -367,7 +412,40 @@ function Jaringan({ engine, accId }: { engine: MitransEngine; accId: string }) {
   );
 }
 
-function BonusTable({ entries }: { entries: LedgerEntry[] }) {
+/** Label tahap pembayaran: tercatat seketika, ditransfer pada Jumat jadwalnya, dan dapat ditarik bila pembelian dibatalkan. */
+function StageCell({ engine, e }: { engine: MitransEngine; e: LedgerEntry }) {
+  const st = engine.entryStage(e);
+  const risk = st.cancellableUntil ? (
+    <div className="muted" style={{ fontSize: 12 }}>
+      Dapat ditarik bila pembelian dibatalkan s.d. {dateLabel(st.cancellableUntil)}
+    </div>
+  ) : null;
+  if (st.stage === "ditransfer") return <Badge tone="good">✓ Ditransfer {dateLabel(st.transferDate!)}</Badge>;
+  if (st.stage === "sebagian")
+    return (
+      <>
+        <Badge tone="info">Uang muka 80% ditransfer · sisa {dateLabel(st.transferDate!)}</Badge>
+        {risk}
+      </>
+    );
+  if (st.stage === "tercatat")
+    return (
+      <>
+        <Badge tone="info">
+          Tercatat ·{" "}
+          {st.transferDate
+            ? `ditransfer ${dateLabel(st.transferDate)}`
+            : st.awaiting === "syarat"
+              ? "menunggu syarat"
+              : "ditetapkan saat tutup bulan"}
+        </Badge>
+        {risk}
+      </>
+    );
+  return <StatusBadge status={e.status} />;
+}
+
+function BonusTable({ engine, entries }: { engine: MitransEngine; entries: LedgerEntry[] }) {
   const [type, setType] = useState<BonusType | "ALL">("ALL");
   const [status, setStatus] = useState<string>("ALL");
   const rows = entries
@@ -379,6 +457,10 @@ function BonusTable({ entries }: { entries: LedgerEntry[] }) {
     .sort((a, b) => b.accruedAt - a.accruedAt);
   return (
     <Panel title="Rincian komisi dan bonus" hint={`${num(rows.length)} entri`}>
+      <div className="callout info" style={{ marginBottom: 12 }}>
+        Bonus <b>tercatat</b> seketika saat penjualan terjadi, lalu <b>ditransfer</b> pada Jumat jadwalnya setelah dipotong PPh 21.
+        Bonus dari penjualan masih dapat <b>ditarik</b> bila pembelian dibatalkan dalam masa pembatalan {PLAN.bonusSafetyDays} hari.
+      </div>
       <div className="toolbar">
         <select
           value={type}
@@ -398,9 +480,9 @@ function BonusTable({ entries }: { entries: LedgerEntry[] }) {
           aria-label="Status"
         >
           <option value="ALL">Semua status</option>
-          <option value="payable">Dibayar</option>
+          <option value="payable">Ditetapkan (dijadwalkan atau ditransfer)</option>
           <option value="held">Ditahan</option>
-          <option value="pending">Menunggu syarat</option>
+          <option value="pending">Tercatat, belum ditetapkan</option>
           <option value="forfeited">Hangus</option>
           <option value="ineligible">Tidak memenuhi syarat</option>
           <option value="clawback">Ditarik</option>
@@ -413,7 +495,7 @@ function BonusTable({ entries }: { entries: LedgerEntry[] }) {
               <th>Timbul</th>
               <th>Jenis</th>
               <th className="r">Bruto</th>
-              <th className="r">Dibayar</th>
+              <th className="r">Ditetapkan</th>
               <th>Status</th>
               <th>Jumat bayar</th>
               <th>Keterangan</th>
@@ -436,10 +518,14 @@ function BonusTable({ entries }: { entries: LedgerEntry[] }) {
                     : "–"}
                 </td>
                 <td>
-                  <StatusBadge status={e.status} />
+                  <StageCell engine={engine} e={e} />
                 </td>
                 <td className="num">
-                  {e.payoutDate ? dateLabel(e.payoutDate) : "–"}
+                  {e.advance && e.advanceDate
+                    ? `${dateLabel(e.advanceDate)} (80%) · ${dateLabel(e.payoutDate!)}`
+                    : e.payoutDate
+                      ? dateLabel(e.payoutDate)
+                      : "–"}
                 </td>
                 <td className="muted" style={{ fontSize: 12.5 }}>
                   {e.note ??
@@ -682,6 +768,7 @@ function PlanB({
 }
 
 function Rujukan({ engine, accId }: { engine: MitransEngine; accId: string }) {
+  const { now } = useDemo();
   const acc = engine.accounts.get(accId)!;
   const customerSales = [...engine.sales.values()].filter(
     (s) => s.kind === "license" && s.sellerId === accId && s.toCustomer,
@@ -702,7 +789,7 @@ function Rujukan({ engine, accId }: { engine: MitransEngine; accId: string }) {
         ) : (
           <div className="callout warn">
             Tautan belum aktif. Selesaikan kuis singkat Kode Etik (gratis) di
-            Kelas Kemitraan atau secara daring.
+            menu Kuis &amp; rekening.
           </div>
         )}
       </Panel>
@@ -717,6 +804,7 @@ function Rujukan({ engine, accId }: { engine: MitransEngine; accId: string }) {
                 <th>Pelanggan</th>
                 <th>Pembelian</th>
                 <th>Orientasi</th>
+                <th>Batas aktivasi afiliasi</th>
               </tr>
             </thead>
             <tbody>
@@ -738,11 +826,20 @@ function Rujukan({ engine, accId }: { engine: MitransEngine; accId: string }) {
                       <span className="muted"> · dikonversi</span>
                     ) : null}
                   </td>
+                  <td className="num">
+                    {s.convertedAt || s.cancelled ? (
+                      <span className="muted">–</span>
+                    ) : s.at + PLAN.conversionWindowDays * 86_400_000 > now ? (
+                      dateLabel(s.at + PLAN.conversionWindowDays * 86_400_000)
+                    ) : (
+                      <span className="muted">Lewat</span>
+                    )}
+                  </td>
                 </tr>
               ))}
               {customerSales.length === 0 && (
                 <tr>
-                  <td colSpan={3} className="muted">
+                  <td colSpan={4} className="muted">
                     Belum ada penjualan kepada Pelanggan.
                   </td>
                 </tr>

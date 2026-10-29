@@ -13,8 +13,8 @@ export function Aturan() {
         <div className="page-head">
           <h1>Ringkasan Aturan Mitra PLS</h1>
           <p className="muted">
-            Diringkas dari Rencana Pemasaran v{PLAN.version}, Kode Etik v1.2,
-            serta Syarat dan Ketentuan v1.2 (draf 27 Oktober 2026). Ringkasan
+            Diringkas dari Rencana Pemasaran v{PLAN.version}, Kode Etik v1.4,
+            serta Syarat dan Ketentuan v1.4 (draf 27 Oktober 2026). Ringkasan
             ini bukan pengganti dokumen resmi.
           </p>
         </div>
@@ -50,13 +50,13 @@ export function Aturan() {
             </thead>
             <tbody>
               <tr>
-                <td>Lisensi (akses 3 bulan)</td>
+                <td>Lisensi (tanpa batas waktu; termasuk akses 30 hari pertama)</td>
                 <td className="r num">{rp(PLAN.license.price)}</td>
                 <td className="r num">{rp(PLAN.license.netPrice)}</td>
                 <td className="r num">{PLAN.license.pvTenths / 10}</td>
               </tr>
               <tr>
-                <td>Langganan (per bulan, mulai bulan ke-4)</td>
+                <td>Langganan/RO (per 30 hari, mulai 30 hari setelah aktivasi)</td>
                 <td className="r num">{rp(PLAN.subscription.price)}</td>
                 <td className="r num">{rp(PLAN.subscription.netPrice)}</td>
                 <td className="r num">{PLAN.subscription.pvTenths / 10}</td>
@@ -86,8 +86,7 @@ export function Aturan() {
                   {rp(PLAN.sponsorBonus)} per Lisensi yang dijual langsung
                 </td>
                 <td>
-                  Lunas, tidak dibatalkan; pemegang Lisensi bulan ke-4+ wajib
-                  Langganan aktif
+                  Lunas, tidak dibatalkan (tanpa syarat Langganan, keputusan A4)
                 </td>
               </tr>
               <tr>
@@ -204,6 +203,19 @@ export function Aturan() {
         <div className="card">
           <h2>5. Status aktif, masa tunggu, dan jadwal bayar</h2>
           <ul>
+            <li>
+              Bonus Sponsor dan Bonus Layanan Berkah selalu dibayar bila
+              penjualan lunas. Syarat Langganan (akses aktif pada akhir bulan, sesudah 30 hari pertama Lisensi) hanya
+              berlaku untuk bonus tim.
+            </li>
+            <li>
+              Bonus tim dibayar 80% setiap Jumat; 20% sisanya setelah tutup
+              bulan sesuai faktor plafon.
+            </li>
+            <li>
+              Bila Lisensi dibatalkan, semua bonus yang timbul darinya ditarik
+              otomatis.
+            </li>
             <li>
               Aktif = paling sedikit {PLAN.activeMinPersonalSales} penjualan
               baru pribadi dalam satu bulan kalender (pembelian sendiri tidak
