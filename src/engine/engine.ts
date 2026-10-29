@@ -142,6 +142,8 @@ export class MitransEngine {
   /** Masukan dan peringkat bayar per bulan yang sudah ditutup (spesifikasi 6). */
   private rankInputsByMonth = new Map<string, Map<string, RankInput>>();
   private paidAsByMonth = new Map<string, Map<string, RankName>>();
+  /** Paket Family: id paket -> akun pemegang kursi. */
+  private bundleSeats = new Map<string, Set<string>>();
   private currentDayEnd = 0;
   private nextEntryId = 1;
   private currentDay: string;
@@ -365,6 +367,8 @@ export class MitransEngine {
     if (new Set(seats).size !== seats.length) throw new EngineError("Kursi Family harus orang berbeda");
     const sponsors = new Set(seats.map((id) => this.mustAccount(id).sponsorId));
     if (sponsors.size !== 1) throw new EngineError("Semua kursi Family harus dari tautan Sponsor yang sama");
+    if (this.sales.has(`${input.saleId}-1`)) throw new EngineError(`Penjualan ${input.saleId} sudah ada`);
+    this.bundleSeats.set(input.saleId, new Set(seats));
     const base = Math.floor(PLAN.family.netPrice / PLAN.family.seats);
     const nets = Array.from({ length: PLAN.family.seats }, (_, i) =>
       i === 0 ? PLAN.family.netPrice - base * (PLAN.family.seats - 1) : base,
@@ -894,7 +898,10 @@ export class MitransEngine {
 
   /** Catat 1 Lisensi pada node `nodeId` untuk upline dalam 10 level. */
   private addLicenseVolume(sale: Sale, nodeId: string): void {
+    const coSeats = sale.bundleId ? this.bundleSeats.get(sale.bundleId) : undefined;
     this.walkUp(nodeId, (anc, side) => {
+      // Kursi Family tidak menjadi volume bagi kursi lain dalam paket yang sama (bukan pembelian sendiri).
+      if (coSeats?.has(anc.accountId)) return;
       if (sale.countedBy!.has(anc.id)) return;
       sale.countedBy!.add(anc.id);
       anc.cumLicenses[side]++;

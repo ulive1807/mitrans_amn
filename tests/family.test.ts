@@ -81,3 +81,37 @@ describe("Paket Family Rp25 jt, 12 bulan, 3 kursi (keputusan Coach 29 Oktober 20
     expect(perLicenseUpperBounds().family).toBeLessThan(0.6);
   });
 });
+
+describe("Setiap kursi Family adalah hak usaha tersendiri", () => {
+  beforeEach(() => {
+    w.engine.purchaseFamily({ saleId: "F1", seatIds: ["AYAH", "IBU", "ANAK"], at: at("2027-01-06") });
+  });
+
+  it("volume kursi satu paket tidak dihitung untuk kursi lain di paket yang sama", () => {
+    for (const id of ["AYAH", "IBU", "ANAK"]) {
+      const node = w.engine.nodes.get(w.engine.accounts.get(id)!.nodeId!)!;
+      expect(node.cumLicenses).toEqual({ L: 0, R: 0 });
+    }
+  });
+
+  it("setiap kursi punya program 90 hari sendiri: IBU menjual dalam 90 hari -> Sponsor + Fast Start untuk IBU", () => {
+    w.mitra("X", "IBU", at("2027-02-10"));
+    expect(w.entries("IBU", "SPONSOR").map((e) => e.gross)).toEqual([750_000]);
+    expect(w.entries("IBU", "FAST_START").map((e) => e.gross)).toEqual([1_000_000]);
+    expect(w.engine.program90End("IBU")).toBe(w.engine.program90End("AYAH"));
+  });
+
+  it("bulan ke-4 sampai ke-12 tetap menerima bonus tanpa membayar Atlas Membership", () => {
+    w.mitra("Y", "ANAK", at("2027-06-10"));
+    w.mitra("Z", "ANAK", at("2027-06-11"));
+    w.engine.closeThrough("2027-06");
+    expect(w.entries("ANAK", "SPONSOR").every((e) => e.status === "payable")).toBe(true);
+  });
+
+  it("pembatasan per identitas dan status aktif dihitung per orang", () => {
+    w.mitra("X", "IBU", at("2027-02-10"));
+    w.engine.closeThrough("2027-02");
+    expect(w.engine.isActive("IBU", "2027-02")).toBe(true);
+    expect(w.engine.isActive("AYAH", "2027-02")).toBe(false);
+  });
+});
