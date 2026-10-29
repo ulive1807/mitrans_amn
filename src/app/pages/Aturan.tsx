@@ -13,9 +13,10 @@ export function Aturan() {
         <div className="page-head">
           <h1>Ringkasan Aturan Mitra PLS</h1>
           <p className="muted">
-            Diringkas dari Rencana Pemasaran v{PLAN.version}, Kode Etik v1.2,
-            serta Syarat dan Ketentuan v1.2 (draf 27 Oktober 2026). Ringkasan
-            ini bukan pengganti dokumen resmi.
+            Diringkas dari Rencana Pemasaran v{PLAN.version} dan Kode Etik
+            Mitra PLS v2.0 (draf 29 Oktober 2026), serta Syarat dan Ketentuan
+            v1.2. Seluruh dokumen masih draf untuk tinjauan konsultan hukum.
+            Ringkasan ini bukan pengganti dokumen resmi.
           </p>
         </div>
 
@@ -23,8 +24,9 @@ export function Aturan() {
           <h2>1. Prinsip</h2>
           <ul>
             <li>
-              Penghasilan hanya dari penjualan nyata Lisensi dan Langganan.
-              Tidak ada komisi dari pendaftaran atau perekrutan.
+              Penghasilan hanya dari penjualan nyata Lisensi Atlas, Lisensi
+              Atlas Family, dan {PLAN.subscription.name} yang lunas. Tidak ada
+              komisi dari pendaftaran atau perekrutan.
             </li>
             <li>
               Pendaftaran Mitra PLS gratis (Rp0) dan tidak mewajibkan pembelian.
@@ -65,7 +67,11 @@ export function Aturan() {
                 <td className="r num">{PLAN.family.pvTenths / 10}</td>
               </tr>
               <tr>
-                <td>{PLAN.subscription.name} (per bulan, mulai bulan ke-4: AI analisa bulanan dan alat duplikasi)</td>
+                <td>
+                  {PLAN.subscription.name} (per bulan, mulai bulan ke-4; Family:
+                  bulan ke-13. AI analisa bulanan dan alat duplikasi; dapat
+                  dihentikan kapan saja)
+                </td>
                 <td className="r num">{rp(PLAN.subscription.price)}</td>
                 <td className="r num">{rp(PLAN.subscription.netPrice)}</td>
                 <td className="r num">{PLAN.subscription.pvTenths / 10}</td>
@@ -93,16 +99,17 @@ export function Aturan() {
               <tr>
                 <td>Sponsor</td>
                 <td>
-                  {rp(PLAN.sponsorBonus)} per Lisensi yang dijual langsung
+                  {rp(PLAN.sponsorBonus)} per Lisensi Atlas;{" "}
+                  {rp(PLAN.family.sponsorBonus)} per paket {PLAN.family.name}
                 </td>
                 <td>
-                  Lunas, tidak dibatalkan; pemegang Lisensi bulan ke-4+ wajib
-                  Langganan aktif
+                  Lunas, tidak dibatalkan; sesudah masa akses (bulan ke-4, atau
+                  ke-13 untuk Family) wajib {PLAN.subscription.name} aktif
                 </td>
               </tr>
               <tr>
                 <td>Fast Start</td>
-                <td>{rp(PLAN.fastStartBonus)} per Lisensi</td>
+                <td>{rp(PLAN.fastStartBonus)} per Lisensi (Family: per kursi)</td>
                 <td>
                   Dijual dalam {PLAN.program90Days} hari pertama sejak aktivasi
                   Lisensi penjual; Lisensi pertama pembeli; dibayar Jumat setelah{" "}
@@ -113,8 +120,8 @@ export function Aturan() {
                 <td>Pendamping</td>
                 <td>{rp(PLAN.pendampingBonus)} sekali per Mitra binaan</td>
                 <td>
-                  Kepada Sponsor, saat Mitra binaan menjual Lisensi pertamanya
-                  dalam {PLAN.program90Days} hari pertamanya
+                  Kepada Sponsor, saat Mitra binaan membuat penjualan Fast
+                  Start pertamanya dalam {PLAN.program90Days} hari pertamanya
                 </td>
               </tr>
               <tr>
@@ -144,7 +151,10 @@ export function Aturan() {
                   {pct(PLAN.pembinaanRatesBp[0] / 10_000, 0)}; 4–6:{" "}
                   {pct(PLAN.pembinaanRatesBp[3] / 10_000, 0)} dari Bonus Pasangan
                 </td>
-                <td>Hanya Mitra PLS pemegang Lisensi</td>
+                <td>
+                  Hanya Mitra PLS pemegang Lisensi; paling banyak{" "}
+                  {rp(PLAN.pembinaanPersonalMonthlyCap)} per orang per bulan
+                </td>
               </tr>
               <tr>
                 <td>Prestasi Peringkat</td>
@@ -216,12 +226,42 @@ export function Aturan() {
           </table>
         </div>
 
-        <div className="card">
-          <h2>4. Plan B — dari Langganan</h2>
+        <div className="card" id="family">
+          <h2>4. {PLAN.family.name}</h2>
           <ul>
             <li>
-              Komisi Langganan {rp(PLAN.subscriptionCommission)} per Langganan
-              per bulan, kepada Mitra PLS penjual atau Sponsor langsung.
+              {rp(PLAN.family.price)} untuk {PLAN.family.seats} orang dewasa
+              (≥18 tahun, NIK dan persetujuan masing-masing) dalam satu
+              keluarga; akses {PLAN.family.accessMonths} bulan per kursi,{" "}
+              {PLAN.subscription.name} mulai bulan ke-
+              {PLAN.family.accessMonths + 1}.
+            </li>
+            <li>
+              Kursi utama (ayah) disponsori penjual. Kursi kedua di kaki kiri
+              dan kursi ketiga di kaki kanan kursi utama, disponsori kursi
+              utama. Setiap kursi adalah hak usaha tersendiri.
+            </li>
+            <li>
+              Penjual paket: Bonus Sponsor {rp(PLAN.family.sponsorBonus)} per
+              paket + Fast Start {rp(PLAN.fastStartBonus)} per kursi bila dalam{" "}
+              {PLAN.program90Days} hari pertamanya. Ketiga kursi dihitung
+              sebagai penjualan baru pribadinya.
+            </li>
+            <li>
+              Kursi utama tidak menerima Bonus Sponsor, Fast Start, maupun
+              Pendamping atas paket keluarganya; volume kursi kedua dan ketiga
+              dihitung untuk kursi utama.
+            </li>
+          </ul>
+        </div>
+
+        <div className="card">
+          <h2>5. Plan B — dari {PLAN.subscription.name}</h2>
+          <ul>
+            <li>
+              Komisi Langganan {rp(PLAN.subscriptionCommission)} per{" "}
+              {PLAN.subscription.name} per bulan, kepada Mitra PLS penjual atau
+              Sponsor langsung.
             </li>
             <li>
               Pasangan Langganan: {PLAN.roPairBp / 100}% × PV Langganan kaki kecil bulan itu ×
@@ -232,14 +272,15 @@ export function Aturan() {
               kecil 100 Lisensi) 1,5% dan tingkat 2 (400 Lisensi) 1,5%.
             </li>
             <li>
-              Syarat: Langganan sendiri aktif, pernah berstatus aktif, dan 1
-              kegiatan pembinaan terkonfirmasi pada bulan itu.
+              Syarat: {PLAN.subscription.name} sendiri aktif (atau masih dalam
+              masa akses Lisensi), pernah berstatus aktif, dan 1 kegiatan
+              pembinaan terkonfirmasi pada bulan itu.
             </li>
           </ul>
         </div>
 
         <div className="card">
-          <h2>5. Status aktif, masa tunggu, dan jadwal bayar</h2>
+          <h2>6. Status aktif, masa tunggu, dan jadwal bayar</h2>
           <ul>
             <li>
               Aktif = paling sedikit {PLAN.activeMinPersonalSales90} penjualan
@@ -254,8 +295,16 @@ export function Aturan() {
               sampai bulan hari ke-{PLAN.program90HoldUntilDay}.
             </li>
             <li>
-              Setiap Jumat (batas 07.00 WIB): Bonus Sponsor, Berkah jatuh tempo,
-              dan bonus tim bagi yang sudah aktif bulan berjalan.
+              Sesudah masa akses Lisensi (bulan ke-4; Family bulan ke-13),{" "}
+              {PLAN.subscription.name} aktif menjadi syarat menerima bonus.
+              Bonus yang timbul tanpa Membership aktif ditahan dengan masa
+              tunggu yang sama. Ini bukan syarat tetap menjadi Mitra PLS.
+            </li>
+            <li>
+              Setiap Jumat (batas 07.00 WIB): Bonus Sponsor, Fast Start dan
+              Pendamping yang sudah lewat {PLAN.refundWorkdays} hari kerja,
+              Berkah jatuh tempo, dan bonus tim bagi yang sudah aktif bulan
+              berjalan.
             </li>
             <li>
               Tutup bulan (tanggal 1 pukul 00.00 WIB): status aktif, masa
@@ -266,7 +315,7 @@ export function Aturan() {
         </div>
 
         <div className="card">
-          <h2>6. Plafon dan batas</h2>
+          <h2>7. Plafon dan batas</h2>
           <table className="t">
             <tbody>
               <tr>
@@ -287,8 +336,8 @@ export function Aturan() {
               <tr>
                 <td>Plafon Plan B</td>
                 <td className="r">
-                  {pct(PLAN.planBCapBp / 10_000, 0)} omzet bersih Langganan per
-                  bulan
+                  {pct(PLAN.planBCapBp / 10_000, 0)} omzet bersih{" "}
+                  {PLAN.subscription.name} per bulan
                 </td>
               </tr>
               <tr>
@@ -297,12 +346,12 @@ export function Aturan() {
               </tr>
               <tr>
                 <td>
-                  Batas atas biaya bonus per Lisensi (Mitra PLS / Pelanggan /
-                  dikonversi)
+                  Batas atas biaya bonus (Lisensi ke Mitra PLS / ke Pelanggan /
+                  paket Family / {PLAN.subscription.name})
                 </td>
                 <td className="r">
                   {pct(b.toMitra, 2)} / {pct(b.toCustomer, 2)} /{" "}
-                  {pct(b.converted, 2)}
+                  {pct(b.family, 2)} / {pct(b.subscription, 2)}
                 </td>
               </tr>
             </tbody>
@@ -315,7 +364,7 @@ export function Aturan() {
         </div>
 
         <div className="card" id="kode-etik">
-          <h2>7. Kode Etik — pokok larangan bagi Mitra PLS</h2>
+          <h2>8. Kode Etik v2.0 — pokok larangan bagi Mitra PLS</h2>
           <ul>
             <li>
               Menjanjikan penghasilan, menampilkan bukti transfer atau gaya
@@ -341,15 +390,66 @@ export function Aturan() {
               Mengirim pesan massal tanpa persetujuan atau menyebarkan data
               pribadi orang lain.
             </li>
+            <li>
+              Memakai kalimat panduan tanpa subjudulnya (angka 21).
+            </li>
+            <li>
+              Menjanjikan "pasti balik modal" atau mengutip angka simulasi tanpa
+              asumsi dan pernyataan bukan janji (angka 22).
+            </li>
+            <li>
+              Memakai ilustrasi batas atas, termasuk Rp1 miliar per bulan, dalam
+              iklan atau materi promosi (angka 23).
+            </li>
+            <li>
+              Mengisi kursi Family dengan orang yang tidak mendaftar dan
+              menyetujui sendiri, atau menawarkan Family sebagai "beli satu
+              dapat tiga posisi" (angka 24 dan 25).
+            </li>
           </ul>
           <p className="muted">
-            Pelanggaran berat (Pasal 18 angka 1, 2, 4, 9, 12, 15, 16) dapat
-            langsung dikenai pemutusan keanggotaan.
+            Pelanggaran berat (Pasal 18 angka 1, 2, 4, 9, 12, 15, 16, 22, 24)
+            dapat langsung dikenai pemutusan keanggotaan. Angka 21, 23, dan 25
+            dikenai teguran tertulis dan penarikan materi; pengulangan dapat
+            dibekukan atau diputus.
           </p>
+          <table className="t">
+            <thead>
+              <tr>
+                <th>Boleh (Pedoman Komunikasi)</th>
+                <th>Dilarang</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>
+                  "Lisensi Atlas {rp(PLAN.license.price)} memberi akses aplikasi
+                  3 bulan, lengkap dengan Program Pendampingan 90 Hari dan
+                  workshop tanpa biaya."
+                </td>
+                <td>"Bayar sekali, akses dan pelatihan seumur hidup."</td>
+              </tr>
+              <tr>
+                <td>"Bonus hanya timbul dari penjualan produk yang lunas, bukan dari pendaftaran."</td>
+                <td>"Ajak 2 orang, langsung dapat bonus."</td>
+              </tr>
+              <tr>
+                <td>
+                  "{PLAN.family.name} adalah lisensi untuk 3 orang dewasa dalam
+                  satu keluarga, dengan akses 12 bulan."
+                </td>
+                <td>"Beli satu dapat tiga posisi."</td>
+              </tr>
+              <tr>
+                <td>"Hasil setiap orang berbeda; baca ringkasan penghasilan tahunan Perusahaan."</td>
+                <td>"Pasti balik modal dalam 90 hari." / bukti transfer, angka Rp1 miliar</td>
+              </tr>
+            </tbody>
+          </table>
         </div>
 
         <div className="card" id="syarat">
-          <h2>8. Hak Pelanggan dan Mitra PLS</h2>
+          <h2>9. Hak Pelanggan dan Mitra PLS</h2>
           <ul>
             <li>
               Masa pertimbangan 10 hari kerja bagi Mitra PLS baru: Lisensi belum
@@ -364,6 +464,14 @@ export function Aturan() {
               Pembelian kembali Lisensi yang belum diaktifkan dan dapat
               dialihkan: harga beli − biaya administrasi ≤10% − komisi yang
               sudah diterima.
+            </li>
+            <li>
+              Setiap pemegang Lisensi berhak atas Program Pendampingan 90 Hari
+              dan 1 workshop 2 hari tanpa biaya; keduanya bukan bagian dari
+              harga Lisensi.
+            </li>
+            <li>
+              {PLAN.subscription.name} dapat dihentikan kapan saja.
             </li>
             <li>
               Pengaduan ditanggapi paling lambat 3 hari kerja dan diselesaikan

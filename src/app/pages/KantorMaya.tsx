@@ -35,7 +35,7 @@ const TABS: { id: Tab; label: string }[] = [
   { id: "jaringan", label: "Jaringan biner" },
   { id: "bonus", label: "Komisi & bonus" },
   { id: "peringkat", label: "Peringkat & Leadership" },
-  { id: "planb", label: "Plan B · Langganan" },
+  { id: "planb", label: "Plan B · Atlas Membership" },
   { id: "rujukan", label: "Rujukan & orientasi" },
 ];
 
@@ -155,9 +155,16 @@ function Program90({ engine, accId }: { engine: MitransEngine; accId: string }) 
     .filter((e) => (e.status === "payable" || e.status === "pending" || e.status === "held") && e.accruedAt < end);
   const sum = (types: string[]) =>
     in90.filter((e) => types.includes(e.type)).reduce((a, e) => a + (e.status === "payable" ? e.amount : e.gross), 0);
+  const familyPackages = new Set(
+    [...engine.sales.values()]
+      .filter((s) => s.kind === "license" && s.sellerId === accId && s.bundleId && !s.cancelled && s.at < end)
+      .map((s) => s.bundleId),
+  ).size;
+  const accessMonths = engine.accounts.get(accId)!.accessMonths ?? PLAN.license.accessMonths;
   const rows: { label: string; value: string; done?: boolean }[] = [
     { label: "Lisensi pribadi (panduan headline)", value: `${p.personal} / ${PLAN.program90TargetPersonal}`, done: p.personal >= PLAN.program90TargetPersonal },
     { label: "Lisensi tim (panduan headline)", value: `${p.team} / ${PLAN.program90TargetTeam}`, done: p.team >= PLAN.program90TargetTeam },
+    { label: `Paket ${PLAN.family.name} terjual`, value: num(familyPackages) },
     { label: "Bonus Sponsor + Fast Start", value: rp(sum(["SPONSOR", "FAST_START"])) },
     { label: "Bonus Pendamping", value: rp(sum(["PENDAMPING"])) },
     { label: "Seluruh bonus dari 90 hari pertama", value: rp(sum(Object.keys(BONUS_LABEL))) },
@@ -180,10 +187,11 @@ function Program90({ engine, accId }: { engine: MitransEngine; accId: string }) 
         </tbody>
       </table>
       <p className="muted" style={{ fontSize: 13 }}>
-        Setiap Lisensi yang Anda jual dalam 90 hari pertama memberi Bonus Sponsor {rp(PLAN.sponsorBonus)} dan
-        Fast Start {rp(PLAN.fastStartBonus)}. Mulai bulan ke-4, {PLAN.subscription.name}{" "}
-        {rp(PLAN.subscription.price)}/bulan menjaga akses alat Anda dan menjadi syarat bonus. Bukan janji
-        penghasilan.
+        Setiap Lisensi Atlas yang Anda jual dalam 90 hari pertama memberi Bonus Sponsor {rp(PLAN.sponsorBonus)} dan
+        Fast Start {rp(PLAN.fastStartBonus)}; setiap paket {PLAN.family.name} memberi Bonus Sponsor{" "}
+        {rp(PLAN.family.sponsorBonus)} dan Fast Start {rp(PLAN.fastStartBonus)} per kursi. Mulai bulan ke-
+        {accessMonths + 1}, {PLAN.subscription.name} {rp(PLAN.subscription.price)}/bulan menjaga akses alat Anda dan
+        menjadi syarat bonus. Bukan janji penghasilan; hasil setiap orang berbeda.
       </p>
     </Panel>
   );
@@ -305,11 +313,19 @@ function Ringkasan({
               <dd>
                 {num(node.carry.L)} / {num(node.carry.R)}
               </dd>
-              <dt>Langganan bulan {monthLabel(lastMonth)}</dt>
+              <dt>Jenis Lisensi</dt>
+              <dd>
+                {acc.accessMonths === PLAN.family.accessMonths
+                  ? `Kursi ${PLAN.family.name} (akses ${PLAN.family.accessMonths} bulan)`
+                  : `Lisensi Atlas (akses ${PLAN.license.accessMonths} bulan)`}
+              </dd>
+              <dt>
+                {PLAN.subscription.name} bulan {monthLabel(lastMonth)}
+              </dt>
               <dd>
                 {engine.subscriptionConditionMet(accId, lastMonth)
                   ? "Syarat terpenuhi"
-                  : "Wajib aktif (bulan ke-4+)"}
+                  : `Wajib aktif (bulan ke-${(acc.accessMonths ?? PLAN.license.accessMonths) + 1}+)`}
               </dd>
             </dl>
           ) : (
@@ -663,7 +679,7 @@ function PlanB({
     <>
       <Panel
         title="Syarat Plan B per bulan"
-        hint="Langganan/akses aktif · pernah aktif · 1 kegiatan pembinaan terkonfirmasi"
+        hint="Atlas Membership/masa akses aktif · pernah aktif · 1 kegiatan pembinaan terkonfirmasi"
       >
         <div className="table-wrap">
           <table className="t">
@@ -701,7 +717,7 @@ function PlanB({
                       <td>
                         {engine.accessActive(accId, m)
                           ? engine.hasPaidSubscription(accId, m)
-                            ? "Langganan"
+                            ? PLAN.subscription.name
                             : "Masa Lisensi"
                           : "–"}
                       </td>
@@ -765,8 +781,11 @@ function Rujukan({ engine, accId }: { engine: MitransEngine; accId: string }) {
               https://affiliatemarketing.network/r/{acc.code}
             </div>
             <p className="muted" style={{ fontSize: 13 }}>
-              Gunakan materi pemasaran resmi. Dilarang menjanjikan penghasilan,
-              keuntungan investasi, atau sinyal beli/jual.
+              Gunakan materi pemasaran resmi dan Pedoman Komunikasi Kode Etik
+              v2.0. Kalimat panduan selalu bersama subjudulnya. Dilarang
+              menjanjikan penghasilan atau "pasti balik modal", keuntungan
+              investasi, sinyal beli/jual, atau menawarkan Family sebagai "beli
+              satu dapat tiga posisi".
             </p>
           </>
         ) : (

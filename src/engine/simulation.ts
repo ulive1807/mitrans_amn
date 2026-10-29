@@ -655,6 +655,8 @@ export function demoScenario(): ScenarioParams {
     seed: 2026,
     licensesPerMonth: (m) => 18 + m * 9,
     mitraShare: 0.7,
+    // Sebagian penjualan Mitra baru berupa Lisensi Atlas Family agar Kantor Maya menampilkannya.
+    familyShare: 0.15,
     conversionRate: 0.2,
     subscriptionRetention: 0.85,
     coachingRate: 0.7,
