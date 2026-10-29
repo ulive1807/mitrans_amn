@@ -243,12 +243,14 @@ Asumsi: setiap orang menjual 1 Lisensi di kaki kiri dan 1 di kaki kanan per bula
 | `scripts/simulate.ts` | Skenario headline; laporan porsi Mitra yang mencapai Balik Modal dan laba per bulan |
 | `/aturan`, `/mitra`, `/admin` | Tampilan bonus 90 hari, hitung mundur 90 hari, kemajuan "2 per bulan" |
 
-## 14. Pertanyaan terbuka
+## 14. Keputusan atas pertanyaan terbuka (29 Oktober 2026)
 
-1. Pembagian dana leadership menurut bobot di bagian 7: setuju?
-2. Tafsiran kolom "PV: transaksi konsumen / bln" di Excel (bagian 6): benar sebagai jumlah transaksi pribadi per bulan?
-3. Syarat aktif setelah 90 hari tetap 2 penjualan per bulan?
-4. Biaya operasional dan workshop bulanan yang sebenarnya, untuk memastikan laba ≥15%.
+| # | Pertanyaan | Keputusan Coach |
+|---|---|---|
+| 1 | Pembagian dana leadership menurut bobot (bagian 7) | Disetujui |
+| 2 | Kolom Excel "PV: transaksi konsumen / bln" = jumlah transaksi pribadi per bulan | Disetujui |
+| 3 | Syarat aktif setelah 90 hari tetap 2 penjualan per bulan | Disetujui |
+| 4 | Biaya operasional dan workshop bulanan | Masih memakai asumsi 15% + cadangan 4%; angka nyata belum diberikan. Laba ≥15% belum terbukti sampai angka ini ada. |
 
 ## 15. Tahapan sebelum Go Live
 
