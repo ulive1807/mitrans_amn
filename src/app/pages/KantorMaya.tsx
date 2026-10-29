@@ -22,6 +22,7 @@ import {
 } from "../components/ui";
 import { dateLabel, monthLabel, num, pct, rp, rpShort } from "../format";
 import { currentRank, paidTotals, useDemo } from "../store";
+import { FamilyTab } from "./FamilyTab";
 
 type Tab =
   | "ringkasan"
@@ -29,6 +30,7 @@ type Tab =
   | "bonus"
   | "peringkat"
   | "planb"
+  | "family"
   | "rujukan";
 const TABS: { id: Tab; label: string }[] = [
   { id: "ringkasan", label: "Ringkasan" },
@@ -36,6 +38,7 @@ const TABS: { id: Tab; label: string }[] = [
   { id: "bonus", label: "Komisi & bonus" },
   { id: "peringkat", label: "Peringkat & Leadership" },
   { id: "planb", label: "Plan B · Atlas Membership" },
+  { id: "family", label: "Lisensi Family" },
   { id: "rujukan", label: "Rujukan & orientasi" },
 ];
 
@@ -130,6 +133,7 @@ export function KantorMaya() {
               months={reports.map((r) => r.month)}
             />
           )}
+          {tab === "family" && <FamilyTab engine={engine} accId={acc.id} />}
           {tab === "rujukan" && <Rujukan engine={engine} accId={acc.id} />}
         </main>
       </div>

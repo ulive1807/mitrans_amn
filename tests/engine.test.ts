@@ -72,7 +72,7 @@ describe("Pendaftaran (Bab 5)", () => {
     engine.registerMitra({
       id: "X",
       name: "X",
-      nik: "3171000000009999",
+      nik: "3171011505900001",
       sponsorId: "A",
       at: jan(3),
     });
@@ -80,7 +80,7 @@ describe("Pendaftaran (Bab 5)", () => {
       engine.registerMitra({
         id: "Y",
         name: "Y",
-        nik: "3171000000009999",
+        nik: "3171011505900001",
         sponsorId: "A",
         at: jan(3),
       }),

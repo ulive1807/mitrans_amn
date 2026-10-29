@@ -5,6 +5,7 @@ import {
   type RankName,
 
 } from "./plan";
+import { ageAt, normalizeNik, parseNik } from "./nik";
 import {
   allocateEqualWithCap,
   allocateWeightedWithCap,
@@ -42,6 +43,7 @@ import {
   type Account,
   type BinaryNode,
   type BonusType,
+  type FamilyBundle,
   type LedgerEntry,
   type MonthReport,
   type PoolSources,
@@ -120,6 +122,8 @@ export class MitransEngine {
   readonly pairLog: PairLogItem[] = [];
 
   private readonly nikIndex = new Map<string, string>();
+  /** Paket Lisensi Atlas Family per id paket (kursi utama, penjual, kursi kiri/kanan). */
+  readonly familyBundles = new Map<string, FamilyBundle>();
   private readonly months = new Map<string, MonthState>();
   private readonly pendingByMonth = new Map<string, LedgerEntry[]>();
   private held: LedgerEntry[] = [];
@@ -199,13 +203,13 @@ export class MitransEngine {
     const sponsor = this.mustAccount(input.sponsorId);
     if (sponsor.role === "pelanggan")
       throw new EngineError("Sponsor harus Mitra PLS atau akun struktural");
-    this.assertNikFree(input.nik);
+    const nik = this.assertNikFree(input.nik, input.at, true);
     const acc: Account = {
       id: input.id,
       code:
         input.code ?? `MTR-${String(this.accounts.size + 1).padStart(6, "0")}`,
       name: input.name,
-      nik: input.nik,
+      nik,
       role: "mitra",
       sponsorId: sponsor.id,
       joinedAt: input.at,
@@ -231,13 +235,13 @@ export class MitransEngine {
     const seller = this.mustAccount(input.sellerId);
     if (seller.role === "pelanggan")
       throw new EngineError("Penjual harus Mitra PLS");
-    this.assertNikFree(input.nik);
+    const nik = this.assertNikFree(input.nik, input.at, false);
     const acc: Account = {
       id: input.id,
       code:
         input.code ?? `PLG-${String(this.accounts.size + 1).padStart(6, "0")}`,
       name: input.name,
-      nik: input.nik,
+      nik,
       role: "pelanggan",
       sponsorId: seller.id,
       joinedAt: input.at,
@@ -254,6 +258,8 @@ export class MitransEngine {
     const acc = this.mustAccount(accountId);
     if (acc.role !== "mitra")
       throw new EngineError("Kuis hanya untuk Mitra PLS");
+    if (acc.familySeat?.status === "menunggu")
+      throw new EngineError("Selesaikan verifikasi kursi Family terlebih dahulu");
     acc.quizPassed = true;
   }
 
@@ -271,7 +277,14 @@ export class MitransEngine {
     at: number;
     legPreference?: Side;
     /** Internal: kursi paket Family (penjual = Sponsor ayah). */
-    family?: { bundleId: string; net: number; sellerId: string; sponsorBonus: number };
+    family?: {
+      bundleId: string;
+      net: number;
+      sellerId: string;
+      sponsorBonus: number;
+      /** Waktu pembelian paket: dasar kelayakan program 90 hari penjual untuk kursi yang diverifikasi kemudian. */
+      program90At?: number;
+    };
   }): Sale {
     this.advance(input.at);
     const buyer = this.mustAccount(input.buyerId);
@@ -319,8 +332,9 @@ export class MitransEngine {
       if (e.status === "pending") this.pendingBerkah.push(e);
     }
 
+    const program90At = input.family?.program90At ?? input.at;
     const program90 =
-      firstLicenseOfBuyer && seller.role === "mitra" && this.inProgram90(seller.id, input.at);
+      firstLicenseOfBuyer && seller.role === "mitra" && this.inProgram90(seller.id, program90At);
     if (program90) {
       this.accrue(seller.id, "FAST_START", PLAN.fastStartBonus, input.at, { saleId: sale.id });
       if (!this.pendampingBySeller.has(seller.id) && seller.sponsorId) {
@@ -349,57 +363,179 @@ export class MitransEngine {
       sale.volumeNodeId = nodeId;
       if (nodeId) this.addLicenseVolume(sale, nodeId);
     }
-    if (firstLicenseOfBuyer && seller.role === "mitra") this.recordProgram90(sale, seller);
+    if (firstLicenseOfBuyer && seller.role === "mitra") this.recordProgram90(sale, seller, program90At);
     return sale;
   }
 
   /**
-   * Paket Family (keputusan Coach 29 Oktober 2026): 1 pembayaran untuk ayah (posisi utama) dan sampai 2
-   * anggota keluarga dewasa yang disponsori langsung oleh ayah: satu di kaki kiri ayah, satu di kaki kanan.
-   * Semua kursi dijual oleh Sponsor ayah: Bonus Sponsor Rp3.000.000 per paket (dibagi rata per kursi) dan
-   * Fast Start per kursi untuknya; ayah tidak menerima Bonus Sponsor/Fast Start dari keluarganya. Volume
-   * ibu dan anak dihitung untuk ayah seperti volume biasa. Akses 12 bulan.
+   * Paket Lisensi Atlas Family: 1 pembayaran untuk kursi utama (ayah) dan 2 anggota keluarga dewasa
+   * yang disponsori langsung oleh ayah: satu di kaki kiri ayah (anak), satu di kaki kanan (istri).
+   * Semua kursi dijual oleh Sponsor ayah: Bonus Sponsor PLAN.family.sponsorBonus per paket (dibagi rata
+   * per kursi) dan Fast Start per kursi untuknya; ayah tidak menerima Bonus Sponsor/Fast Start dari
+   * keluarganya. Volume ibu dan anak dihitung untuk ayah seperti volume biasa. Akses 12 bulan.
+   *
+   * Dua cara mengisi kursi kiri/kanan:
+   * - `members`: ayah mendaftarkan anak dan istri saat checkout. Akun dan posisinya langsung dibuat
+   *   (NIK diperiksa: sah, belum terdaftar, usia ≥18), tetapi Lisensi kursi itu baru aktif setelah
+   *   anggota memverifikasi sendiri (`verifyFamilyMember`). Sebelum itu tidak ada volume maupun bonus.
+   * - `leftId`/`rightId`: anggota yang sudah mendaftar sendiri (sudah terverifikasi); langsung aktif.
    */
   purchaseFamily(input: {
     saleId: string;
     headId: string;
     leftId?: string;
     rightId?: string;
+    members?: Partial<Record<Side, { id: string; name: string; nik: string }>>;
     at: number;
   }): Sale[] {
+    this.advance(input.at);
     const head = this.mustAccount(input.headId);
     const others: [string, Side][] = [];
     if (input.leftId) others.push([input.leftId, "L"]);
     if (input.rightId) others.push([input.rightId, "R"]);
-    const ids = [head.id, ...others.map(([id]) => id)];
+    const newMembers = (["L", "R"] as Side[])
+      .filter((side) => input.members?.[side])
+      .map((side) => [input.members![side]!, side] as const);
+    if (newMembers.some(([, side]) => others.some(([, o]) => o === side)))
+      throw new EngineError("Satu kursi hanya untuk satu anggota keluarga");
+    const ids = [head.id, ...others.map(([id]) => id), ...newMembers.map(([m]) => m.id)];
     if (new Set(ids).size !== ids.length) throw new EngineError("Kursi Family harus orang berbeda");
     for (const [id] of others)
       if (this.mustAccount(id).sponsorId !== head.id)
         throw new EngineError("Anggota keluarga harus disponsori langsung oleh pemegang kursi utama");
+    if (head.role !== "mitra") throw new EngineError("Kursi utama harus Mitra PLS");
     if (head.nodeId) throw new EngineError("Pemegang kursi utama sudah memegang Lisensi");
     if (this.sales.has(`${input.saleId}-1`)) throw new EngineError(`Penjualan ${input.saleId} sudah ada`);
-    const base = Math.floor(PLAN.family.netPrice / PLAN.family.seats);
-    const net = (i: number) => (i === 0 ? PLAN.family.netPrice - base * (PLAN.family.seats - 1) : base);
+    // Periksa semua NIK anggota baru sebelum ada yang dicatat, termasuk NIK yang sama di kedua kursi.
+    const niks = newMembers.map(([m]) => this.assertNikFree(m.nik, input.at, true));
+    if (new Set(niks).size !== niks.length)
+      throw new EngineError("NIK sudah terdaftar. Satu NIK hanya untuk satu akun");
+    for (const [m] of newMembers)
+      if (this.accounts.has(m.id)) throw new EngineError(`Akun ${m.id} sudah ada`);
+
     const sellerId = head.sponsorId!;
-    const sponsorBase = Math.floor(PLAN.family.sponsorBonus / PLAN.family.seats);
-    const sponsorBonus = (i: number) =>
-      i === 0 ? PLAN.family.sponsorBonus - sponsorBase * (PLAN.family.seats - 1) : sponsorBase;
-    const family = (i: number) => ({ bundleId: input.saleId, net: net(i), sellerId, sponsorBonus: sponsorBonus(i) });
+    const bundle: FamilyBundle = {
+      id: input.saleId,
+      headId: head.id,
+      sellerId,
+      purchasedAt: input.at,
+      seats: {},
+    };
+    this.familyBundles.set(bundle.id, bundle);
     const sales = [
-      this.purchaseLicense({ saleId: `${input.saleId}-1`, buyerId: head.id, at: input.at, family: family(0) }),
+      this.purchaseLicense({
+        saleId: `${input.saleId}-1`,
+        buyerId: head.id,
+        at: input.at,
+        family: this.familySeatTerms(bundle, 0),
+      }),
     ];
-    others.forEach(([id, side], i) =>
+    others.forEach(([id, side], i) => {
+      bundle.seats[side] = id;
+      this.mustAccount(id).familySeat = {
+        bundleId: bundle.id,
+        side,
+        status: "aktif",
+        invitedAt: input.at,
+        verifiedAt: input.at,
+      };
       sales.push(
         this.purchaseLicense({
           saleId: `${input.saleId}-${i + 2}`,
           buyerId: id,
           at: input.at,
           legPreference: side,
-          family: family(i + 1),
+          family: this.familySeatTerms(bundle, i + 1),
         }),
-      ),
-    );
+      );
+    });
+    newMembers.forEach(([m, side]) => {
+      const acc = this.registerMitra({ id: m.id, name: m.name, nik: m.nik, sponsorId: head.id, at: input.at });
+      acc.familySeat = { bundleId: bundle.id, side, status: "menunggu", invitedAt: input.at };
+      bundle.seats[side] = acc.id;
+      // Posisi langsung dikunci di kaki kiri/kanan ayah agar tidak terisi penempatan lain.
+      this.attachNode(acc, head.nodeId!, side, input.at);
+    });
     return sales;
+  }
+
+  /** Bagian omzet dan Bonus Sponsor satu kursi Family (kursi 0 = kursi utama). */
+  private familySeatTerms(bundle: FamilyBundle, seat: number) {
+    const n = PLAN.family.seats;
+    const base = Math.floor(PLAN.family.netPrice / n);
+    const sponsorBase = Math.floor(PLAN.family.sponsorBonus / n);
+    return {
+      bundleId: bundle.id,
+      net: seat === 0 ? PLAN.family.netPrice - base * (n - 1) : base,
+      sellerId: bundle.sellerId,
+      sponsorBonus: seat === 0 ? PLAN.family.sponsorBonus - sponsorBase * (n - 1) : sponsorBase,
+      program90At: bundle.purchasedAt,
+    };
+  }
+
+  /**
+   * Anggota keluarga memverifikasi sendiri kursinya (verifikasi identitas dan persetujuan dokumen),
+   * paling lambat PLAN.family.seatVerifyDays hari sejak didaftarkan. Saat itu Lisensi kursi aktif:
+   * volume masuk ke kursi utama dan upline, Bonus Sponsor bagian kursi dan Fast Start untuk penjual.
+   */
+  verifyFamilyMember(accountId: string, at: number): Sale {
+    this.advance(at);
+    const acc = this.mustAccount(accountId);
+    const seat = acc.familySeat;
+    if (!seat) throw new EngineError("Akun ini bukan kursi Family");
+    if (seat.status === "aktif") throw new EngineError("Kursi Family sudah terverifikasi");
+    if (at > addDays(seat.invitedAt, PLAN.family.seatVerifyDays))
+      throw new EngineError(
+        `Batas verifikasi ${PLAN.family.seatVerifyDays} hari terlewati; kursi utama dapat mengganti anggota keluarga`,
+      );
+    const bundle = this.familyBundles.get(seat.bundleId)!;
+    const index = seat.side === "L" ? 2 : 3;
+    seat.status = "aktif";
+    seat.verifiedAt = at;
+    return this.purchaseLicense({
+      saleId: `${bundle.id}-${index}`,
+      buyerId: acc.id,
+      at,
+      family: this.familySeatTerms(bundle, index - 1),
+    });
+  }
+
+  /**
+   * Kursi utama mengganti anggota keluarga yang belum memverifikasi kursinya. Akun lama dihapus dan
+   * NIK-nya dilepas; anggota baru menempati posisi yang sama dan mendapat batas verifikasi baru.
+   */
+  replaceFamilyMember(input: { accountId: string; member: { id: string; name: string; nik: string }; at: number }): Account {
+    this.advance(input.at);
+    const old = this.mustAccount(input.accountId);
+    const seat = old.familySeat;
+    if (!seat || seat.status !== "menunggu")
+      throw new EngineError("Hanya kursi Family yang belum diverifikasi yang dapat diganti");
+    if (this.ledger.some((e) => e.accountId === old.id) || [...this.accounts.values()].some((a) => a.sponsorId === old.id))
+      throw new EngineError("Kursi ini sudah memiliki catatan; hubungi layanan pelanggan");
+    const bundle = this.familyBundles.get(seat.bundleId)!;
+    const head = this.mustAccount(bundle.headId);
+    const node = this.nodes.get(old.nodeId!)!;
+    this.accounts.delete(old.id);
+    this.nikIndex.delete(old.nik);
+    try {
+      const acc = this.registerMitra({
+        id: input.member.id,
+        name: input.member.name,
+        nik: input.member.nik,
+        sponsorId: head.id,
+        at: input.at,
+      });
+      acc.familySeat = { bundleId: bundle.id, side: seat.side, status: "menunggu", invitedAt: input.at };
+      acc.nodeId = node.id;
+      node.accountId = acc.id;
+      bundle.seats[seat.side] = acc.id;
+      return acc;
+    } catch (e) {
+      // Pendaftaran pengganti gagal (mis. NIK sudah terdaftar): kembalikan anggota lama.
+      this.accounts.set(old.id, old);
+      this.nikIndex.set(old.nik, old.id);
+      throw e;
+    }
   }
 
   /** Pelanggan mengonfirmasi pendampingan orientasi di aplikasi (Bab 7 butir 5). */
@@ -819,10 +955,24 @@ export class MitransEngine {
     this.nikIndex.set(acc.nik, acc.id);
   }
 
-  private assertNikFree(nik: string): void {
-    if (!/^\d{16}$/.test(nik)) throw new EngineError("NIK harus 16 digit");
-    if (this.nikIndex.has(nik))
-      throw new EngineError("Satu NIK hanya untuk satu akun");
+  /**
+   * Satu NIK satu akun (Bab 5.2): NIK diperiksa bentuknya, dinormalkan, lalu ditolak bila sudah dipakai
+   * akun mana pun (Mitra PLS, Pelanggan, atau kursi Family yang masih menunggu verifikasi).
+   * Mengembalikan NIK yang sudah dinormalkan.
+   */
+  private assertNikFree(raw: string, at: number, adult: boolean): string {
+    const info = parseNik(raw, at);
+    if ("error" in info) throw new EngineError(info.error);
+    if (this.nikIndex.has(info.nik))
+      throw new EngineError("NIK sudah terdaftar. Satu NIK hanya untuk satu akun");
+    if (adult && ageAt(info.birthDate, at) < 18)
+      throw new EngineError("Mitra PLS harus berusia paling rendah 18 tahun (menurut tanggal lahir pada NIK)");
+    return info.nik;
+  }
+
+  /** Untuk formulir: apakah NIK ini sudah dipakai akun lain. */
+  nikTaken(raw: string): boolean {
+    return this.nikIndex.has(normalizeNik(raw));
   }
 
   private assertSellerCanSell(seller: Account): void {
@@ -928,7 +1078,7 @@ export class MitransEngine {
   }
 
   /** Catat Lisensi untuk kemajuan program 90 hari penjual dan Sponsor-sponsornya. */
-  private recordProgram90(sale: Sale, seller: Account): void {
+  private recordProgram90(sale: Sale, seller: Account, at = sale.at): void {
     const bucket = (id: string) => {
       let c = this.program90Sales.get(id);
       if (!c) {
@@ -937,10 +1087,10 @@ export class MitransEngine {
       }
       return c;
     };
-    if (this.inProgram90(seller.id, sale.at)) bucket(seller.id).personal.add(sale.id);
+    if (this.inProgram90(seller.id, at)) bucket(seller.id).personal.add(sale.id);
     let cur = seller.sponsorId ? this.accounts.get(seller.sponsorId) : undefined;
     while (cur && cur.role === "mitra") {
-      if (this.inProgram90(cur.id, sale.at)) bucket(cur.id).team.add(sale.id);
+      if (this.inProgram90(cur.id, at)) bucket(cur.id).team.add(sale.id);
       cur = cur.sponsorId ? this.accounts.get(cur.sponsorId) : undefined;
     }
   }

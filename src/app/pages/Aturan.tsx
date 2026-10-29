@@ -237,9 +237,17 @@ export function Aturan() {
               {PLAN.family.accessMonths + 1}.
             </li>
             <li>
-              Kursi utama (ayah) disponsori penjual. Kursi kedua di kaki kiri
-              dan kursi ketiga di kaki kanan kursi utama, disponsori kursi
-              utama. Setiap kursi adalah hak usaha tersendiri.
+              Kursi utama (ayah) disponsori penjual. Saat membeli, ayah
+              mendaftarkan anak (kaki kiri) dan istri (kaki kanan); posisinya
+              langsung dikunci dan disponsori ayah. Kursi itu aktif setelah
+              anggota sendiri memverifikasi identitas dan menyetujui dokumen,
+              paling lambat {PLAN.family.seatVerifyDays} hari. Setiap kursi
+              adalah hak usaha tersendiri.
+            </li>
+            <li>
+              1 akun = 1 NIK: sistem memeriksa NIK (16 angka, kode provinsi,
+              tanggal lahir, usia ≥18) dan otomatis menolak NIK yang sudah
+              terdaftar pada akun mana pun.
             </li>
             <li>
               Penjual paket: Bonus Sponsor {rp(PLAN.family.sponsorBonus)} per

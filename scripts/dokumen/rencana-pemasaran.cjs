@@ -314,7 +314,7 @@ const blocks = [
     "ol",
     [
       "Berusia paling rendah 18 tahun atau sudah cakap hukum.",
-      "Memiliki KTP elektronik yang masih berlaku. Satu Nomor Induk Kependudukan (NIK) hanya untuk satu akun Mitra PLS.",
+      "Memiliki KTP elektronik yang masih berlaku. Satu Nomor Induk Kependudukan (NIK) hanya untuk satu akun, baik Mitra PLS maupun Pelanggan. Sistem memeriksa bentuk NIK dan tanggal lahirnya, dan otomatis menolak NIK yang sudah terdaftar; keaslian NIK diverifikasi melalui layanan verifikasi identitas elektronik.",
       "Memiliki rekening bank atas nama sendiri untuk menerima komisi dan bonus.",
       "Membaca serta menyetujui Rencana Pemasaran, Kode Etik, dan Syarat dan Ketentuan secara elektronik.",
       "Tidak sedang menjalani sanksi pemutusan keanggotaan dari Perusahaan.",
@@ -402,7 +402,7 @@ const blocks = [
       ],
       [
         "Posisi kursi kedua dan ketiga",
-        "Anak ditempatkan langsung di kaki kiri ayah dan ibu di kaki kanan ayah. Sponsor keduanya adalah ayah",
+        "Anak ditempatkan langsung di kaki kiri ayah dan ibu di kaki kanan ayah. Sponsor keduanya adalah ayah. Posisi ini dikunci saat pembelian sehingga tidak dapat terisi penempatan lain",
       ],
       [
         "Masa akses",
@@ -415,6 +415,18 @@ const blocks = [
       [
         "Status, peringkat, dan batas",
         "Dihitung terpisah untuk setiap kursi (per NIK)",
+      ],
+      [
+        "Pendaftaran kursi kedua dan ketiga",
+        "Saat membeli paket, kursi utama mendaftarkan nama dan NIK anak serta istri. Sistem menolak NIK yang tidak sah, sudah terdaftar pada akun mana pun, dipakai dua kali, atau milik orang di bawah 18 tahun (menurut tanggal lahir pada NIK)",
+      ],
+      [
+        "Verifikasi oleh anggota sendiri",
+        "Kursi kedua dan ketiga baru aktif setelah anggota itu sendiri memverifikasi identitas dan menyetujui Rencana Pemasaran, Kode Etik, serta Syarat dan Ketentuan, paling lambat 30 hari sejak didaftarkan. Sebelum itu tidak ada volume, bonus, maupun tautan rujukan bagi kursi itu",
+      ],
+      [
+        "Penggantian anggota",
+        "Anggota yang belum memverifikasi dapat diganti oleh kursi utama dengan anggota keluarga dewasa lain; NIK lama dilepas dan anggota baru mendapat batas 30 hari",
       ],
       ["Bonus dari pembelian paket", "Lihat bagian 8.3"],
     ],
@@ -584,7 +596,7 @@ const blocks = [
       [
         "Mitra PLS yang menjual paket (Sponsor kursi utama)",
         "Bonus Sponsor Rp3.000.000 per paket, ditambah Fast Start Rp1.000.000 per kursi bila dijual dalam 90 hari pertamanya (paling banyak Rp6.000.000 per paket)",
-        "Ketiga kursi tercatat sebagai penjualan baru pribadinya",
+        "Bagian kursi utama timbul saat pembelian; bagian kursi kedua dan ketiga timbul saat kursi itu diverifikasi. Fast Start dinilai dari tanggal pembelian paket. Setiap kursi tercatat sebagai penjualan baru pribadinya",
       ],
       [
         "Pemegang kursi utama (ayah)",

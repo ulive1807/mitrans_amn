@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { perLicenseUpperBounds } from "../src/engine/calc";
 import { EngineError } from "../src/engine/engine";
 import { PLAN } from "../src/engine/plan";
+import { syntheticNik } from "../src/engine/simulation";
 import { at, createWorld } from "./helpers";
 
 let w: ReturnType<typeof createWorld>;
@@ -122,7 +123,7 @@ describe("Setiap kursi Family adalah hak usaha tersendiri", () => {
     let s = 0;
     const reg = (sponsorId: string, t: number) => {
       const id = `F${++n}`;
-      e.registerMitra({ id, name: id, nik: String(3_200_000_000_000_000 + n), sponsorId, at: t });
+      e.registerMitra({ id, name: id, nik: syntheticNik(5_000 + n), sponsorId, at: t });
       e.passQuiz(id);
       return id;
     };

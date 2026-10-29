@@ -110,7 +110,7 @@ const blocks = [
   ],
   [
     "p",
-    "Satu Identitas hanya untuk satu keanggotaan. Keanggotaan tidak dapat didaftarkan atas nama orang lain. Ketentuan ini juga berlaku bagi setiap pemegang kursi Lisensi Atlas Family yang mendaftar sebagai Mitra PLS.",
+    "Satu Identitas hanya untuk satu akun. Sistem otomatis menolak NIK yang sudah terdaftar pada akun mana pun, termasuk kursi Lisensi Atlas Family yang masih menunggu verifikasi. Keanggotaan tidak dapat didaftarkan atas nama orang lain tanpa persetujuan dan verifikasi orang itu sendiri.",
   ],
   ["h2", "Pasal 4. Prosedur pendaftaran"],
   [
@@ -122,7 +122,7 @@ const blocks = [
       "Pendaftaran tidak dipungut biaya dan tidak mewajibkan pembelian barang apa pun.",
       "Mitra PLS menerima paket perdana digital tanpa biaya melalui Kantor Maya.",
       "Tautan rujukan Mitra PLS aktif setelah ia lulus kuis singkat tentang Kode Etik ini. Kuis tersedia di Kelas Kemitraan dan secara daring, tanpa biaya.",
-      "Untuk Lisensi Atlas Family, setiap pemegang kursi kedua dan ketiga mendaftar, memverifikasi identitas, dan memberikan persetujuan sendiri. Penempatan kursi mengikuti Rencana Pemasaran bagian 5.6.",
+      "Untuk Lisensi Atlas Family, kursi utama mendaftarkan nama dan NIK anggota keluarganya saat membeli paket, dengan persetujuan mereka. Setiap anggota kemudian memverifikasi identitas dan memberikan persetujuan sendiri paling lambat 30 hari; sebelum itu kursinya belum aktif. Penempatan kursi mengikuti Rencana Pemasaran bagian 5.6.",
     ],
   ],
   ["h2", "Pasal 5. Masa pertimbangan dan pembatalan keanggotaan"],

@@ -73,8 +73,17 @@ export function syntheticName(i: number): string {
   return `${FIRST[i % FIRST.length]} ${LAST[Math.floor(i / FIRST.length) % LAST.length]}`;
 }
 
+/**
+ * NIK sintetis yang lolos pemeriksaan bentuk (src/engine/nik.ts) dan unik untuk setiap i:
+ * 3171 01 + tanggal lahir 1970–1999 (DDMMYY) + nomor urut. Bukan NIK orang sungguhan.
+ */
 export function syntheticNik(i: number): string {
-  return `3171${String(i).padStart(12, "0")}`;
+  const day = 1 + (i % 28);
+  const month = 1 + (Math.floor(i / 28) % 12);
+  const year = 70 + (Math.floor(i / 336) % 30);
+  const serial = 1 + Math.floor(i / 10_080);
+  const p2 = (n: number) => String(n).padStart(2, "0");
+  return `317101${p2(day)}${p2(month)}${p2(year)}${String(serial).padStart(4, "0")}`;
 }
 
 export interface ScenarioParams {

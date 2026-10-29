@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { EngineError, atWib } from "../../engine";
+import { EngineError, atWib, parseNik } from "../../engine";
 import { dateLabel } from "../format";
 import { useDemo } from "../store";
 import { ProtoRibbon, TopBar } from "../components/ui";
@@ -117,9 +117,21 @@ export function Daftar() {
   const age = form.birth
     ? (now - Date.parse(form.birth)) / (365.25 * 86_400_000)
     : 0;
+  // 1 akun = 1 NIK: bentuk NIK diperiksa, NIK yang sudah terdaftar ditolak, dan tanggal lahir harus sama dengan NIK.
+  const nikInfo = form.nik ? parseNik(form.nik, now) : undefined;
+  const nikError = !nikInfo
+    ? "Isi NIK sesuai KTP (16 angka)"
+    : "error" in nikInfo
+      ? nikInfo.error
+      : engine.nikTaken(form.nik)
+        ? "NIK sudah terdaftar. Satu NIK hanya untuk satu akun"
+        : form.birth &&
+            new Date(nikInfo.birthDate).toISOString().slice(0, 10) !== form.birth
+          ? "Tanggal lahir tidak sama dengan tanggal lahir pada NIK"
+          : "";
   const errs = {
     name: form.name.trim().length < 3 ? "Isi nama lengkap sesuai KTP" : "",
-    nik: !/^\d{16}$/.test(form.nik) ? "NIK terdiri dari 16 angka" : "",
+    nik: nikError,
     birth: !form.birth
       ? "Isi tanggal lahir"
       : age < 18

@@ -36,6 +36,27 @@ export interface Account {
   /** Peringkat yang sudah tercapai dan terverifikasi (sekali per identitas), urut dari rendah. */
   ranksAchieved: { rank: RankName; at: number; claimed: boolean }[];
   terminated?: boolean;
+  /** Pemegang kursi kedua/ketiga Lisensi Atlas Family yang didaftarkan kursi utama. */
+  familySeat?: {
+    bundleId: string;
+    side: Side;
+    /** "menunggu": posisi sudah dikunci, tetapi Lisensi kursi belum aktif sampai anggota memverifikasi sendiri. */
+    status: "menunggu" | "aktif";
+    invitedAt: number;
+    verifiedAt?: number;
+  };
+}
+
+/** Paket Lisensi Atlas Family. */
+export interface FamilyBundle {
+  id: string;
+  /** Kursi utama (ayah). */
+  headId: string;
+  /** Mitra PLS yang menjual paket (Sponsor kursi utama). */
+  sellerId: string;
+  purchasedAt: number;
+  /** Pemegang kursi di kaki kiri dan kanan kursi utama. */
+  seats: Partial<Record<Side, string>>;
 }
 
 export interface BinaryNode {
