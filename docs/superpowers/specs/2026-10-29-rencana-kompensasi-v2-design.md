@@ -319,7 +319,7 @@ Simulasi headline resmi (2 per bulan selama 2 bulan, lalu bina; engine, skala 1)
 
 Laba per paket Family (dana layanan Rp426.000 per 3 bulan per akun = Rp5.112.000 untuk 12 bulan; 3 workshop): **33,9%** pada pola headline, **14,3%** pada bonus terburuk. Bagi keluarga, Family lebih hemat Rp8.273.000 dibanding 3 Lisensi + 9 bulan Atlas Membership untuk 3 orang (Rp33.273.000).
 
-Ilustrasi engine: Mitra yang menjual 1 Family di bulan ke-1 dan 1 Family di bulan ke-2 menerima Rp13.950.000 dari 90 hari pertamanya (Sponsor Rp4.500.000, Fast Start Rp6.000.000, Pasangan Rp450.000, Pool Rp3.000.000); Rp10.950.000 tanpa Pool.
+Ilustrasi engine: Mitra yang menjual 1 Family di bulan ke-1 dan 1 Family di bulan ke-2 menerima Rp14.525.000 dari 90 hari pertamanya (Sponsor Rp5.000.000, Fast Start Rp6.000.000, Pasangan Rp450.000, Pembinaan Rp75.000, Pool Rp3.000.000); Rp11.525.000 tanpa Pool (engine, keputusan akhir baris 19).
 
 Ketentuan hak usaha per kursi (dibuktikan uji `tests/family.test.ts`):
 - Setiap kursi dewasa yang terdaftar sebagai Mitra adalah **hak usaha tersendiri**: posisi, status aktif, program 90 hari (dimulai saat Family diaktifkan), peringkat, dan batas per identitas masing-masing.
