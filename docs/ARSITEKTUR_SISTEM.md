@@ -58,7 +58,7 @@ Prinsip implementasi:
 | A11 | Pool Aktif melebihi ruang plafon Plan A | Sisanya dibawa ke bulan berikutnya | `poolCarry` |
 | A12 | Pembatalan setelah unit dipasangkan | Volume dan saldo dikurangi; bonus pasangan yang sudah timbul ditandai untuk ditinjau admin | `refundSale().needsReview` |
 | A13 | Jendela program 90 hari | `[aktivasi Lisensi pertama, +90 hari)`; penjualan tepat hari ke-90 tidak dihitung. Fast Start, Pendamping, dan Balik Modal hanya dari Lisensi pertama setiap pembeli | `inProgram90`, `recordProgram90` |
-| A14 | Syarat "minimal 1 di tiap kaki" Balik Modal (keputusan Coach) | Dari 4 Lisensi pribadi, ≥1 Mitra baru berada di kaki kiri dan ≥1 di kaki kanan posisi penjual; Lisensi Pelanggan tidak mengisi kaki | `program90Progress().legs`, `sideUnder` |
+| A14 | (dihapus) Syarat kaki Balik Modal | Bonus Balik Modal dihapus (spesifikasi 14.3); program 90 hari kini hanya mencatat kemajuan pribadi dan tim | `program90Progress` |
 | A15 | Pemimpin "kaki berbeda" pada peringkat bulanan (keputusan Coach) | Mitra yang disponsori langsung, dengan peringkat bayar bulan itu, di kaki biner kiri dan kanan posisi Sponsor; hanya Mitra aktif yang memenuhi atau memelihara peringkat | `evaluateRanks` |
 
 ## 4. Temuan dari pengujian yang perlu dibahas

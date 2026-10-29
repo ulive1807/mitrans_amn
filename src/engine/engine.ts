@@ -62,7 +62,6 @@ function emptyByType(): Record<BonusType, number> {
     BERKAH: 0,
     FAST_START: 0,
     PENDAMPING: 0,
-    BALIK_MODAL: 0,
     PASANGAN: 0,
     PEMBINAAN: 0,
     PRESTASI: 0,
@@ -137,14 +136,9 @@ export class MitransEngine {
   private companyByMonth = new Map<string, number>();
   private clawbackByMonth = new Map<string, LedgerEntry[]>();
   /** Program 90 hari: penjualan pribadi dan tim yang dihitung dalam jendela 90 hari tiap akun. */
-  private program90Sales = new Map<
-    string,
-    { personal: Set<string>; team: Set<string>; personalLegs: Map<string, Side> }
-  >();
+  private program90Sales = new Map<string, { personal: Set<string>; team: Set<string> }>();
   /** Penjual yang Mitra binaannya sudah memberi Bonus Pendamping kepada Sponsor-nya -> saleId pemicu. */
   private pendampingBySeller = new Map<string, string>();
-  /** Bonus Balik Modal per identitas (NIK). */
-  private balikModalByNik = new Map<string, LedgerEntry>();
   /** Masukan dan peringkat bayar per bulan yang sudah ditutup (spesifikasi 6). */
   private rankInputsByMonth = new Map<string, Map<string, RankInput>>();
   private paidAsByMonth = new Map<string, Map<string, RankName>>();
@@ -478,10 +472,9 @@ export class MitransEngine {
       clawedBack += this.reverseEntry(e, at, saleId);
     }
     this.pendingBerkah = this.pendingBerkah.filter((e) => e.saleId !== saleId);
-    const program90Affected: string[] = [];
-    for (const [id, c] of this.program90Sales) {
-      c.personalLegs.delete(saleId);
-      if (c.personal.delete(saleId) || c.team.delete(saleId)) program90Affected.push(id);
+    for (const c of this.program90Sales.values()) {
+      c.personal.delete(saleId);
+      c.team.delete(saleId);
     }
     for (const [sellerId, sid] of this.pendampingBySeller)
       if (sid === saleId) this.pendampingBySeller.delete(sellerId);
@@ -503,13 +496,6 @@ export class MitransEngine {
         else if (anc.carry[side] > 0) anc.carry[side]--;
         else needsReview = true; // unit sudah dipasangkan
       });
-    }
-    // Penjualan yang dibatalkan tidak dihitung: Balik Modal ditarik bila syaratnya tidak lagi terpenuhi.
-    for (const id of program90Affected) {
-      const acc = this.accounts.get(id)!;
-      const bm = this.balikModalByNik.get(acc.nik);
-      if (bm && bm.accountId === id && this.isLive(bm) && !this.meetsBalikModal(id))
-        clawedBack += this.reverseEntry(bm, at, saleId);
     }
     return { clawedBack, needsReview };
   }
@@ -548,20 +534,6 @@ export class MitransEngine {
     return e.amount;
   }
 
-  /** Entri masih berlaku: belum dibatalkan dan belum ditarik kembali. */
-  private isLive(e: LedgerEntry): boolean {
-    return e.status !== "clawback" && e.reversedBy === undefined;
-  }
-
-  private meetsBalikModal(accountId: string): boolean {
-    const p = this.program90Progress(accountId);
-    return (
-      p.personal >= PLAN.balikModalPersonal &&
-      p.team >= PLAN.balikModalTeam &&
-      p.legs.L &&
-      p.legs.R
-    );
-  }
 
   // ---------------------------------------------------------------------------
   // Waktu
@@ -624,22 +596,16 @@ export class MitransEngine {
     return t >= acc.program90StartAt! && t < end;
   }
 
+  /** Kemajuan program 90 hari: Lisensi pribadi dan Lisensi tim (Sponsor-keturunan) dalam jendela 90 hari. */
   program90Progress(accountId: string): {
     personal: number;
     team: number;
-    legs: { L: boolean; R: boolean };
-    achieved: boolean;
     endsAt?: number;
   } {
-    const acc = this.mustAccount(accountId);
     const c = this.program90Sales.get(accountId);
-    const bm = this.balikModalByNik.get(acc.nik);
-    const sides = [...(c?.personalLegs.values() ?? [])];
     return {
       personal: c?.personal.size ?? 0,
       team: c?.team.size ?? 0,
-      legs: { L: sides.includes("L"), R: sides.includes("R") },
-      achieved: !!bm && this.isLive(bm),
       endsAt: this.program90End(accountId),
     };
   }
@@ -902,44 +868,21 @@ export class MitransEngine {
     });
   }
 
-  /** Catat Lisensi untuk program 90 hari penjual dan Sponsor-sponsornya, lalu periksa Bonus Balik Modal. */
+  /** Catat Lisensi untuk kemajuan program 90 hari penjual dan Sponsor-sponsornya. */
   private recordProgram90(sale: Sale, seller: Account): void {
     const bucket = (id: string) => {
       let c = this.program90Sales.get(id);
       if (!c) {
-        c = { personal: new Set(), team: new Set(), personalLegs: new Map() };
+        c = { personal: new Set(), team: new Set() };
         this.program90Sales.set(id, c);
       }
       return c;
     };
-    const touched: Account[] = [];
-    if (this.inProgram90(seller.id, sale.at)) {
-      const c = bucket(seller.id);
-      c.personal.add(sale.id);
-      // Keputusan Coach: syarat kaki Balik Modal dari Mitra baru yang dijual pribadi, bukan limpahan tim.
-      const buyerNode = this.accounts.get(sale.buyerId)!.nodeId;
-      const side =
-        seller.nodeId && buyerNode ? this.sideUnder(seller.nodeId, buyerNode) : undefined;
-      if (side) c.personalLegs.set(sale.id, side);
-      touched.push(seller);
-    }
+    if (this.inProgram90(seller.id, sale.at)) bucket(seller.id).personal.add(sale.id);
     let cur = seller.sponsorId ? this.accounts.get(seller.sponsorId) : undefined;
     while (cur && cur.role === "mitra") {
-      if (this.inProgram90(cur.id, sale.at)) {
-        bucket(cur.id).team.add(sale.id);
-        touched.push(cur);
-      }
+      if (this.inProgram90(cur.id, sale.at)) bucket(cur.id).team.add(sale.id);
       cur = cur.sponsorId ? this.accounts.get(cur.sponsorId) : undefined;
-    }
-    for (const acc of touched) {
-      const existing = this.balikModalByNik.get(acc.nik);
-      if (existing && this.isLive(existing)) continue;
-      if (this.meetsBalikModal(acc.id)) {
-        this.balikModalByNik.set(
-          acc.nik,
-          this.accrue(acc.id, "BALIK_MODAL", PLAN.balikModalBonus, sale.at, { saleId: sale.id }),
-        );
-      }
     }
   }
 

@@ -9,8 +9,8 @@ Kolom **Kode** menunjukkan tempat aturan dijalankan engine (`src/engine/`).
 
 | Produk | Harga (termasuk PPN) | Omzet bersih | PV | Kode |
 |---|---:|---:|---:|---|
-| Lisensi (akses 3 bulan) | Rp7.500.000 | Rp6.756.757 | 67,5 | `PLAN.license` |
-| Langganan (per bulan, mulai bulan ke-4) | Rp399.000 | Rp359.459 | 3,5 | `PLAN.subscription` |
+| Lisensi Atlas (akses 3 bulan + Program Pendampingan 90 Hari dan 1 workshop tanpa biaya) | Rp7.500.000 | Rp6.756.757 | 67,5 | `PLAN.license` |
+| Atlas Membership (per bulan, mulai bulan ke-4) | Rp399.000 | Rp359.459 | 3,5 | `PLAN.subscription` |
 
 - Harga sama untuk Mitra PLS dan Pelanggan. Tidak ada opsi tahunan. Langganan tanpa Lisensi belum tersedia.
 - 1 PV = Rp100.000 omzet bersih, hanya untuk menghitung bonus.
@@ -38,9 +38,8 @@ Kolom **Kode** menunjukkan tempat aturan dijalankan engine (`src/engine/`).
 | Bonus | Nominal | Batas / syarat | Penerima | Kode |
 |---|---|---|---|---|
 | Sponsor | Rp750.000 per Lisensi dijual langsung | – | Penjual | `purchaseLicense` |
-| Fast Start | Rp750.000 per Lisensi | Dijual dalam 90 hari pertama penjual; Lisensi pertama pembeli; dibayar Jumat setelah 7 hari kerja | Penjual | `purchaseLicense` |
+| Fast Start | Rp1.000.000 per Lisensi | Dijual dalam 90 hari pertama penjual; Lisensi pertama pembeli; dibayar Jumat setelah 7 hari kerja | Penjual | `purchaseLicense` |
 | Pendamping | Rp100.000 sekali per Mitra binaan | Mitra binaan menjual Lisensi pertamanya dalam 90 hari pertamanya | Sponsor | `purchaseLicense` |
-| Balik Modal | Rp1.500.000 sekali per NIK | Dalam 90 hari: ≥4 Lisensi pribadi (≥1 Mitra baru pribadi di kaki kiri dan kanan), ≥4 Lisensi tim | Mitra itu | `recordProgram90` |
 | Layanan Berkah | Rp50.000 per Lisensi kepada Pelanggan | Konfirmasi orientasi + 30 hari; tanpa konfirmasi 60 hari → Pool | Penjual | `closeMonth` langkah 1 |
 | Pasangan | Rp150.000 per pasangan | 10 level; 20 pasangan/hari; sisa unit dibawa | Pemegang posisi | `pairDay`, `endOfDay` |
 | Pembinaan | Gen 1–3: 25%, gen 4–6: 5% dari Bonus Pasangan | 6 generasi sponsor; paling banyak Rp500 jt per orang per bulan, kelebihan → Pool | Sponsor pemegang Lisensi | `accruePembinaan` |
@@ -48,7 +47,7 @@ Kolom **Kode** menunjukkan tempat aturan dijalankan engine (`src/engine/`).
 | Leadership | Dana 5%, dibagi menurut bobot (Director 1 … Royal Crown 8) | Mitra aktif yang memelihara peringkat; Rp100 jt/orang/bulan | Pemegang peringkat | `allocateWeightedWithCap` |
 | Pool Aktif | Sebanding penjualan baru pribadi, paling banyak Rp500.000 per penjualan | Sumber hangus + pengisian sampai 55% omzet bersih Lisensi; sisa kembali ke perusahaan | Semua Mitra PLS aktif | `distributePool` |
 
-Bonus Level dan Royalti Plan A v1.2 dihapus.
+Bonus Level dan Royalti Plan A v1.2 dihapus. Bonus Balik Modal yang sempat diusulkan juga dihapus (spesifikasi 14.3).
 
 Peringkat bulanan (volume per kaki dalam 10 level, paket setara = omzet bersih Lisensi dan Langganan ÷ Rp6.756.757): lihat `PLAN.monthlyRanks` atau halaman `/aturan`. Syarat: transaksi pribadi, volume kiri:kanan, Mitra langsung aktif, 2 pemimpin yang disponsori langsung di kaki berbeda; pemeliharaan 70% (Builder–Manager) atau 80% (Director ke atas).
 
@@ -78,7 +77,7 @@ Syarat Plan B: Langganan sendiri aktif, pernah aktif, dan ≥1 kegiatan pembinaa
 | Plafon Plan B | 50% omzet bersih Langganan per bulan | `options.planBCapBp` |
 | Anggaran bonus tim | Plafon A − bonus langsung − dana peringkat 4,5% − dana leadership 5% | `closeMonth` langkah 4 |
 | Faktor plafon | Semua klaim tim dikali faktor sama; sisanya dibayar lebih dulu bulan berikutnya | `teamCarry` |
-| Batas atas per Lisensi | 59,82% (kepada Mitra baru), 59,08% (kepada Pelanggan) | `perLicenseUpperBounds` |
+| Batas atas per Lisensi | 57,97% (kepada Mitra baru), 57,23% (kepada Pelanggan) | `perLicenseUpperBounds` |
 | Per identitas | Rp1.000.000.000 per bulan (Plan A + B) | `applyIdentityCap` |
 
 ## 7. Jadwal pembayaran

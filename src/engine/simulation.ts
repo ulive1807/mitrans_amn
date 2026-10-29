@@ -128,8 +128,8 @@ export interface SimulationSummary {
   rankPaidFromReserve: number;
   poolCarryEnd: number;
   heldEnd: number;
-  /** Porsi Mitra yang jendela 90 harinya sudah selesai dan memperoleh Bonus Balik Modal. */
-  balikModalShare: number;
+  /** Porsi Mitra yang jendela 90 harinya sudah selesai dan menerima >= Rp7.500.000 dari bonus yang timbul di dalamnya. */
+  share90Above7_5: number;
 }
 
 export interface SimulationResult {
@@ -492,31 +492,42 @@ export function summarize(
     rankPaidFromReserve: sum((r) => r.rankPaidFromReserve),
     poolCarryEnd: engine.poolCarryAmount,
     heldEnd: engine.heldEntries.reduce((a, e) => a + e.gross, 0),
-    balikModalShare: balikModalShare(engine),
+    share90Above7_5: share90Above(engine, 7_500_000),
   };
 }
 
-function balikModalShare(engine: MitransEngine): number {
+function share90Above(engine: MitransEngine, threshold: number): number {
   const lastClose = engine.reports.length
     ? Date.parse(`${engine.reports[engine.reports.length - 1].month}-01T00:00:00Z`)
     : 0;
-  const done = [...engine.accounts.values()].filter((a) => {
+  const totals = new Map<string, number>();
+  const ends = new Map<string, number>();
+  for (const a of engine.accounts.values()) {
     const end = a.role === "mitra" ? engine.program90End(a.id) : undefined;
-    return end !== undefined && end < lastClose;
-  });
-  if (done.length === 0) return 0;
-  return done.filter((a) => engine.program90Progress(a.id).achieved).length / done.length;
+    if (end !== undefined && end < lastClose) {
+      ends.set(a.id, end);
+      totals.set(a.id, 0);
+    }
+  }
+  if (ends.size === 0) return 0;
+  for (const e of engine.ledger) {
+    const end = ends.get(e.accountId);
+    if (end !== undefined && e.status === "payable" && e.accruedAt < end)
+      totals.set(e.accountId, totals.get(e.accountId)! + e.amount);
+  }
+  return [...totals.values()].filter((v) => v >= threshold).length / ends.size;
 }
 
 /**
  * Skenario headline (spesifikasi 1 dan 11): setiap Mitra PLS menjual 1 Lisensi ke kaki kiri dan 1 ke
  * kaki kanan per bulan, mulai bulan setelah aktivasinya. "terus": setiap bulan sampai `growthMonths`;
+ * "duaBulan": hanya 2 bulan pertamanya (headline resmi), lalu membina;
  * "sekali": hanya pada bulan pertamanya. Semua berlangganan mulai bulan ke-4 dan menjalankan pembinaan.
  */
 export function runHeadlineScenario(opts: {
   growthMonths: number;
   months: number;
-  mode: "terus" | "sekali";
+  mode: "terus" | "sekali" | "duaBulan";
   options?: Partial<EngineOptions>;
 }): SimulationResult {
   const startMonth = "2027-01";
@@ -546,7 +557,11 @@ export function runHeadlineScenario(opts: {
     }
     if (m >= opts.growthMonths) continue;
     const sellers = all.filter(
-      (h) => h.joinIdx < m && (opts.mode === "terus" || h.joinIdx === m - 1),
+      (h) =>
+        h.joinIdx < m &&
+        (opts.mode === "terus" ||
+          (opts.mode === "duaBulan" && m - h.joinIdx <= 2) ||
+          h.joinIdx === m - 1),
     );
     for (const sp of sellers) {
       join(sp.id, at, "L", m);
@@ -556,7 +571,7 @@ export function runHeadlineScenario(opts: {
   engine.closeThrough(monthFromIndex(startIdx + opts.months - 1));
   const p = {
     name: `headline-${opts.mode}-${opts.growthMonths}`,
-    label: `Headline: 2 per bulan (${opts.mode}), ${opts.growthMonths} bulan pertumbuhan`,
+    label: `Headline: 2 per bulan (${opts.mode === "duaBulan" ? "selama 2 bulan, lalu bina" : opts.mode}), ${opts.growthMonths} bulan`,
     months: opts.months,
   };
   return { engine, reports: engine.reports, summary: summarize(p, engine) };

@@ -1,6 +1,8 @@
 # Rancangan Ulang Rencana Kompensasi Mitrans-Astra v2.0
 
 Status: **draf spesifikasi untuk ditinjau Coach Doddy** · 29 Oktober 2026
+
+> **Keputusan terbaru ada di bagian 14.1–14.3** dan mengalahkan bagian sebelumnya bila bertentangan. Ringkas: Bonus Balik Modal dihapus; Fast Start Rp1.000.000; Pool Aktif paling banyak Rp500.000 per penjualan; dana peringkat 4,5%; Plan B 50% dengan Pasangan RO 5%; batas Pembinaan Rp500 jt/bulan; Langganan bernama **Atlas Membership**.
 Dasar: Rencana Pemasaran v1.2, Kode Etik v1.2, S&K mitrans.id v1.2, Excel `master_rank_binary_7500000_ro399000_40pct.xlsx`, Sistem Binary Atlas (25 Oktober 2026), engine di `src/engine/`.
 
 > Semua angka penghasilan di dokumen ini adalah ilustrasi cara menghitung dengan asumsi tertulis, bukan janji atau perkiraan penghasilan. Belum ditinjau konsultan hukum dan belum diverifikasi asosiasi penjualan langsung. **Tidak ada deploy** sebelum tahapan di bagian 12 selesai.
@@ -23,7 +25,7 @@ Arti headline dalam aturan:
 |---|---|
 | "Ajak 2 orang per bulan selama 2 bulan" | 4 penjualan Lisensi pribadi dalam 90 hari, minimal 1 di kaki kiri dan 1 di kaki kanan |
 | "bantu mereka melakukan hal yang sama" | 4 penjualan Lisensi oleh tim sponsor dalam 90 hari |
-| Hasil bila keduanya tercapai | Bonus Balik Modal Rp1.500.000 (bagian 5.3) dan rangkaian bonus 90 hari |
+| Hasil bila keduanya tercapai | Rangkaian bonus 90 hari: Sponsor Rp750.000 + Fast Start Rp1.000.000 per Lisensi pribadi, Pendamping, Pasangan, Pembinaan (Bonus Balik Modal dihapus, bagian 14.3) |
 
 ## 2. Tujuan dan kriteria berhasil
 
@@ -62,9 +64,9 @@ Semua persentase di dokumen ini dihitung dari **omzet bersih** (setelah PPN). An
 | Bonus | v1.2 | v2.0 |
 |---|---|---|
 | Sponsor | Rp750.000 | Tetap Rp750.000 |
-| Fast Start | – | **Baru** Rp750.000 |
+| Fast Start | – | **Baru** Rp1.000.000 |
 | Pendamping | – | **Baru** Rp100.000 |
-| Balik Modal | – | **Baru** Rp1.500.000 sekali |
+| Balik Modal | – | Sempat diusulkan, **dihapus** (bagian 14.3) |
 | Layanan Berkah | Rp50.000 | Tetap |
 | Level | Rp750.000 per kedalaman, maks Rp7,5 jt | **Dihapus** |
 | Pasangan | Rp150.000, 10 level, 20/hari | Tetap |
@@ -79,9 +81,8 @@ Semua persentase di dokumen ini dihitung dari **omzet bersih** (setelah PPN). An
 
 | Bonus | Nominal | Syarat | Penerima |
 |---|---|---|---|
-| Fast Start | Rp750.000 per Lisensi | Lisensi dijual langsung dalam 90 hari pertama penjual; lunas; lewat masa pengembalian 7 hari kerja | Penjual |
+| Fast Start | Rp1.000.000 per Lisensi | Lisensi dijual langsung dalam 90 hari pertama penjual; lunas; lewat masa pengembalian 7 hari kerja | Penjual |
 | Pendamping | Rp100.000 sekali per Mitra binaan | Mitra yang disponsori langsung menjual Lisensi pertamanya dalam 90 hari pertamanya | Sponsor Mitra binaan |
-| Balik Modal | Rp1.500.000 sekali per identitas | Dalam 90 hari: ≥4 Lisensi pribadi (minimal 1 Mitra baru yang dijual pribadi di kaki kiri dan 1 di kaki kanan; Lisensi Pelanggan dihitung pribadi tetapi tidak mengisi kaki) dan ≥4 Lisensi dijual tim sponsor | Mitra PLS itu |
 
 Yang tidak dihitung untuk ketiganya: pembelian sendiri, akun yang dikendalikan sendiri, pembelian yang dibatalkan atau dikembalikan, dan Langganan.
 
@@ -174,14 +175,13 @@ Bila klaim melebihi plafon, semua klaim bonus tim dibayar dengan faktor yang sam
 | Pos | Rumus | % omzet bersih |
 |---|---|---:|
 | Sponsor | Rp750.000 | 11,10 |
-| Fast Start | Rp750.000 | 11,10 |
+| Fast Start | Rp1.000.000 | 14,80 |
 | Pendamping | Rp100.000 | 1,48 |
-| Balik Modal | Rp1.500.000 ÷ 4 Lisensi | 5,55 |
 | Pasangan + Pembinaan | 5 × Rp150.000 × 1,90 | 21,09 |
 | Dana peringkat + leadership | 4,5% + 5% | 9,50 |
-| **Jumlah** | | **59,82** |
+| **Jumlah** | | **57,97** |
 
-Lisensi kepada Pelanggan: tanpa Pendamping, ditambah Berkah Rp50.000 (0,74%). Jumlahnya 59,08%.
+Lisensi kepada Pelanggan: tanpa Pendamping, ditambah Berkah Rp50.000 (0,74%). Jumlahnya 57,23%.
 
 ### 10.3 Laba perusahaan
 
@@ -295,3 +295,16 @@ Laba per Lisensi setelah keputusan 10 (omzet bersih Rp6.756.757; dana layanan Rp
 Simulasi pola headline dengan engine (setiap Mitra menjual 2 per bulan selama 2 bulan pertamanya, lalu membina): Mitra pertama Rp10.375.000 dari 90 hari pertama (Rp8.375.000 tanpa Pool); 25 dari 25 Mitra yang menyelesaikan 90 hari memperoleh ≥ Rp7.500.000; bonus Plan A sekitar 35% omzet bersih Lisensi.
 
 Susunan ilustrasi Rp1 miliar per bulan (Royal Crown): Pasangan Rp90 jt (batas 20/hari) + Pembinaan Rp500 jt (batas baru) + Leadership Rp100 jt + Royalti RO Rp100 jt + Pasangan RO 5% (kaki kecil ±5.700 Langganan) Rp100 jt + Sponsor, Pool, Komisi Langganan ±Rp32 jt + bonus Plan B lain. Batas per identitas tetap Rp1 miliar per bulan.
+
+### 14.3 Penyederhanaan untuk presentasi (29 Oktober 2026)
+
+| # | Hal | Keputusan Coach |
+|---|---|---|
+| 14 | Bonus Balik Modal | **Dihapus.** Penggantinya Fast Start naik Rp750.000 → **Rp1.000.000** per Lisensi pribadi dalam 90 hari pertama. Batas atas terburuk per Lisensi 57,97% (Pelanggan 57,23%). |
+| 15 | Rumusan harga Rp7.500.000 | **Lisensi Atlas: akses aplikasi 3 bulan, termasuk Program Pendampingan 90 Hari dan 1 workshop tanpa biaya.** Pendampingan dan workshop bukan bagian dari harga (PP 3/2026 Pasal 54 ayat (2): jasa dilarang dipasarkan lewat penjualan langsung). Tidak memakai kata "lifetime". |
+| 16 | Bulan ke-4 dan seterusnya | **Atlas Membership Rp399.000/bulan**: lanjutan akses AI analisa bulanan dan alat duplikasi sistem. Membership aktif menjadi syarat menerima bonus mulai bulan ke-4 sejak aktivasi Lisensi (bukan syarat menjadi Mitra; Pelanggan boleh berhenti kapan saja). |
+
+Kalimat presentasi yang disarankan:
+> "Lisensi Atlas Rp7,5 juta memberi akses aplikasi 3 bulan, lengkap dengan Program Pendampingan 90 Hari dan workshop tanpa biaya. Setiap Lisensi yang Anda jual dalam 90 hari pertama memberi Bonus Sponsor Rp750.000 dan Fast Start Rp1.000.000. Mulai bulan ke-4, lanjutkan dengan Atlas Membership Rp399.000 per bulan untuk AI analisa dan alat duplikasi Anda."
+
+Simulasi headline resmi (2 per bulan selama 2 bulan, lalu bina; engine, skala 1): Mitra pertama Rp9.875.000 dari 90 hari pertama, **Rp7.875.000 tanpa Pool Aktif**; 100% Mitra yang menyelesaikan 90 hari menerima ≥ Rp7.500.000; bonus Plan A sekitar 35,7% omzet bersih Lisensi. Skenario organik 5 tahun: Plan A 17,8–20,6%.

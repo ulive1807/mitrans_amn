@@ -247,7 +247,7 @@ function TutupBulan({ reports }: { reports: MonthReport[] }) {
       <Panel title="Rumus anggaran bonus tim (Bab 12.2)">
         <p style={{ margin: 0 }}>
           Anggaran bonus tim = plafon Plan A (60%) − bonus langsung (Sponsor,
-          Berkah, Fast Start, Pendamping, Balik Modal) − dana peringkat (4,5%) −
+          Berkah, Fast Start, Pendamping) − dana peringkat (4,5%) −
           dana leadership (5%). Bila klaim Pasangan dan Pembinaan melebihi
           anggaran, semua klaim dibayar dengan faktor yang sama dan sisanya
           dibayar lebih dulu bulan berikutnya. Pool Aktif mengisi sampai 55%.

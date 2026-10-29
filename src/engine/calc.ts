@@ -243,8 +243,7 @@ export function perLicenseUpperBounds() {
     1 + PLAN.pembinaanRatesBp.reduce((a, b) => a + b, 0) / 10_000; // 1,90
   const fundsShare = (PLAN.rankFundBp + PLAN.leadershipFundBp) / 10_000;
   const team = pairsPerLicense * PLAN.pairBonus * pembinaanMultiplier;
-  const balikModalShare = PLAN.balikModalBonus / PLAN.balikModalPersonal;
-  const direct = PLAN.sponsorBonus + PLAN.fastStartBonus + balikModalShare;
+  const direct = PLAN.sponsorBonus + PLAN.fastStartBonus;
   const toMitra = (direct + PLAN.pendampingBonus + team) / net + fundsShare;
   const toCustomer = (direct + team + PLAN.berkahBonus) / net + fundsShare;
   const converted = toCustomer;

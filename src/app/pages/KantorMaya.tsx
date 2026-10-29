@@ -137,7 +137,7 @@ export function KantorMaya() {
   );
 }
 
-/** Kartu program 90 hari (spesifikasi 5.2): kemajuan menuju Bonus Balik Modal. */
+/** Kartu program 90 hari (spesifikasi 5.2): kemajuan pola headline dan bonus 90 hari. */
 function Program90({ engine, accId }: { engine: MitransEngine; accId: string }) {
   const p = engine.program90Progress(accId);
   if (p.endsAt === undefined) {
@@ -149,11 +149,18 @@ function Program90({ engine, accId }: { engine: MitransEngine; accId: string }) 
     );
   }
   const daysLeft = Math.max(0, Math.ceil((p.endsAt - Date.parse(`${engine.today}T00:00:00+07:00`)) / 86_400_000));
-  const rows: { label: string; value: string; done: boolean }[] = [
-    { label: "Lisensi pribadi", value: `${p.personal} / ${PLAN.balikModalPersonal}`, done: p.personal >= PLAN.balikModalPersonal },
-    { label: "Lisensi tim", value: `${p.team} / ${PLAN.balikModalTeam}`, done: p.team >= PLAN.balikModalTeam },
-    { label: "Mitra baru pribadi di kaki kiri", value: p.legs.L ? "Ya" : "Belum", done: p.legs.L },
-    { label: "Mitra baru pribadi di kaki kanan", value: p.legs.R ? "Ya" : "Belum", done: p.legs.R },
+  const end = p.endsAt;
+  const in90 = engine
+    .entriesFor(accId)
+    .filter((e) => (e.status === "payable" || e.status === "pending" || e.status === "held") && e.accruedAt < end);
+  const sum = (types: string[]) =>
+    in90.filter((e) => types.includes(e.type)).reduce((a, e) => a + (e.status === "payable" ? e.amount : e.gross), 0);
+  const rows: { label: string; value: string; done?: boolean }[] = [
+    { label: "Lisensi pribadi (panduan headline)", value: `${p.personal} / ${PLAN.program90TargetPersonal}`, done: p.personal >= PLAN.program90TargetPersonal },
+    { label: "Lisensi tim (panduan headline)", value: `${p.team} / ${PLAN.program90TargetTeam}`, done: p.team >= PLAN.program90TargetTeam },
+    { label: "Bonus Sponsor + Fast Start", value: rp(sum(["SPONSOR", "FAST_START"])) },
+    { label: "Bonus Pendamping", value: rp(sum(["PENDAMPING"])) },
+    { label: "Seluruh bonus dari 90 hari pertama", value: rp(sum(Object.keys(BONUS_LABEL))) },
   ];
   return (
     <Panel
@@ -167,21 +174,16 @@ function Program90({ engine, accId }: { engine: MitransEngine; accId: string }) 
             <tr key={r.label}>
               <td>{r.label}</td>
               <td className="r num">{r.value}</td>
-              <td>{r.done ? <Badge tone="good">✓</Badge> : <span className="muted">–</span>}</td>
+              <td>{r.done === undefined ? null : r.done ? <Badge tone="good">✓</Badge> : <span className="muted">–</span>}</td>
             </tr>
           ))}
-          <tr>
-            <td>Bonus Balik Modal {rp(PLAN.balikModalBonus)}</td>
-            <td className="r" colSpan={2}>
-              {p.achieved ? <Badge tone="good">✓ Diperoleh</Badge> : <span className="muted">Belum</span>}
-            </td>
-          </tr>
         </tbody>
       </table>
       <p className="muted" style={{ fontSize: 13 }}>
-        Bonus Balik Modal {rp(PLAN.balikModalBonus)} diberikan bila dalam 90 hari Anda menjual{" "}
-        {PLAN.balikModalPersonal} Lisensi dan tim Anda menjual {PLAN.balikModalTeam} Lisensi. Ini
-        syarat program, bukan janji penghasilan.
+        Setiap Lisensi yang Anda jual dalam 90 hari pertama memberi Bonus Sponsor {rp(PLAN.sponsorBonus)} dan
+        Fast Start {rp(PLAN.fastStartBonus)}. Mulai bulan ke-4, {PLAN.subscription.name}{" "}
+        {rp(PLAN.subscription.price)}/bulan menjaga akses alat Anda dan menjadi syarat bonus. Bukan janji
+        penghasilan.
       </p>
     </Panel>
   );

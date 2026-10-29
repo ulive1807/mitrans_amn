@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { PLAN } from "../src/engine/plan";
+import { BONUS_LABEL } from "../src/engine/types";
 import { addDays, addWorkdays, payoutFriday } from "../src/engine/time";
 import { at, createWorld } from "./helpers";
 
@@ -24,7 +25,7 @@ function headline() {
 }
 
 describe("Fast Start (spesifikasi 5.2)", () => {
-  it("Rp500.000 untuk Lisensi yang dijual dalam 90 hari pertama", () => {
+  it("Rp1.000.000 untuk Lisensi yang dijual dalam 90 hari pertama", () => {
     w.mitra("B", "A", at("2027-01-10"));
     expect(w.entries("A", "FAST_START").map((e) => e.gross)).toEqual([PLAN.fastStartBonus]);
   });
@@ -76,47 +77,26 @@ describe("Pendamping (spesifikasi 5.2)", () => {
   });
 });
 
-describe("Balik Modal (spesifikasi 1 dan 5.2)", () => {
-  it("headline: 4 pribadi (kiri dan kanan) + 4 tim dalam 90 hari", () => {
+describe("Headline tanpa Balik Modal (keputusan Coach 29 Oktober 2026)", () => {
+  it("Bonus Balik Modal sudah tidak ada", () => {
+    expect(Object.keys(BONUS_LABEL)).not.toContain("BALIK_MODAL");
+    expect("balikModalBonus" in PLAN).toBe(false);
+  });
+
+  it("headline: Sponsor + Fast Start Rp1.750.000 per Lisensi pribadi; kemajuan 4 pribadi dan 4 tim", () => {
     headline();
-    const bm = w.entries("A", "BALIK_MODAL");
-    expect(bm.map((e) => e.gross)).toEqual([PLAN.balikModalBonus]);
-    expect(w.entries("A", "FAST_START")).toHaveLength(4);
+    expect(PLAN.fastStartBonus).toBe(1_000_000);
+    expect(w.entries("A", "FAST_START").map((e) => e.gross)).toEqual(Array(4).fill(1_000_000));
+    expect(w.entries("A", "SPONSOR")).toHaveLength(4);
     expect(w.entries("A", "PENDAMPING")).toHaveLength(4);
-    expect(w.engine.program90Progress("A")).toMatchObject({
-      personal: 4,
-      team: 4,
-      legs: { L: true, R: true },
-      achieved: true,
-    });
+    expect(w.engine.program90Progress("A")).toMatchObject({ personal: 4, team: 4 });
   });
 
-  it("tidak diberikan dengan 3 penjualan pribadi", () => {
+  it("pembatalan penjualan menarik Fast Start dan mengurangi kemajuan", () => {
     headline();
-    // Bandingkan: dunia kedua tanpa penjualan pribadi ke-4 (E).
-    w = createWorld();
-    w.mitra("A", "MITRANS-002", aStart);
-    w.mitra("B", "A", at("2027-01-05"), { leg: "L" });
-    w.mitra("C", "A", at("2027-01-06"), { leg: "R" });
-    w.mitra("D", "A", at("2027-02-03"), { leg: "L" });
-    w.mitra("B1", "B", at("2027-02-10"));
-    w.mitra("B2", "B", at("2027-02-10"));
-    w.mitra("C1", "C", at("2027-02-10"));
-    w.mitra("D1", "D", at("2027-02-11"));
-    expect(w.entries("A", "BALIK_MODAL")).toHaveLength(0);
-  });
-
-  it("pembatalan penjualan pemicu menarik Balik Modal dan Fast Start, lalu bisa diperoleh lagi", () => {
-    headline();
-    const bm = w.entries("A", "BALIK_MODAL")[0];
-    expect(bm.saleId).toBe("L-E1");
-    w.engine.refundSale("L-E1", at("2027-02-12"));
-    expect(bm.status).toBe("clawback");
-    expect(w.entries("E", "FAST_START")[0].status).toBe("clawback");
-    w.mitra("E2", "E", at("2027-02-13"));
-    const again = w.entries("A", "BALIK_MODAL").filter((e) => e.status !== "clawback");
-    expect(again).toHaveLength(1);
-    expect(again[0].saleId).toBe("L-E2");
+    w.engine.refundSale("L-E", at("2027-02-12"));
+    expect(w.entries("A", "FAST_START").filter((e) => e.status === "clawback")).toHaveLength(1);
+    expect(w.engine.program90Progress("A").personal).toBe(3);
   });
 });
 
@@ -146,16 +126,6 @@ describe("Syarat aktif dan masa tunggu program 90 hari (spesifikasi 5.3)", () =>
 });
 
 describe("Perbaikan tinjauan akhir: pembatalan dan jendela 90 hari", () => {
-  it("Balik Modal dapat diperoleh lagi bila penjualan pemicu dibatalkan sesudah tutup bulan", () => {
-    headline();
-    w.engine.closeThrough("2027-02");
-    w.engine.refundSale("L-E1", at("2027-03-02"));
-    expect(w.engine.program90Progress("A").achieved).toBe(false);
-    w.mitra("E2", "E", at("2027-03-03"));
-    const fresh = w.entries("A", "BALIK_MODAL").filter((e) => e.saleId === "L-E2");
-    expect(fresh).toHaveLength(1);
-    expect(w.engine.program90Progress("A").achieved).toBe(true);
-  });
 
   it("pembatalan sebelum Jumat pembayaran membatalkan bonus, bukan membuat entri negatif", () => {
     w.mitra("B", "A", at("2027-01-29"));
@@ -178,30 +148,4 @@ describe("Perbaikan tinjauan akhir: pembatalan dan jendela 90 hari", () => {
     expect(w.entries("B", "FAST_START")).toHaveLength(0);
   });
 
-  it("pembatalan penjualan lain yang menurunkan hitungan di bawah syarat menarik Balik Modal", () => {
-    headline();
-    const bm = w.entries("A", "BALIK_MODAL")[0];
-    w.engine.refundSale("L-B1", at("2027-02-12"));
-    expect(bm.status).toBe("clawback");
-    expect(w.engine.program90Progress("A").achieved).toBe(false);
-  });
-});
-
-describe("Keputusan Coach: syarat kaki Balik Modal dari penjualan pribadi", () => {
-  it("pembatalan satu-satunya penjualan pribadi di kaki kanan menarik Balik Modal walau kaki kanan masih berisi tim", () => {
-    w.mitra("B", "A", at("2027-01-05"), { leg: "L" });
-    w.mitra("C", "A", at("2027-01-05"), { leg: "R" });
-    w.customer("P1", "A", at("2027-01-06"));
-    w.customer("P2", "A", at("2027-01-06"));
-    w.customer("P3", "A", at("2027-01-06"));
-    w.mitra("B1", "B", at("2027-01-10"));
-    w.mitra("C1", "C", at("2027-01-10"));
-    w.mitra("B11", "B1", at("2027-01-11"));
-    w.mitra("C11", "C1", at("2027-01-11"));
-    const bm = w.entries("A", "BALIK_MODAL")[0];
-    expect(bm).toBeDefined();
-    w.engine.refundSale("L-C", at("2027-01-12"));
-    expect(w.engine.program90Progress("A")).toMatchObject({ personal: 4, legs: { L: true, R: false } });
-    expect(bm.status).toBe("clawback");
-  });
 });

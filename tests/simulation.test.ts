@@ -70,12 +70,26 @@ describe("Skenario headline (spesifikasi 1 dan 11)", () => {
       expect(r.planAPaid - r.rankPaidFromReserve).toBeLessThanOrEqual(r.planACap);
   });
 
-  it("melaporkan porsi Mitra yang memperoleh Balik Modal", () => {
-    expect(head.summary.balikModalShare).toBeGreaterThan(0);
-    expect(head.summary.balikModalShare).toBeLessThanOrEqual(1);
+  it("melaporkan porsi Mitra yang memperoleh >= Rp7.500.000 dalam 90 hari pertama", () => {
+    expect(head.summary.share90Above7_5).toBeGreaterThan(0);
+    expect(head.summary.share90Above7_5).toBeLessThanOrEqual(1);
   });
 
   it("batas atas biaya per Lisensi di bawah 60%", () => {
     expect(perLicenseUpperBounds().toMitra).toBeLessThan(0.6);
+  });
+});
+
+describe("Headline resmi: 2 per bulan selama 2 bulan, lalu bina (keputusan Coach 29 Oktober 2026)", () => {
+  const h = runHeadlineScenario({ growthMonths: 7, months: 7, mode: "duaBulan" });
+  it("Mitra pertama >= Rp7.500.000 dari 90 hari pertama tanpa bergantung pada Pool Aktif", () => {
+    const end = h.engine.program90End("M1")!;
+    const noPool = h.engine.ledger
+      .filter((e) => e.accountId === "M1" && e.status === "payable" && e.accruedAt < end && e.type !== "POOL_AKTIF")
+      .reduce((a, e) => a + e.amount, 0);
+    expect(noPool).toBe(7_875_000);
+  });
+  it("semua Mitra yang menyelesaikan 90 hari menerima >= Rp7.500.000", () => {
+    expect(h.summary.share90Above7_5).toBe(1);
   });
 });

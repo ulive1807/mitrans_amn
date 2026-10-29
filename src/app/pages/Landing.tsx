@@ -236,9 +236,10 @@ export function Landing() {
           <div className="grid-2">
             <div className="price-card featured">
               <span className="chip tag">Mulai di sini</span>
-              <h3>Lisensi Mitrans-Astra</h3>
+              <h3>Lisensi Atlas</h3>
               <div className="muted" style={{ color: "#a8b8af" }}>
-                Termasuk akses {PLAN.license.accessMonths} bulan sejak aktivasi
+                Akses aplikasi {PLAN.license.accessMonths} bulan sejak aktivasi,
+                termasuk Program Pendampingan 90 Hari
               </div>
               <div className="price">
                 {rp(PLAN.license.price)} <small>sekali bayar</small>
@@ -246,19 +247,19 @@ export function Landing() {
               <ul>
                 <li>Seluruh fitur data, grafik, dan penyaring</li>
                 <li>Materi edukasi dan latihan bertahap</li>
-                <li>Pendampingan orientasi 7 hari oleh Mitra PLS</li>
+                <li>Program Pendampingan 90 Hari dan 1 workshop 2 hari tanpa biaya</li>
                 <li>Lisensi dapat dialihkan melalui aplikasi</li>
               </ul>
               <p className="fineprint">
                 Dasar pengenaan pajak {rp(PLAN.license.netPrice)} + PPN{" "}
-                {rp(PLAN.license.vat)}. Workshop bulanan tanpa biaya dan bukan
-                bagian dari harga Lisensi.
+                {rp(PLAN.license.vat)}. Pendampingan dan workshop diberikan tanpa
+                biaya dan bukan bagian dari harga Lisensi.
               </p>
             </div>
             <div className="price-card plain">
-              <h3>Langganan</h3>
+              <h3>{PLAN.subscription.name}</h3>
               <div className="muted" style={{ color: "#a8b8af" }}>
-                Perpanjangan akses mulai bulan ke-4
+                Mulai bulan ke-4: AI analisa bulanan dan alat duplikasi
               </div>
               <div className="price">
                 {rp(PLAN.subscription.price)} <small>per bulan</small>
@@ -270,7 +271,7 @@ export function Landing() {
                 <li>Akses berjalan sampai akhir periode yang dibayar</li>
               </ul>
               <p className="fineprint">
-                Langganan tanpa Lisensi belum tersedia.
+                {PLAN.subscription.name} tanpa Lisensi belum tersedia.
               </p>
             </div>
           </div>
@@ -320,9 +321,9 @@ export function Landing() {
 
           <Headline tone="dark" />
           <p className="hero-note" style={{ marginTop: 0 }}>
-            Bonus Balik Modal {rp(PLAN.balikModalBonus)} diberikan bila dalam{" "}
-            {PLAN.program90Days} hari Anda menjual {PLAN.balikModalPersonal}{" "}
-            Lisensi dan tim Anda menjual {PLAN.balikModalTeam} Lisensi.
+            Setiap Lisensi yang Anda jual dalam {PLAN.program90Days} hari pertama
+            memberi Bonus Sponsor {rp(PLAN.sponsorBonus)} dan Fast Start{" "}
+            {rp(PLAN.fastStartBonus)}.
           </p>
           <div className="plan-split">
             <div className="plan-box">
@@ -344,8 +345,7 @@ export function Landing() {
                 <span>Program 90 hari</span>
                 <span>
                   Fast Start {rp(PLAN.fastStartBonus)} per Lisensi · Pendamping{" "}
-                  {rp(PLAN.pendampingBonus)} · Balik Modal{" "}
-                  {rp(PLAN.balikModalBonus)}
+                  {rp(PLAN.pendampingBonus)}
                 </span>
               </div>
               <div className="plan-row">

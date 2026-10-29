@@ -142,13 +142,13 @@ lines.push("");
 lines.push("| Jenis | Spesifikasi v2.0 | Engine |");
 lines.push("|---|---:|---:|");
 lines.push(
-  `| Lisensi kepada Mitra PLS baru | 59,82% | ${(b.toMitra * 100).toFixed(2).replace(".", ",")}% |`,
+  `| Lisensi kepada Mitra PLS baru | 57,97% | ${(b.toMitra * 100).toFixed(2).replace(".", ",")}% |`,
 );
 lines.push(
-  `| Lisensi kepada Pelanggan | 59,08% | ${(b.toCustomer * 100).toFixed(2).replace(".", ",")}% |`,
+  `| Lisensi kepada Pelanggan | 57,23% | ${(b.toCustomer * 100).toFixed(2).replace(".", ",")}% |`,
 );
 lines.push(
-  `| Lisensi Pelanggan dikonversi | 59,08% | ${(b.converted * 100).toFixed(2).replace(".", ",")}% |`,
+  `| Lisensi Pelanggan dikonversi | 57,23% | ${(b.converted * 100).toFixed(2).replace(".", ",")}% |`,
 );
 lines.push(
   `| Langganan | 47,47% | ${(b.subscription * 100).toFixed(2).replace(".", ",")}% |`,
@@ -156,11 +156,12 @@ lines.push(
 lines.push("");
 lines.push("## Skenario headline: \"ajak 2 orang per bulan selama 2 bulan, dan bantu mereka melakukan hal yang sama\"");
 lines.push("");
-lines.push("Setiap Mitra PLS menjual 1 Lisensi ke kaki kiri dan 1 ke kaki kanan per bulan mulai bulan setelah aktivasinya; semua berlangganan mulai bulan ke-4 dan menjalankan pembinaan. Penjualan terjadi tanggal 10, sehingga penjualan bulan ke-3 (tepat hari ke-90) sudah di luar jendela 90 hari.");
+lines.push("Setiap Mitra PLS menjual 1 Lisensi ke kaki kiri dan 1 ke kaki kanan per bulan mulai bulan setelah aktivasinya (headline resmi: selama 2 bulan, lalu membina); semua berlangganan mulai bulan ke-4 dan menjalankan pembinaan. Penjualan terjadi tanggal 10, sehingga penjualan bulan ke-3 (tepat hari ke-90) sudah di luar jendela 90 hari.");
 lines.push("");
-lines.push("| Skenario | Mitra PLS | Bonus Mitra pertama dari 90 hari pertama | Tanpa Pool Aktif | Porsi Mitra yang memperoleh Balik Modal* | Median total per Mitra PLS | Porsi tanpa bonus |");
+lines.push("| Skenario | Mitra PLS | Bonus Mitra pertama dari 90 hari pertama | Tanpa Pool Aktif | Porsi Mitra ≥ Rp7,5 jt dalam 90 hari* | Median total per Mitra PLS | Porsi tanpa bonus |");
 lines.push("|---|---:|---:|---:|---:|---:|---:|");
 const headlineRuns = [
+  runHeadlineScenario({ growthMonths: 7, months: 7, mode: "duaBulan" }),
   runHeadlineScenario({ growthMonths: 5, months: 8, mode: "terus" }),
   runHeadlineScenario({ growthMonths: 8, months: 8, mode: "sekali" }),
 ];
@@ -173,13 +174,13 @@ for (const h of headlineRuns) {
   const noPool = m1.filter((e) => e.type !== "POOL_AKTIF").reduce((a, e) => a + e.amount, 0);
   const s = h.summary;
   lines.push(
-    `| ${s.label} | ${s.mitraCount} | ${rp(tot)} | ${rp(noPool)} | ${pct(s.balikModalShare)} | ${rp(s.income.median)} | ${pct(s.income.zeroShare)} |`,
+    `| ${s.label} | ${s.mitraCount} | ${rp(tot)} | ${rp(noPool)} | ${pct(s.share90Above7_5)} | ${rp(s.income.median)} | ${pct(s.income.zeroShare)} |`,
   );
 }
 lines.push("");
 lines.push("\\* Di antara Mitra PLS yang jendela 90 harinya sudah selesai pada akhir simulasi.");
 lines.push("");
-lines.push("Rasio bonus Plan A per bulan (skenario terus):");
+lines.push("Rasio bonus Plan A per bulan (headline resmi: 2 per bulan selama 2 bulan, lalu bina):");
 lines.push("");
 lines.push("| Bulan | Lisensi | Plan A dibayar | Pengisian Pool (top-up) | Mitra aktif |");
 lines.push("|---|---:|---:|---:|---:|");

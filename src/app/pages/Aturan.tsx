@@ -50,13 +50,13 @@ export function Aturan() {
             </thead>
             <tbody>
               <tr>
-                <td>Lisensi (akses 3 bulan)</td>
+                <td>Lisensi Atlas (akses 3 bulan, termasuk Program Pendampingan 90 Hari dan 1 workshop tanpa biaya)</td>
                 <td className="r num">{rp(PLAN.license.price)}</td>
                 <td className="r num">{rp(PLAN.license.netPrice)}</td>
                 <td className="r num">{PLAN.license.pvTenths / 10}</td>
               </tr>
               <tr>
-                <td>Langganan (per bulan, mulai bulan ke-4)</td>
+                <td>{PLAN.subscription.name} (per bulan, mulai bulan ke-4: AI analisa bulanan dan alat duplikasi)</td>
                 <td className="r num">{rp(PLAN.subscription.price)}</td>
                 <td className="r num">{rp(PLAN.subscription.netPrice)}</td>
                 <td className="r num">{PLAN.subscription.pvTenths / 10}</td>
@@ -106,17 +106,6 @@ export function Aturan() {
                 <td>
                   Kepada Sponsor, saat Mitra binaan menjual Lisensi pertamanya
                   dalam {PLAN.program90Days} hari pertamanya
-                </td>
-              </tr>
-              <tr>
-                <td>Balik Modal</td>
-                <td>{rp(PLAN.balikModalBonus)} sekali per identitas</td>
-                <td>
-                  Dalam {PLAN.program90Days} hari: {PLAN.balikModalPersonal}{" "}
-                  Lisensi pribadi (minimal 1 Mitra baru pribadi di kaki kiri dan 1
-                  di kaki kanan) dan{" "}
-                  {PLAN.balikModalTeam} Lisensi dari tim. Syarat program, bukan
-                  janji penghasilan
                 </td>
               </tr>
               <tr>

@@ -21,6 +21,8 @@ export const PLAN = {
     accessMonths: 3,
   },
   subscription: {
+    /** Nama dagang Langganan bulanan (keputusan Coach 29 Oktober 2026). */
+    name: "Atlas Membership",
     price: 399_000,
     netPrice: 359_459,
     vat: 39_541,
@@ -76,11 +78,11 @@ export const PLAN = {
   serviceFundPerLicense: 426_000,
 
   // Spesifikasi 5.2–5.3: program 90 hari
-  fastStartBonus: 750_000, // keputusan Coach 29 Oktober 2026 (semula Rp500.000)
+  fastStartBonus: 1_000_000, // keputusan Coach 29 Oktober 2026 (semula Rp500.000, lalu Rp750.000); pengganti Balik Modal
   pendampingBonus: 100_000,
-  balikModalBonus: 1_500_000,
-  balikModalPersonal: 4,
-  balikModalTeam: 4,
+  // Panduan headline (bukan syarat bonus): 2 per bulan selama 2 bulan, dan tim melakukan hal yang sama
+  program90TargetPersonal: 4,
+  program90TargetTeam: 4,
   program90Days: 90,
   program90HoldUntilDay: 150,
   activeMinPersonalSales90: 1,
