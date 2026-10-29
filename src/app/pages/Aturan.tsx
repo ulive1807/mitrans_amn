@@ -465,6 +465,14 @@ export function Aturan() {
               (harian dari Rp399.000/bulan).
             </li>
             <li>
+              {PLAN.family.name} dikembalikan utuh per paket: dalam{" "}
+              {PLAN.family.refundConsiderationWorkdays} hari kerja sejak
+              pembelian paket (kursi aktif dipotong akses terpakai), atau{" "}
+              {PLAN.family.refundMismatchWorkdays} hari kerja dengan dana
+              kembali penuh bila produk tidak sesuai. Bonus dari paket ditarik
+              dan NIK kursi yang belum diverifikasi dilepas.
+            </li>
+            <li>
               Pengembalian 7 hari kerja bila produk tidak sesuai dengan yang
               diperjanjikan.
             </li>

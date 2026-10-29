@@ -428,6 +428,7 @@ const blocks = [
         "Penggantian anggota",
         "Anggota yang belum memverifikasi dapat diganti oleh kursi utama dengan anggota keluarga dewasa lain; NIK lama dilepas dan anggota baru mendapat batas 30 hari",
       ],
+      ["Pengembalian paket", "Paket dikembalikan utuh (3 kursi). Masa pertimbangan 10 hari kerja sejak pembelian paket: kursi belum aktif kembali penuh, kursi aktif dipotong akses terpakai (harian dari Rp399.000 per bulan). Produk tidak sesuai yang diperjanjikan, 7 hari kerja sejak pembelian: kembali penuh. Semua komisi dan bonus dari paket ditarik; kursi yang belum diverifikasi dihapus dan NIK-nya dilepas; anggota yang sudah verifikasi tetap Mitra PLS tanpa Lisensi"],
       ["Bonus dari pembelian paket", "Lihat bagian 8.3"],
     ],
     [1.5, 4],
@@ -1290,7 +1291,7 @@ const blocks = [
     "ol",
     [
       "Keterangan yang benar sebelum perekrutan tentang identitas Perusahaan, produk, Rencana Pemasaran, dan Kode Etik.",
-      "Masa pertimbangan 10 hari kerja bagi Mitra PLS baru. Lisensi yang dibeli dalam masa itu dan belum diaktifkan dikembalikan dananya 100%. Bila sudah diaktifkan, pengembalian dana dikurangi nilai akses yang sudah dipakai, dihitung harian dari Rp399.000 per bulan per kursi.",
+      "Masa pertimbangan 10 hari kerja bagi Mitra PLS baru. Lisensi yang dibeli dalam masa itu dan belum diaktifkan dikembalikan dananya 100%. Bila sudah diaktifkan, pengembalian dana dikurangi nilai akses yang sudah dipakai, dihitung harian dari Rp399.000 per bulan per kursi. Untuk Lisensi Atlas Family, masa pertimbangan 10 hari kerja dihitung sejak pembelian paket (bagian 5.6).",
       "Pengembalian 7 hari kerja bagi Pelanggan bila produk tidak sesuai dengan yang diperjanjikan.",
       "Pembelian kembali Lisensi yang belum diaktifkan dan masih dapat dialihkan bila Mitra PLS mengundurkan diri atau diberhentikan, dengan harga pembelian dikurangi biaya administrasi paling banyak 10% dan komisi atau bonus yang telah diterima atas pembelian itu.",
       "Ganti rugi atas kerugian akibat produk atau layanan yang tidak sesuai dengan yang diperjanjikan, sesuai Kode Etik.",

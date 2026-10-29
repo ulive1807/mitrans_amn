@@ -31,8 +31,12 @@ export const PLAN = {
     accessMonths: 12,
     /** Bonus Sponsor per paket untuk Sponsor ayah (keputusan Coach 29 Oktober 2026), dibagi rata per kursi. */
     sponsorBonus: 3_000_000,
-    /** Batas hari bagi anggota keluarga untuk memverifikasi kursinya sejak didaftarkan kursi utama (usulan, menunggu persetujuan Coach). */
-    seatVerifyDays: 30, // naik dari Rp2.500.000 (keputusan Coach 29 Oktober 2026, pola 2 Family/bulan)
+    /** Batas hari bagi anggota keluarga untuk memverifikasi kursinya sejak didaftarkan kursi utama. */
+    seatVerifyDays: 30, // disetujui Coach 29 Oktober 2026
+    /** Pengembalian paket: masa pertimbangan sejak pembelian paket (hari kerja); pemakaian dihitung harian dari harga Atlas Membership. */
+    refundConsiderationWorkdays: 10,
+    /** Pengembalian karena produk tidak sesuai yang diperjanjikan (hari kerja), dana kembali penuh. */
+    refundMismatchWorkdays: 7, // naik dari Rp2.500.000 (keputusan Coach 29 Oktober 2026, pola 2 Family/bulan)
   },
   subscription: {
     /** Nama dagang Langganan bulanan (keputusan Coach 29 Oktober 2026). */

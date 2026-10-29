@@ -26,6 +26,7 @@ Kolom **Kode** menunjukkan tempat aturan dijalankan engine (`src/engine/`).
 | Syarat | ≥18 tahun, e-KTP, rekening atas nama sendiri, setuju 3 dokumen | Form `/daftar` |
 | Identitas | Satu NIK satu akun (Mitra PLS, Pelanggan, dan kursi Family yang menunggu verifikasi); NIK diperiksa bentuk, kode provinsi, dan tanggal lahirnya, Mitra ≥18 tahun menurut NIK; NIK ganda ditolak otomatis; batas dihitung per NIK | `parseNik` (`nik.ts`), `assertNikFree`, `nikTaken` |
 | Kursi Family | Ayah mendaftarkan anak (kiri) dan istri (kanan) saat membeli; posisi dikunci; kursi aktif setelah anggota memverifikasi sendiri ≤30 hari; dapat diganti bila belum verifikasi | `purchaseFamily({members})`, `verifyFamilyMember`, `replaceFamilyMember` |
+| Pengembalian Family | Utuh per paket: 10 hari kerja sejak pembelian (kursi aktif dipotong akses terpakai) atau 7 hari kerja bila produk tidak sesuai (penuh); bonus paket ditarik; NIK kursi belum verifikasi dilepas | `refundFamily` |
 | Tautan rujukan | Aktif setelah lulus kuis Kode Etik | `passQuiz`, `assertSellerCanSell` |
 | Masa pertimbangan | 10 hari kerja | Ditampilkan di `/daftar` |
 | Posisi biner | Saat Lisensi pertama diaktifkan | `purchaseLicense` → `placeNode` |

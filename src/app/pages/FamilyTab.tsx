@@ -3,6 +3,7 @@ import {
   EngineError,
   PLAN,
   addDays,
+  addWorkdays,
   ageAt,
   atWib,
   parseNik,
@@ -59,8 +60,10 @@ export function FamilyTab({
   );
 }
 
-function seatStatus(acc: Account | undefined) {
-  if (!acc) return <Badge tone="mute">Kosong</Badge>;
+function seatStatus(acc: Account | undefined, refunded = false) {
+  if (!acc) return <Badge tone="mute">Kosong / dibatalkan</Badge>;
+  if (refunded || acc.familySeat?.status === "dibatalkan")
+    return <Badge tone="bad">↩ Dikembalikan</Badge>;
   if (!acc.familySeat || acc.familySeat.status === "aktif")
     return <Badge tone="good">✓ Aktif</Badge>;
   return <Badge tone="warn">⏸ Menunggu verifikasi</Badge>;
@@ -251,7 +254,7 @@ function BundleSeats({
               <td>{label}</td>
               <td>{a?.name ?? "–"}</td>
               <td className="num">{a ? maskNik(a.nik) : "–"}</td>
-              <td>{seatStatus(a)}</td>
+              <td>{seatStatus(a, !!bundle.refund)}</td>
               <td>{deadline(a)}</td>
               <td>
                 {a?.familySeat?.status === "menunggu" && (
@@ -327,7 +330,101 @@ function BundleSeats({
         yang belum verifikasi dapat Anda ganti dengan anggota keluarga dewasa
         lain.
       </p>
+      <RefundBox engine={engine} bundle={bundle} />
     </Panel>
+  );
+}
+
+/** Pengembalian paket Family: masa pertimbangan dan produk tidak sesuai (Rencana Pemasaran 5.6, Bab 13). */
+function RefundBox({ engine, bundle }: { engine: MitransEngine; bundle: FamilyBundle }) {
+  const { bump } = useDemo();
+  const [reason, setReason] = useState<"pertimbangan" | "tidak_sesuai">("pertimbangan");
+  const [confirm, setConfirm] = useState(false);
+  const [error, setError] = useState("");
+  const r = bundle.refund;
+  const lastDay = (d: number) => dateLabel(addWorkdays(bundle.purchasedAt, d));
+  if (r)
+    return (
+      <div className="card" style={{ marginTop: 12 }}>
+        <h3>Paket dikembalikan {dateLabel(r.at)}</h3>
+        <table className="t">
+          <thead>
+            <tr>
+              <th>Kursi</th>
+              <th className="r">Harga bagian kursi</th>
+              <th className="r">Potongan akses terpakai</th>
+              <th className="r">Dana kembali</th>
+            </tr>
+          </thead>
+          <tbody>
+            {r.seats.map((x) => (
+              <tr key={x.label}>
+                <td>{x.label}</td>
+                <td className="r num">{rp(x.price)}</td>
+                <td className="r num">{x.deduction ? rp(x.deduction) : "–"}</td>
+                <td className="r num">{rp(x.refund)}</td>
+              </tr>
+            ))}
+            <tr>
+              <td>
+                <b>Jumlah</b>
+              </td>
+              <td />
+              <td />
+              <td className="r num">
+                <b>{rp(r.amount)}</b>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+        <p className="muted" style={{ fontSize: 13 }}>
+          Komisi dan bonus dari paket ini ditarik dari penerimanya. Kursi yang belum diverifikasi dihapus dan NIK-nya
+          dilepas; anggota yang sudah verifikasi tetap Mitra PLS tanpa Lisensi.
+        </p>
+      </div>
+    );
+  return (
+    <div className="card" style={{ marginTop: 12 }}>
+      <h3>Pengembalian paket</h3>
+      <ul style={{ marginTop: 0 }}>
+        <li>
+          Masa pertimbangan sampai {lastDay(PLAN.family.refundConsiderationWorkdays)} (
+          {PLAN.family.refundConsiderationWorkdays} hari kerja): kursi belum aktif kembali penuh; kursi aktif dipotong
+          akses terpakai, harian dari {rp(PLAN.subscription.price)} per bulan.
+        </li>
+        <li>
+          Produk tidak sesuai yang diperjanjikan sampai {lastDay(PLAN.family.refundMismatchWorkdays)} (
+          {PLAN.family.refundMismatchWorkdays} hari kerja): dana kembali penuh.
+        </li>
+      </ul>
+      <div className="field">
+        <label>Alasan</label>
+        <select value={reason} onChange={(e) => setReason(e.target.value as typeof reason)}>
+          <option value="pertimbangan">Masa pertimbangan</option>
+          <option value="tidak_sesuai">Produk tidak sesuai yang diperjanjikan</option>
+        </select>
+      </div>
+      <label className="check">
+        <input type="checkbox" checked={confirm} onChange={(e) => setConfirm(e.target.checked)} />
+        <span>Saya mengerti seluruh paket (3 kursi) dikembalikan dan bonus dari paket ini ditarik.</span>
+      </label>
+      {error && <div className="callout warn">{error}</div>}
+      <button
+        className="btn-secondary"
+        disabled={!confirm}
+        onClick={() => {
+          setError("");
+          try {
+            engine.refundFamily({ bundleId: bundle.id, at: atWib(engine.today, 9), reason });
+            bump();
+          } catch (e) {
+            setError(e instanceof EngineError ? e.message : "Pengembalian gagal");
+          }
+        }}
+      >
+        Ajukan pengembalian paket (simulasi)
+      </button>
+    </div>
   );
 }
 
@@ -408,6 +505,7 @@ function SoldBundles({
             <th>Dibeli</th>
             <th>Kaki kiri</th>
             <th>Kaki kanan</th>
+            <th>Status paket</th>
           </tr>
         </thead>
         <tbody>
@@ -423,6 +521,13 @@ function SoldBundles({
               <td>
                 {seatStatus(
                   b.seats.R ? engine.accounts.get(b.seats.R) : undefined,
+                )}
+              </td>
+              <td>
+                {b.refund ? (
+                  <Badge tone="bad">↩ Dikembalikan {dateLabel(b.refund.at)}</Badge>
+                ) : (
+                  <Badge tone="good">Berjalan</Badge>
                 )}
               </td>
             </tr>

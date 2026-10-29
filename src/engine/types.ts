@@ -41,7 +41,7 @@ export interface Account {
     bundleId: string;
     side: Side;
     /** "menunggu": posisi sudah dikunci, tetapi Lisensi kursi belum aktif sampai anggota memverifikasi sendiri. */
-    status: "menunggu" | "aktif";
+    status: "menunggu" | "aktif" | "dibatalkan";
     invitedAt: number;
     verifiedAt?: number;
   };
@@ -57,6 +57,19 @@ export interface FamilyBundle {
   purchasedAt: number;
   /** Pemegang kursi di kaki kiri dan kanan kursi utama. */
   seats: Partial<Record<Side, string>>;
+  /** Pengembalian paket (refundFamily). */
+  refund?: FamilyRefund;
+}
+
+export interface FamilyRefund {
+  at: number;
+  reason: "pertimbangan" | "tidak_sesuai";
+  /** Dana yang dikembalikan kepada pembeli (termasuk PPN). */
+  amount: number;
+  /** Rincian per kursi: harga bagian kursi, potongan akses terpakai, dan dana kembali. */
+  seats: { label: string; price: number; deduction: number; refund: number }[];
+  /** Komisi dan bonus yang ditarik dari penerimanya. */
+  clawedBack: number;
 }
 
 export interface BinaryNode {

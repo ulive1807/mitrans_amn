@@ -133,6 +133,7 @@ const blocks = [
       "Pembatalan dilakukan melalui Kantor Maya atau layanan pelanggan, tanpa perlu menyebutkan alasan.",
       "Lisensi yang dibeli dalam masa pertimbangan dikembalikan dananya: 100% bila Lisensi belum diaktifkan; atau dikurangi nilai akses yang sudah dipakai, dihitung harian dari Rp399.000 per bulan per kursi, bila Lisensi sudah diaktifkan.",
       "Komisi dan bonus yang timbul dari pembelian yang dibatalkan ditarik kembali dari penerimanya.",
+      "Lisensi Atlas Family dikembalikan utuh per paket: dalam 10 hari kerja sejak pembelian paket dengan ketentuan angka 3, atau dalam 7 hari kerja dengan pengembalian penuh bila produk tidak sesuai yang diperjanjikan. Kursi yang belum diverifikasi dihapus dan NIK-nya dilepas.",
     ],
   ],
   ["h2", "Pasal 6. Masa berlaku dan pendaftaran ulang"],

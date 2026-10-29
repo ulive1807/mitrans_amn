@@ -44,6 +44,7 @@ import {
   type BinaryNode,
   type BonusType,
   type FamilyBundle,
+  type FamilyRefund,
   type LedgerEntry,
   type MonthReport,
   type PoolSources,
@@ -484,6 +485,7 @@ export class MitransEngine {
     const seat = acc.familySeat;
     if (!seat) throw new EngineError("Akun ini bukan kursi Family");
     if (seat.status === "aktif") throw new EngineError("Kursi Family sudah terverifikasi");
+    if (seat.status === "dibatalkan") throw new EngineError("Paket Family ini sudah dikembalikan");
     if (at > addDays(seat.invitedAt, PLAN.family.seatVerifyDays))
       throw new EngineError(
         `Batas verifikasi ${PLAN.family.seatVerifyDays} hari terlewati; kursi utama dapat mengganti anggota keluarga`,
@@ -536,6 +538,96 @@ export class MitransEngine {
       this.nikIndex.set(old.nik, old.id);
       throw e;
     }
+  }
+
+  /**
+   * Pengembalian paket Lisensi Atlas Family (satu pembayaran, dikembalikan utuh per paket).
+   * - "tidak_sesuai": produk tidak sesuai yang diperjanjikan, paling lambat PLAN.family.refundMismatchWorkdays
+   *   hari kerja sejak pembelian; dana kembali penuh.
+   * - "pertimbangan": paling lambat PLAN.family.refundConsiderationWorkdays hari kerja sejak pembelian; kursi yang
+   *   belum aktif kembali penuh, kursi yang sudah aktif dipotong nilai akses terpakai (harian dari harga
+   *   Atlas Membership per bulan).
+   * Semua komisi dan bonus dari paket ditarik kembali. Kursi yang belum diverifikasi dihapus dan NIK-nya dilepas;
+   * anggota yang sudah verifikasi tetap Mitra PLS tanpa Lisensi.
+   */
+  refundFamily(input: { bundleId: string; at: number; reason: FamilyRefund["reason"] }): FamilyRefund {
+    this.advance(input.at);
+    const bundle = this.familyBundles.get(input.bundleId);
+    if (!bundle) throw new EngineError("Paket Family tidak ditemukan");
+    if (bundle.refund) throw new EngineError("Paket Family ini sudah dikembalikan");
+    const days =
+      input.reason === "tidak_sesuai"
+        ? PLAN.family.refundMismatchWorkdays
+        : PLAN.family.refundConsiderationWorkdays;
+    if (input.at > addWorkdays(bundle.purchasedAt, days))
+      throw new EngineError(
+        `Di luar masa pengembalian ${days} hari kerja sejak pembelian paket; hubungi layanan pelanggan`,
+      );
+    const n = PLAN.family.seats;
+    const basePrice = Math.floor(PLAN.family.price / n);
+    const seatPrice = (i: number) => (i === 0 ? PLAN.family.price - basePrice * (n - 1) : basePrice);
+    const perDay = PLAN.subscription.price / 30;
+    const seatAccounts: [string, string | undefined, number][] = [
+      ["Kursi utama", bundle.headId, 0],
+      ["Kaki kiri", bundle.seats.L, 1],
+      ["Kaki kanan", bundle.seats.R, 2],
+    ];
+    const seats: FamilyRefund["seats"] = [];
+    let clawedBack = 0;
+    for (const [label, accId, i] of seatAccounts) {
+      const price = seatPrice(i);
+      const acc = accId ? this.accounts.get(accId) : undefined;
+      const sale = acc
+        ? [...this.sales.values()].find(
+            (s) => s.bundleId === bundle.id && s.buyerId === acc.id && !s.cancelled,
+          )
+        : undefined;
+      let deduction = 0;
+      if (sale && input.reason === "pertimbangan") {
+        const used = Math.max(1, Math.ceil((input.at - sale.at) / 86_400_000));
+        deduction = Math.min(price, Math.round(used * perDay));
+      }
+      if (sale) clawedBack += this.refundSale(sale.id, input.at).clawedBack;
+      if (acc?.familySeat) {
+        if (acc.familySeat.status === "menunggu") this.removePendingSeat(acc);
+        else acc.familySeat.status = "dibatalkan";
+      }
+      seats.push({ label, price, deduction, refund: price - deduction });
+    }
+    const refund: FamilyRefund = {
+      at: input.at,
+      reason: input.reason,
+      amount: seats.reduce((a, s) => a + s.refund, 0),
+      seats,
+      clawedBack,
+    };
+    bundle.refund = refund;
+    return refund;
+  }
+
+  /**
+   * Kursi Family yang belum diverifikasi dibatalkan: NIK dilepas dan data pribadi dihapus. Bila posisinya
+   * belum memiliki jaringan di bawahnya, posisi dihapus; bila sudah, posisi tetap sebagai kursi kosong
+   * berstatus berhenti agar jaringan di bawahnya tidak berubah.
+   */
+  private removePendingSeat(acc: Account): void {
+    acc.familySeat!.status = "dibatalkan";
+    this.nikIndex.delete(acc.nik);
+    const node = acc.nodeId ? this.nodes.get(acc.nodeId) : undefined;
+    const hasEntries =
+      this.ledger.some((e) => e.accountId === acc.id) ||
+      [...this.accounts.values()].some((a) => a.sponsorId === acc.id);
+    if (node && !node.left && !node.right && !hasEntries) {
+      const parent = this.nodes.get(node.parentId!)!;
+      if (parent.left === node.id) parent.left = null;
+      if (parent.right === node.id) parent.right = null;
+      this.nodes.delete(node.id);
+      this.accounts.delete(acc.id);
+      return;
+    }
+    acc.name = "Kursi Family dibatalkan";
+    acc.nik = `BATAL-${acc.id}`;
+    acc.terminated = true;
   }
 
   /** Pelanggan mengonfirmasi pendampingan orientasi di aplikasi (Bab 7 butir 5). */

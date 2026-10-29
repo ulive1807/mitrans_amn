@@ -242,3 +242,74 @@ describe("Kursi Lisensi Atlas Family didaftarkan oleh ayah", () => {
     expect(node("AYAH").cumLicenses.L).toBe(1);
   });
 });
+
+describe("Pengembalian paket Lisensi Atlas Family", () => {
+  let w: ReturnType<typeof createWorld>;
+  const buyAt = at("2027-01-06"); // Rabu
+  const members = {
+    L: { id: "ANAK", name: "Anak", nik: NIK_ANAK },
+    R: { id: "ISTRI", name: "Istri", nik: NIK_ISTRI },
+  };
+  const net = (id: string) =>
+    w.engine.entriesFor(id).filter((e) => e.status !== "clawback" || e.amount < 0).reduce((a, e) => a + e.amount, 0);
+  beforeEach(() => {
+    w = createWorld();
+    w.mitra("A", "MITRANS-002", at("2027-01-01"));
+    w.engine.registerMitra({ id: "AYAH", name: "Ayah", nik: NIK_AYAH, sponsorId: "A", at: at("2027-01-05") });
+    w.engine.purchaseFamily({ saleId: "F1", headId: "AYAH", members, at: buyAt });
+  });
+
+  it("masa pertimbangan: kursi belum aktif kembali penuh, kursi aktif dipotong akses terpakai; bonus ditarik; NIK dilepas", () => {
+    w.engine.verifyFamilyMember("ANAK", at("2027-01-07"));
+    const r = w.engine.refundFamily({ bundleId: "F1", at: at("2027-01-12"), reason: "pertimbangan" });
+    const perDay = PLAN.subscription.price / 30;
+    expect(r.seats.map((s) => s.deduction)).toEqual([Math.round(6 * perDay), Math.round(5 * perDay), 0]);
+    expect(r.amount).toBe(PLAN.family.price - r.seats[0].deduction - r.seats[1].deduction);
+    // Bonus penjual dari paket ditarik seluruhnya.
+    expect(net("A") - w.engine.entriesFor("A").filter((e) => !e.saleId?.startsWith("F1")).reduce((a, e) => a + e.amount, 0)).toBe(0);
+    for (const e of w.engine.entriesFor("A").filter((x) => x.saleId?.startsWith("F1") && x.gross > 0))
+      expect(e.status === "clawback" || e.reversedBy !== undefined).toBe(true);
+    // Volume ayah kembali nol; istri (belum verifikasi) dihapus dan NIK-nya dapat dipakai lagi.
+    const ayahNode = w.engine.nodes.get(w.engine.accounts.get("AYAH")!.nodeId!)!;
+    expect(ayahNode.cumLicenses).toEqual({ L: 0, R: 0 });
+    expect(w.engine.accounts.has("ISTRI")).toBe(false);
+    expect(ayahNode.right).toBeNull();
+    expect(w.engine.nikTaken(NIK_ISTRI)).toBe(false);
+    // Anak yang sudah verifikasi tetap Mitra PLS tanpa Lisensi.
+    const anak = w.engine.accounts.get("ANAK")!;
+    expect(anak.familySeat?.status).toBe("dibatalkan");
+    expect(anak.licenseActivatedAt).toBeUndefined();
+    expect(() => w.engine.refundFamily({ bundleId: "F1", at: at("2027-01-13"), reason: "pertimbangan" })).toThrow(
+      /sudah dikembalikan/,
+    );
+  });
+
+  it("produk tidak sesuai dalam 7 hari kerja: dana kembali penuh", () => {
+    w.engine.verifyFamilyMember("ISTRI", at("2027-01-08"));
+    const r = w.engine.refundFamily({ bundleId: "F1", at: at("2027-01-14"), reason: "tidak_sesuai" });
+    expect(r.amount).toBe(PLAN.family.price);
+  });
+
+  it("di luar masa pengembalian ditolak", () => {
+    expect(() => w.engine.refundFamily({ bundleId: "F1", at: at("2027-01-18"), reason: "tidak_sesuai" })).toThrow(
+      /Di luar masa pengembalian 7 hari kerja/,
+    );
+    expect(() => w.engine.refundFamily({ bundleId: "F1", at: at("2027-01-21"), reason: "pertimbangan" })).toThrow(
+      /10 hari kerja/,
+    );
+  });
+
+  it("kursi belum verifikasi yang sudah punya jaringan di bawahnya tetap sebagai posisi berhenti tanpa NIK", () => {
+    w.engine.passQuiz("AYAH");
+    w.mitra("TETANGGA", "AYAH", at("2027-01-07"), { leg: "R" });
+    const r = w.engine.refundFamily({ bundleId: "F1", at: at("2027-01-08"), reason: "pertimbangan" });
+    expect(r.amount).toBeGreaterThan(0);
+    const istri = w.engine.accounts.get("ISTRI");
+    if (istri) {
+      expect(istri.terminated).toBe(true);
+      expect(istri.name).toBe("Kursi Family dibatalkan");
+    }
+    expect(w.engine.nikTaken(NIK_ISTRI)).toBe(false);
+    expect(() => w.engine.verifyFamilyMember("ANAK", at("2027-01-09"))).toThrow(EngineError);
+  });
+});
