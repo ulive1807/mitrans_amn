@@ -251,7 +251,10 @@ export function Landing() {
                 <li>Lisensi dapat dialihkan melalui aplikasi</li>
               </ul>
               <p className="fineprint">
-                Dasar pengenaan pajak {rp(PLAN.license.netPrice)} + PPN{" "}
+                Tersedia juga {PLAN.family.name} {rp(PLAN.family.price)} untuk{" "}
+                {PLAN.family.seats} anggota keluarga dewasa, akses{" "}
+                {PLAN.family.accessMonths} bulan. Dasar pengenaan pajak{" "}
+                {rp(PLAN.license.netPrice)} + PPN{" "}
                 {rp(PLAN.license.vat)}. Pendampingan dan workshop diberikan tanpa
                 biaya dan bukan bagian dari harga Lisensi.
               </p>

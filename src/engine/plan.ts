@@ -20,6 +20,16 @@ export const PLAN = {
     pvTenths: 675, // 67,5 PV
     accessMonths: 3,
   },
+  /** Keputusan Coach 29 Oktober 2026: paket keluarga 3 kursi dewasa, akses 12 bulan. */
+  family: {
+    name: "Lisensi Atlas Family",
+    price: 25_000_000,
+    netPrice: 22_522_523,
+    vat: 2_477_477,
+    pvTenths: 2250, // 225 PV
+    seats: 3,
+    accessMonths: 12,
+  },
   subscription: {
     /** Nama dagang Langganan bulanan (keputusan Coach 29 Oktober 2026). */
     name: "Atlas Membership",

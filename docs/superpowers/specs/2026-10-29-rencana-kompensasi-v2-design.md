@@ -308,3 +308,15 @@ Kalimat presentasi yang disarankan:
 > "Lisensi Atlas Rp7,5 juta memberi akses aplikasi 3 bulan, lengkap dengan Program Pendampingan 90 Hari dan workshop tanpa biaya. Setiap Lisensi yang Anda jual dalam 90 hari pertama memberi Bonus Sponsor Rp750.000 dan Fast Start Rp1.000.000. Mulai bulan ke-4, lanjutkan dengan Atlas Membership Rp399.000 per bulan untuk AI analisa dan alat duplikasi Anda."
 
 Simulasi headline resmi (2 per bulan selama 2 bulan, lalu bina; engine, skala 1): Mitra pertama Rp9.875.000 dari 90 hari pertama, **Rp7.875.000 tanpa Pool Aktif**; 100% Mitra yang menyelesaikan 90 hari menerima ≥ Rp7.500.000; bonus Plan A sekitar 35,7% omzet bersih Lisensi. Skenario organik 5 tahun: Plan A 17,8–20,6%.
+
+### 14.4 Paket Lisensi Atlas Family (29 Oktober 2026)
+
+| # | Hal | Keputusan Coach |
+|---|---|---|
+| 17 | Produk | **Lisensi Atlas Family Rp25.000.000** (omzet bersih Rp22.522.523, PPN Rp2.477.477, 225 PV): 3 kursi dewasa, akses aplikasi **12 bulan**; Atlas Membership mulai bulan ke-13. |
+| 18 | Posisi usaha | Setiap kursi dewasa (≥18 tahun, NIK sendiri) yang mendaftar Mitra PLS mendapat **posisi sendiri**, ditempatkan di bawah Sponsor penjual seperti pembeli biasa. Pemegang kursi tidak menerima bonus dari pembelian keluarganya sendiri. Anak <18 tahun hanya akun pengguna. |
+| 19 | Bonus | **Per kursi, setara 3 Lisensi Atlas**: Sponsor 3 × Rp750.000 = Rp2.250.000; Fast Start (90 hari pertama penjual) 3 × Rp1.000.000 = Rp3.000.000; volume 3 unit; 3 penjualan pribadi untuk status aktif. Batas atas terburuk per paket 53,12%. |
+
+Laba per paket Family (dana layanan Rp426.000 per 3 bulan per akun = Rp5.112.000 untuk 12 bulan; 3 workshop): **33,9%** pada pola headline, **14,3%** pada bonus terburuk. Bagi keluarga, Family lebih hemat Rp8.273.000 dibanding 3 Lisensi + 9 bulan Atlas Membership untuk 3 orang (Rp33.273.000).
+
+Ilustrasi engine: Mitra yang menjual 1 Family di bulan ke-1 dan 1 Family di bulan ke-2 menerima Rp13.950.000 dari 90 hari pertamanya (Sponsor Rp4.500.000, Fast Start Rp6.000.000, Pasangan Rp450.000, Pool Rp3.000.000); Rp10.950.000 tanpa Pool.

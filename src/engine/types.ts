@@ -21,6 +21,8 @@ export interface Account {
   quizPassed: boolean;
   /** Awal program 90 hari: aktivasi Lisensi pertama; tidak berubah walau Lisensi dibatalkan lalu dibeli lagi. */
   program90StartAt?: number;
+  /** Masa akses Lisensi pertama dalam bulan (3 untuk Lisensi Atlas, 12 untuk Family). */
+  accessMonths?: number;
   /** Aktivasi Lisensi pertama milik akun ini (untuk syarat Langganan bulan ke-4 dan masa akses). */
   licenseActivatedAt?: number;
   /** Id node jaringan biner. Hanya Mitra PLS pemegang Lisensi. */
@@ -62,6 +64,12 @@ export type SaleKind = "license" | "subscription";
 export interface Sale {
   id: string;
   kind: SaleKind;
+  /** Lisensi: produk asal kursi ini. */
+  product?: "license" | "family";
+  /** Lisensi: omzet bersih kursi ini (Family dibagi rata per kursi). */
+  net?: number;
+  /** Family: id paket bersama. */
+  bundleId?: string;
   buyerId: string;
   /** Mitra PLS yang menjual (pemilik tautan rujukan). */
   sellerId: string;

@@ -56,6 +56,15 @@ export function Aturan() {
                 <td className="r num">{PLAN.license.pvTenths / 10}</td>
               </tr>
               <tr>
+                <td>
+                  {PLAN.family.name} ({PLAN.family.seats} kursi dewasa, akses{" "}
+                  {PLAN.family.accessMonths} bulan; bonus dihitung per kursi)
+                </td>
+                <td className="r num">{rp(PLAN.family.price)}</td>
+                <td className="r num">{rp(PLAN.family.netPrice)}</td>
+                <td className="r num">{PLAN.family.pvTenths / 10}</td>
+              </tr>
+              <tr>
                 <td>{PLAN.subscription.name} (per bulan, mulai bulan ke-4: AI analisa bulanan dan alat duplikasi)</td>
                 <td className="r num">{rp(PLAN.subscription.price)}</td>
                 <td className="r num">{rp(PLAN.subscription.netPrice)}</td>

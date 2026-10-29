@@ -10,6 +10,7 @@ Kolom **Kode** menunjukkan tempat aturan dijalankan engine (`src/engine/`).
 | Produk | Harga (termasuk PPN) | Omzet bersih | PV | Kode |
 |---|---:|---:|---:|---|
 | Lisensi Atlas (akses 3 bulan + Program Pendampingan 90 Hari dan 1 workshop tanpa biaya) | Rp7.500.000 | Rp6.756.757 | 67,5 | `PLAN.license` |
+| Lisensi Atlas Family (3 kursi dewasa, akses 12 bulan; bonus per kursi) | Rp25.000.000 | Rp22.522.523 | 225 | `PLAN.family`, `purchaseFamily` |
 | Atlas Membership (per bulan, mulai bulan ke-4) | Rp399.000 | Rp359.459 | 3,5 | `PLAN.subscription` |
 
 - Harga sama untuk Mitra PLS dan Pelanggan. Tidak ada opsi tahunan. Langganan tanpa Lisensi belum tersedia.

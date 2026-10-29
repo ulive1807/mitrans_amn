@@ -247,9 +247,13 @@ export function perLicenseUpperBounds() {
   const toMitra = (direct + PLAN.pendampingBonus + team) / net + fundsShare;
   const toCustomer = (direct + team + PLAN.berkahBonus) / net + fundsShare;
   const converted = toCustomer;
+  // Family: bonus per kursi seperti Lisensi Atlas, dana dari omzet bersih Family.
+  const family =
+    (PLAN.family.seats * (direct + PLAN.pendampingBonus + team)) / PLAN.family.netPrice +
+    fundsShare;
   const subscription =
     PLAN.subscriptionCommission / PLAN.subscription.netPrice +
     (PLAN.maxLevels / 2) * (PLAN.roPairBp / 10_000) +
     PLAN.roRoyaltyTiers.reduce((a, t) => a + t.shareBp, 0) / 10_000;
-  return { toMitra, toCustomer, converted, subscription };
+  return { toMitra, toCustomer, converted, subscription, family };
 }

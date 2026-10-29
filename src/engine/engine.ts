@@ -270,6 +270,8 @@ export class MitransEngine {
     buyerId: string;
     at: number;
     legPreference?: Side;
+    /** Internal: kursi paket Family. */
+    family?: { bundleId: string; net: number };
   }): Sale {
     this.advance(input.at);
     const buyer = this.mustAccount(input.buyerId);
@@ -290,6 +292,9 @@ export class MitransEngine {
       month,
       toCustomer: buyer.role === "pelanggan",
       countedBy: new Set(),
+      product: input.family ? "family" : "license",
+      net: input.family?.net ?? PLAN.license.netPrice,
+      bundleId: input.family?.bundleId,
     };
     this.sales.set(sale.id, sale);
     const bySale = this.licenseSalesByBuyer.get(buyer.id) ?? [];
@@ -326,7 +331,10 @@ export class MitransEngine {
       }
     }
 
-    if (!buyer.licenseActivatedAt) buyer.licenseActivatedAt = input.at;
+    if (!buyer.licenseActivatedAt) {
+      buyer.licenseActivatedAt = input.at;
+      buyer.accessMonths = input.family ? PLAN.family.accessMonths : PLAN.license.accessMonths;
+    }
     if (buyer.program90StartAt === undefined) buyer.program90StartAt = input.at;
 
     if (buyer.role === "mitra") {
@@ -343,6 +351,32 @@ export class MitransEngine {
     }
     if (firstLicenseOfBuyer && seller.role === "mitra") this.recordProgram90(sale, seller);
     return sale;
+  }
+
+  /**
+   * Paket Family (keputusan Coach 29 Oktober 2026): 1 pembayaran untuk 1–3 kursi dewasa. Setiap kursi
+   * menjadi Lisensi atas nama pemegangnya sendiri (Mitra atau Pelanggan), dijual oleh Sponsor yang
+   * sama, dengan akses 12 bulan. Bonus dihitung per kursi seperti Lisensi Atlas.
+   */
+  purchaseFamily(input: { saleId: string; seatIds: string[]; at: number }): Sale[] {
+    const seats = input.seatIds;
+    if (seats.length < 1 || seats.length > PLAN.family.seats)
+      throw new EngineError(`Family berisi 1–${PLAN.family.seats} kursi`);
+    if (new Set(seats).size !== seats.length) throw new EngineError("Kursi Family harus orang berbeda");
+    const sponsors = new Set(seats.map((id) => this.mustAccount(id).sponsorId));
+    if (sponsors.size !== 1) throw new EngineError("Semua kursi Family harus dari tautan Sponsor yang sama");
+    const base = Math.floor(PLAN.family.netPrice / PLAN.family.seats);
+    const nets = Array.from({ length: PLAN.family.seats }, (_, i) =>
+      i === 0 ? PLAN.family.netPrice - base * (PLAN.family.seats - 1) : base,
+    );
+    return seats.map((buyerId, i) =>
+      this.purchaseLicense({
+        saleId: `${input.saleId}-${i + 1}`,
+        buyerId,
+        at: input.at,
+        family: { bundleId: input.saleId, net: nets[i] },
+      }),
+    );
   }
 
   /** Pelanggan mengonfirmasi pendampingan orientasi di aplikasi (Bab 7 butir 5). */
@@ -491,7 +525,7 @@ export class MitransEngine {
         if (!sale.countedBy!.has(anc.id)) return;
         anc.cumLicenses[side] = Math.max(0, anc.cumLicenses[side] - 1);
         if (sale.month === wibMonth(at))
-          anc.monthNet[side] = Math.max(0, anc.monthNet[side] - PLAN.license.netPrice);
+          anc.monthNet[side] = Math.max(0, anc.monthNet[side] - (sale.net ?? PLAN.license.netPrice));
         if (anc.todayIn[side] > 0) anc.todayIn[side]--;
         else if (anc.carry[side] > 0) anc.carry[side]--;
         else needsReview = true; // unit sudah dipasangkan
@@ -648,7 +682,9 @@ export class MitransEngine {
   /** Syarat Langganan aktif mulai bulan ke-4 sejak aktivasi Lisensi (Bab 9.2). */
   subscriptionConditionMet(accountId: string, month: string): boolean {
     const n = this.licenseMonthNumber(accountId, month);
-    if (n === undefined || n < PLAN.subscriptionRequiredFromMonth) return true;
+    if (n === undefined) return true;
+    const acc = this.mustAccount(accountId);
+    if (n <= (acc.accessMonths ?? PLAN.license.accessMonths)) return true;
     return this.hasPaidSubscription(accountId, month);
   }
 
@@ -658,7 +694,7 @@ export class MitransEngine {
     if (this.hasPaidSubscription(accountId, month)) return true;
     return (
       !this.options.planBRequiresPaidSubscription &&
-      n <= PLAN.license.accessMonths
+      n <= (this.mustAccount(accountId).accessMonths ?? PLAN.license.accessMonths)
     );
   }
 
@@ -862,7 +898,7 @@ export class MitransEngine {
       if (sale.countedBy!.has(anc.id)) return;
       sale.countedBy!.add(anc.id);
       anc.cumLicenses[side]++;
-      anc.monthNet[side] += PLAN.license.netPrice;
+      anc.monthNet[side] += sale.net ?? PLAN.license.netPrice;
       anc.todayIn[side]++;
       this.touchedToday.add(anc.id);
     });
@@ -1198,7 +1234,7 @@ export class MitransEngine {
     const licenseSales = ms.licenseSaleIds
       .map((id) => this.sales.get(id)!)
       .filter((s) => !s.cancelled);
-    const licenseNet = licenseSales.length * PLAN.license.netPrice;
+    const licenseNet = licenseSales.reduce((a, s) => a + (s.net ?? PLAN.license.netPrice), 0);
     const planACap = applyBp(licenseNet, this.options.planACapBp);
     const rankFund = applyBp(licenseNet, PLAN.rankFundBp);
     const leadershipFund = applyBp(licenseNet, PLAN.leadershipFundBp);
