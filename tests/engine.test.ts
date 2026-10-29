@@ -187,47 +187,51 @@ describe("Sisa unit pasangan dipakai hari berikutnya (Lampiran B.2)", () => {
   });
 });
 
-describe("Status aktif dan masa tunggu 2 bulan (Bab 9.1 dan 9.3)", () => {
+describe("Status aktif dan masa tunggu 2 bulan (Bab 9.1 dan 9.3), sesudah program 90 hari", () => {
+  // A aktivasi 2 Januari; jendela 90 hari berakhir 2 April. Skenario memakai Mei–Agustus agar ambang aktif 2.
   beforeEach(() => {
-    mitra("B", "A", jan(5), { leg: "L" }); // Januari: hanya 1 penjualan -> tidak aktif
-    mitra("C", "A", at("2027-02-05"), { leg: "R" }); // Februari: pasangan terbentuk, 1 penjualan -> tidak aktif
+    // Mulai bulan ke-4 (April) bonus mensyaratkan Langganan aktif (Bab 9.2): A membayar April–Agustus.
+    for (const m of ["04", "05", "06", "07", "08"])
+      engine.paySubscription({ saleId: `S-A-${m}`, accountId: "A", forMonth: `2027-${m}`, at: at("2027-04-01") });
+    mitra("B", "A", at("2027-05-05"), { leg: "L" }); // Mei: hanya 1 penjualan -> tidak aktif
+    mitra("C", "A", at("2027-06-05"), { leg: "R" }); // Juni: pasangan terbentuk, 1 penjualan -> tidak aktif
   });
 
   it("bonus tim ditahan saat tidak aktif lalu dibayar bila aktif dalam 2 bulan berikutnya", () => {
-    engine.closeThrough("2027-02");
+    engine.closeThrough("2027-06");
     const pair = entries("A", "PASANGAN")[0];
     const level = entries("A", "LEVEL")[0];
     expect(pair.status).toBe("held");
     expect(level.status).toBe("held");
-    expect(pair.holdUntil).toBe("2027-04");
-    customer("P1", "A", at("2027-03-03"));
-    customer("P2", "A", at("2027-03-04"));
-    engine.closeThrough("2027-03");
-    expect(engine.isActive("A", "2027-03")).toBe(true);
+    expect(pair.holdUntil).toBe("2027-08");
+    customer("P1", "A", at("2027-07-03"));
+    customer("P2", "A", at("2027-07-04"));
+    engine.closeThrough("2027-07");
+    expect(engine.isActive("A", "2027-07")).toBe(true);
     expect(pair.status).toBe("payable");
     expect(level.status).toBe("payable");
-    expect(pair.settledMonth).toBe("2027-03");
+    expect(pair.settledMonth).toBe("2027-07");
   });
 
   it("bonus hangus pada akhir bulan ke-2 dan masuk Pool Aktif", () => {
-    engine.closeThrough("2027-04");
+    engine.closeThrough("2027-08");
     const pair = entries("A", "PASANGAN")[0];
     expect(pair.status).toBe("forfeited");
-    const april = engine.report("2027-04")!;
-    expect(april.pool.forfeitedTeam).toBe(PLAN.pairBonus + PLAN.levelBonus);
+    const aug = engine.report("2027-08")!;
+    expect(aug.pool.forfeitedTeam).toBe(PLAN.pairBonus + PLAN.levelBonus);
   });
 
   it("pembelian untuk diri sendiri tidak dihitung", () => {
-    expect(engine.personalSales("2027-01").get("A")).toBe(1);
+    expect(engine.personalSales("2027-05").get("A")).toBe(1);
     expect(() =>
       engine.purchaseLicense({
         saleId: "self",
         buyerId: "A",
-        at: at("2027-02-10"),
+        at: at("2027-06-10"),
       }),
     ).not.toThrow();
     // Lisensi kedua A dibeli lewat Sponsor-nya (struktural) dan tidak dihitung sebagai penjualan A.
-    expect(engine.personalSales("2027-02").get("A")).toBe(1);
+    expect(engine.personalSales("2027-06").get("A")).toBe(1);
   });
 });
 
@@ -364,7 +368,8 @@ describe("Pembatalan (Bab 13 butir 10)", () => {
     const s = customer("P1", "A", jan(10));
     engine.closeThrough("2027-01");
     const r = engine.refundSale(s, at("2027-02-02"));
-    expect(r.clawedBack).toBe(PLAN.sponsorBonus);
+    // v2.0: penjualan dalam 90 hari pertama A juga memberi Fast Start, yang ikut ditarik.
+    expect(r.clawedBack).toBe(PLAN.sponsorBonus + PLAN.fastStartBonus);
     expect(
       engine
         .entriesFor("A")

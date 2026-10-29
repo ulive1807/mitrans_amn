@@ -17,6 +17,8 @@ import {
 import {
   addDays,
   addMonths,
+  addWorkdays,
+  atWib,
   monthCloseAt,
   monthIndex,
   monthNumberSince,
@@ -26,7 +28,9 @@ import {
   wibMonth,
 } from "./time";
 import {
+  DIRECT_TYPES,
   PLAN_A_TYPES,
+  PROGRAM90_TYPES,
   PLAN_B_TYPES,
   TEAM_TYPES,
   type Account,
@@ -50,6 +54,9 @@ function emptyByType(): Record<BonusType, number> {
   return {
     SPONSOR: 0,
     BERKAH: 0,
+    FAST_START: 0,
+    PENDAMPING: 0,
+    BALIK_MODAL: 0,
     LEVEL: 0,
     PASANGAN: 0,
     PEMBINAAN: 0,
@@ -124,6 +131,12 @@ export class MitransEngine {
   private activeByMonth = new Map<string, Set<string>>();
   private companyByMonth = new Map<string, number>();
   private clawbackByMonth = new Map<string, LedgerEntry[]>();
+  /** Program 90 hari: penjualan pribadi dan tim yang dihitung dalam jendela 90 hari tiap akun. */
+  private program90Sales = new Map<string, { personal: Set<string>; team: Set<string> }>();
+  /** Penjual yang Mitra binaannya sudah memberi Bonus Pendamping kepada Sponsor-nya -> saleId pemicu. */
+  private pendampingBySeller = new Map<string, string>();
+  /** Bonus Balik Modal per identitas (NIK). */
+  private balikModalByNik = new Map<string, LedgerEntry>();
   private currentDayEnd = 0;
   private nextEntryId = 1;
   private currentDay: string;
@@ -275,6 +288,8 @@ export class MitransEngine {
     };
     this.sales.set(sale.id, sale);
     const bySale = this.licenseSalesByBuyer.get(buyer.id) ?? [];
+    // Program 90 hari hanya menghitung Lisensi pertama setiap pembeli (bukan pembelian ulang).
+    const firstLicenseOfBuyer = bySale.every((id) => this.sales.get(id)!.cancelled);
     bySale.push(sale.id);
     this.licenseSalesByBuyer.set(buyer.id, bySale);
     const ms = this.month(month);
@@ -294,6 +309,18 @@ export class MitransEngine {
       if (e.status === "pending") this.pendingBerkah.push(e);
     }
 
+    const program90 =
+      firstLicenseOfBuyer && seller.role === "mitra" && this.inProgram90(seller.id, input.at);
+    if (program90) {
+      this.accrue(seller.id, "FAST_START", PLAN.fastStartBonus, input.at, { saleId: sale.id });
+      if (!this.pendampingBySeller.has(seller.id) && seller.sponsorId) {
+        this.pendampingBySeller.set(seller.id, sale.id);
+        this.accrue(seller.sponsorId, "PENDAMPING", PLAN.pendampingBonus, input.at, {
+          saleId: sale.id,
+        });
+      }
+    }
+
     if (!buyer.licenseActivatedAt) buyer.licenseActivatedAt = input.at;
 
     if (buyer.role === "mitra") {
@@ -310,6 +337,7 @@ export class MitransEngine {
       sale.volumeNodeId = nodeId;
       if (nodeId) this.addLicenseVolume(sale, nodeId, false);
     }
+    if (firstLicenseOfBuyer && seller.role === "mitra") this.recordProgram90(sale, seller);
     return sale;
   }
 
@@ -457,6 +485,12 @@ export class MitransEngine {
       }
     }
     this.pendingBerkah = this.pendingBerkah.filter((e) => e.saleId !== saleId);
+    for (const c of this.program90Sales.values()) {
+      c.personal.delete(saleId);
+      c.team.delete(saleId);
+    }
+    for (const [sellerId, sid] of this.pendampingBySeller)
+      if (sid === saleId) this.pendampingBySeller.delete(sellerId);
     if (sale.kind === "license") {
       const buyer = this.accounts.get(sale.buyerId)!;
       const stillHolds = (this.licenseSalesByBuyer.get(buyer.id) ?? []).some(
@@ -509,7 +543,51 @@ export class MitransEngine {
   isActive(accountId: string, month: string): boolean {
     const closed = this.activeByMonth.get(month);
     if (closed) return closed.has(accountId);
-    return (this.personalSales(month).get(accountId) ?? 0) >= PLAN.activeMinPersonalSales;
+    return (
+      (this.personalSales(month).get(accountId) ?? 0) >=
+      this.activeThreshold(accountId, month)
+    );
+  }
+
+  /** Ambang aktif (spesifikasi 5.3): 1 penjualan bila bulan itu menyentuh 90 hari pertama, selain itu 2. */
+  activeThreshold(accountId: string, month: string): number {
+    const end = this.program90End(accountId);
+    return end !== undefined && atWib(`${month}-01`, 0) < end
+      ? PLAN.activeMinPersonalSales90
+      : PLAN.activeMinPersonalSales;
+  }
+
+  /** Akhir jendela 90 hari (eksklusif) sejak aktivasi Lisensi pertama; undefined bila belum memegang Lisensi. */
+  program90End(accountId: string): number | undefined {
+    const acc = this.mustAccount(accountId);
+    if (acc.role !== "mitra" || !acc.licenseActivatedAt) return undefined;
+    return addDays(acc.licenseActivatedAt, PLAN.program90Days);
+  }
+
+  inProgram90(accountId: string, t: number): boolean {
+    const end = this.program90End(accountId);
+    if (end === undefined) return false;
+    return t >= this.mustAccount(accountId).licenseActivatedAt! && t < end;
+  }
+
+  program90Progress(accountId: string): {
+    personal: number;
+    team: number;
+    legs: { L: boolean; R: boolean };
+    achieved: boolean;
+    endsAt?: number;
+  } {
+    const acc = this.mustAccount(accountId);
+    const c = this.program90Sales.get(accountId);
+    const node = acc.nodeId ? this.nodes.get(acc.nodeId) : undefined;
+    const bm = this.balikModalByNik.get(acc.nik);
+    return {
+      personal: c?.personal.size ?? 0,
+      team: c?.team.size ?? 0,
+      legs: { L: (node?.cumLicenses.L ?? 0) > 0, R: (node?.cumLicenses.R ?? 0) > 0 },
+      achieved: !!bm && bm.status !== "clawback",
+      endsAt: this.program90End(accountId),
+    };
   }
 
 
@@ -811,13 +889,55 @@ export class MitransEngine {
     }
   }
 
+  /** Catat Lisensi untuk program 90 hari penjual dan Sponsor-sponsornya, lalu periksa Bonus Balik Modal. */
+  private recordProgram90(sale: Sale, seller: Account): void {
+    const bucket = (id: string) => {
+      let c = this.program90Sales.get(id);
+      if (!c) {
+        c = { personal: new Set(), team: new Set() };
+        this.program90Sales.set(id, c);
+      }
+      return c;
+    };
+    const touched: Account[] = [];
+    if (this.inProgram90(seller.id, sale.at)) {
+      bucket(seller.id).personal.add(sale.id);
+      touched.push(seller);
+    }
+    let cur = seller.sponsorId ? this.accounts.get(seller.sponsorId) : undefined;
+    while (cur && cur.role === "mitra") {
+      if (this.inProgram90(cur.id, sale.at)) {
+        bucket(cur.id).team.add(sale.id);
+        touched.push(cur);
+      }
+      cur = cur.sponsorId ? this.accounts.get(cur.sponsorId) : undefined;
+    }
+    for (const acc of touched) {
+      const existing = this.balikModalByNik.get(acc.nik);
+      if (existing && existing.status !== "clawback") continue;
+      const p = this.program90Progress(acc.id);
+      if (
+        p.personal >= PLAN.balikModalPersonal &&
+        p.team >= PLAN.balikModalTeam &&
+        p.legs.L &&
+        p.legs.R
+      ) {
+        this.balikModalByNik.set(
+          acc.nik,
+          this.accrue(acc.id, "BALIK_MODAL", PLAN.balikModalBonus, sale.at, { saleId: sale.id }),
+        );
+      }
+    }
+  }
+
   private countPersonalSale(sellerId: string, at: number): void {
     const seller = this.accounts.get(sellerId)!;
     if (seller.role !== "mitra") return;
     const ms = this.month(wibMonth(at));
     const n = (ms.runningSales.get(sellerId) ?? 0) + 1;
     ms.runningSales.set(sellerId, n);
-    if (n === PLAN.activeMinPersonalSales) ms.becameActiveAt.set(sellerId, at);
+    if (n === this.activeThreshold(sellerId, wibMonth(at)))
+      ms.becameActiveAt.set(sellerId, at);
   }
 
   // ---------------------------------------------------------------------------
@@ -989,7 +1109,7 @@ export class MitransEngine {
     const sales = this.personalSales(month);
     const active = new Set<string>();
     for (const [id, n] of sales) {
-      if (n >= PLAN.activeMinPersonalSales) {
+      if (n >= this.activeThreshold(id, month)) {
         active.add(id);
         this.accounts.get(id)!.everActive = true;
       }
@@ -1018,6 +1138,14 @@ export class MitransEngine {
       e.status = "held";
       e.holdUntil = addMonths(month, PLAN.holdMonths);
       e.note = note;
+      if (this.inProgram90(e.accountId, e.accruedAt)) {
+        // Spesifikasi 5.3: bonus yang ditahan dalam 90 hari pertama belum hangus sampai hari ke-150.
+        const day150 = wibMonth(
+          addDays(this.accounts.get(e.accountId)!.licenseActivatedAt!, PLAN.program90HoldUntilDay),
+        );
+        if (monthIndex(day150) > monthIndex(e.holdUntil)) e.holdUntil = day150;
+        e.note = `${note} · masa tunggu program 90 hari`;
+      }
       this.held.push(e);
     };
 
@@ -1055,9 +1183,9 @@ export class MitransEngine {
     const teamClaims: LedgerEntry[] = [];
     for (const e of this.pendingByMonth.get(month) ?? []) {
       if (e.status !== "pending") continue;
-      if (e.type === "SPONSOR") {
+      if (DIRECT_TYPES.includes(e.type)) {
         if (this.subscriptionConditionMet(e.accountId, month)) {
-          settle(e, e.gross, payoutFriday(e.accruedAt));
+          settle(e, e.gross, this.directPayoutDate(e));
         } else {
           heldNoSubscription += e.gross;
           hold(e, "Langganan penjual tidak aktif (bulan ke-4+)");
@@ -1089,7 +1217,7 @@ export class MitransEngine {
         continue;
       }
       const ok =
-        e.type === "SPONSOR" || e.type === "BERKAH"
+        DIRECT_TYPES.includes(e.type)
           ? this.subscriptionConditionMet(e.accountId, month)
           : isActive(e.accountId) &&
             this.subscriptionConditionMet(e.accountId, month);
@@ -1123,7 +1251,7 @@ export class MitransEngine {
       settled
         .filter((e) => types.includes(e.type))
         .reduce((a, e) => a + e.amount, 0);
-    const directPaid = sumSettled(["SPONSOR", "BERKAH"]);
+    const directPaid = sumSettled(DIRECT_TYPES);
     const teamBudget = Math.max(
       0,
       planACap - directPaid - rankFund - royaltyFund,
@@ -1417,6 +1545,13 @@ export class MitransEngine {
       companyStructural,
       heldNoSubscription,
     });
+  }
+
+  /** Bonus program 90 hari dibayar setelah masa pengembalian 7 hari kerja; Sponsor pada Jumat berikutnya. */
+  private directPayoutDate(e: LedgerEntry): string {
+    return PROGRAM90_TYPES.includes(e.type)
+      ? payoutFriday(addWorkdays(e.accruedAt, PLAN.refundWorkdays))
+      : payoutFriday(e.accruedAt);
   }
 
   private carryEntry(

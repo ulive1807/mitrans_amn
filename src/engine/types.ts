@@ -82,6 +82,9 @@ export interface Sale {
 export type BonusType =
   | "SPONSOR"
   | "BERKAH"
+  | "FAST_START"
+  | "PENDAMPING"
+  | "BALIK_MODAL"
   | "LEVEL"
   | "PASANGAN"
   | "PEMBINAAN"
@@ -95,6 +98,9 @@ export type BonusType =
 export const PLAN_A_TYPES: BonusType[] = [
   "SPONSOR",
   "BERKAH",
+  "FAST_START",
+  "PENDAMPING",
+  "BALIK_MODAL",
   "LEVEL",
   "PASANGAN",
   "PEMBINAAN",
@@ -107,11 +113,24 @@ export const PLAN_B_TYPES: BonusType[] = [
   "PASANGAN_RO",
   "ROYALTI_RO",
 ];
+/** Bonus langsung: dibayar tanpa syarat aktif, di luar anggaran bonus tim. */
+export const DIRECT_TYPES: BonusType[] = [
+  "SPONSOR",
+  "BERKAH",
+  "FAST_START",
+  "PENDAMPING",
+  "BALIK_MODAL",
+];
+/** Bonus program 90 hari: dibayar setelah masa pengembalian 7 hari kerja. */
+export const PROGRAM90_TYPES: BonusType[] = ["FAST_START", "PENDAMPING", "BALIK_MODAL"];
 export const TEAM_TYPES: BonusType[] = ["LEVEL", "PASANGAN", "PEMBINAAN"];
 
 export const BONUS_LABEL: Record<BonusType, string> = {
   SPONSOR: "Bonus Sponsor",
   BERKAH: "Bonus Layanan Berkah",
+  FAST_START: "Bonus Fast Start",
+  PENDAMPING: "Bonus Pendamping",
+  BALIK_MODAL: "Bonus Balik Modal",
   LEVEL: "Bonus Level",
   PASANGAN: "Bonus Pasangan",
   PEMBINAAN: "Bonus Pembinaan",
