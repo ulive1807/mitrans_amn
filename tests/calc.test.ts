@@ -1,16 +1,19 @@
 import { describe, expect, it } from "vitest";
 import {
   allocateEqualWithCap,
+  allocateWeightedWithCap,
   applyBp,
   distributePool,
   pairDay,
   pembinaanRateBp,
+  maintainsRank,
   perLicenseUpperBounds,
+  qualifiedRank,
   ranksForSmallLeg,
   roPairAmount,
 } from "../src/engine/calc";
 import { PLAN } from "../src/engine/plan";
-import { atWib, payoutFriday } from "../src/engine/time";
+import { addWorkdays, atWib, payoutFriday } from "../src/engine/time";
 
 describe("Produk dan PV (Bab 3.1)", () => {
   it("harga = DPP + PPN", () => {
@@ -57,23 +60,14 @@ describe("Bonus Pasangan (Lampiran B.2)", () => {
   });
 });
 
-describe("Bonus Pembinaan (Lampiran B.3)", () => {
-  it("jumlah Rp1.040.000", () => {
+describe("Bonus Pembinaan v2.0 (spesifikasi 5.4)", () => {
+  it("generasi 1-3 masing-masing 25%, generasi 4-6 masing-masing 5%", () => {
     const pairs = [2_000_000, 1_000_000, 800_000, 500_000, 300_000, 100_000];
     const amounts = pairs.map((p, i) => applyBp(p, pembinaanRateBp(i + 1)));
     expect(amounts).toEqual([
-      500_000, 250_000, 200_000, 50_000, 30_000, 10_000,
+      500_000, 250_000, 200_000, 25_000, 15_000, 5_000,
     ]);
-    expect(amounts.reduce((a, b) => a + b, 0)).toBe(1_040_000);
     expect(pembinaanRateBp(7)).toBe(0);
-  });
-  it("contoh 10.1: 25% x (1,2 jt + 0,6 jt + 0,3 jt) = Rp525.000", () => {
-    expect(
-      [1_200_000, 600_000, 300_000].reduce(
-        (a, p, i) => a + applyBp(p, pembinaanRateBp(i + 1)),
-        0,
-      ),
-    ).toBe(525_000);
   });
 });
 
@@ -160,17 +154,78 @@ describe("Peringkat (Bab 8.2)", () => {
   });
 });
 
-describe("Batas atas biaya bonus per Lisensi (Bab 12.2)", () => {
+describe("Batas atas biaya bonus per Lisensi v2.0 (spesifikasi 10.2)", () => {
   const b = perLicenseUpperBounds();
-  it("Lisensi kepada Mitra PLS baru = 48,95%", () =>
-    expect(b.toMitra * 100).toBeCloseTo(48.95, 2));
-  it("Lisensi kepada Pelanggan = 38,6%", () =>
-    expect(b.toCustomer * 100).toBeCloseTo(38.6, 1));
-  it("Lisensi Pelanggan dikonversi = 49,7%", () =>
-    expect(b.converted * 100).toBeCloseTo(49.7, 1));
-  it("Langganan: dokumen menulis 38%, perhitungan dari nominal Rp70.000 / Rp359.459 = 37,47%", () => {
-    // Komisi Langganan 20% dihitung dari PV (Rp350.000), bukan omzet bersih (Rp359.459).
+  it("Lisensi kepada Mitra PLS baru = 58,62%", () =>
+    expect(b.toMitra * 100).toBeCloseTo(58.62, 1));
+  it("Lisensi kepada Pelanggan = 57,88%", () =>
+    expect(b.toCustomer * 100).toBeCloseTo(57.88, 1));
+  it("semua di bawah plafon 60%", () => {
+    expect(b.toMitra).toBeLessThan(0.6);
+    expect(b.toCustomer).toBeLessThan(0.6);
+    expect(b.converted).toBeLessThan(0.6);
+  });
+  it("Langganan tetap 37,47%", () => {
     expect(b.subscription * 100).toBeCloseTo(37.47, 2);
+  });
+});
+
+describe("Peringkat bulanan v2.0 (spesifikasi 6)", () => {
+  const none = { L: "Member", R: "Member" } as const;
+  it("Builder: 1 transaksi pribadi, 2:2 paket, 2 Mitra langsung aktif", () => {
+    expect(
+      qualifiedRank({ personalTx: 1, legPaket: { L: 2, R: 2 }, directActive: 2, leaderBest: none }),
+    ).toBe("Builder");
+    expect(
+      qualifiedRank({ personalTx: 1, legPaket: { L: 2, R: 1.99 }, directActive: 2, leaderBest: none }),
+    ).toBe("Member");
+  });
+  it("Executive butuh Builder di kaki kiri dan kanan", () => {
+    const base = { personalTx: 2, legPaket: { L: 5, R: 5 }, directActive: 3 };
+    expect(qualifiedRank({ ...base, leaderBest: { L: "Builder", R: "Member" } })).toBe("Builder");
+    expect(qualifiedRank({ ...base, leaderBest: { L: "Builder", R: "Builder" } })).toBe("Executive");
+  });
+  it("pemeliharaan 70% (Builder) dan 80% (Director) per kaki", () => {
+    expect(maintainsRank("Builder", { L: 1.4, R: 1.4 })).toBe(true);
+    expect(maintainsRank("Builder", { L: 1.39, R: 5 })).toBe(false);
+    expect(maintainsRank("Director", { L: 20, R: 20 })).toBe(true);
+    expect(maintainsRank("Director", { L: 19.9, R: 30 })).toBe(false);
+  });
+  it("total bonus peringkat sampai Royal Crown Rp133.650.000", () => {
+    expect(PLAN.monthlyRanks.reduce((a, r) => a + r.reward, 0)).toBe(133_650_000);
+    expect(PLAN.monthlyRanks).toHaveLength(12);
+  });
+});
+
+describe("Dana leadership menurut bobot (spesifikasi 7)", () => {
+  const holders = [
+    { id: "a", weight: 1 },
+    { id: "b", weight: 3 },
+  ];
+  it("dibagi menurut bobot", () => {
+    const r = allocateWeightedWithCap(10_000_000, holders, 100_000_000);
+    expect(r.allocation.get("a")).toBe(2_500_000);
+    expect(r.allocation.get("b")).toBe(7_500_000);
+  });
+  it("kelebihan batas dibagi ulang", () => {
+    const r = allocateWeightedWithCap(10_000_000, holders, 5_000_000);
+    expect(r.allocation.get("a")).toBe(5_000_000);
+    expect(r.allocation.get("b")).toBe(5_000_000);
+    expect(r.overCap).toBe(0);
+  });
+  it("semua mencapai batas: sisa menjadi overCap", () => {
+    const r = allocateWeightedWithCap(10_000_000, holders, 1_000_000);
+    expect(r.overCap).toBe(8_000_000);
+  });
+  it("tanpa pemegang: seluruh dana unassigned", () => {
+    const r = allocateWeightedWithCap(10_000_000, [], 100_000_000);
+    expect(r.unassigned).toBe(10_000_000);
+  });
+});
+
+describe("Hari kerja (masa pengembalian 7 hari kerja)", () => {
+  it("Jumat + 7 hari kerja = Selasa minggu kedua", () => {
+    expect(addWorkdays(atWib("2027-01-08", 10), 7)).toBe(atWib("2027-01-19", 10));
   });
 });
 

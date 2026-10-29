@@ -28,6 +28,18 @@ export function addDays(t: number, days: number): number {
   return t + days * DAY_MS;
 }
 
+/** Maju n hari kerja (Senin–Jumat menurut WIB), jam tetap. Hari libur nasional belum diperhitungkan. */
+export function addWorkdays(t: number, n: number): number {
+  let cur = t;
+  let left = n;
+  while (left > 0) {
+    cur += DAY_MS;
+    const dow = new Date(cur + WIB_OFFSET_MS).getUTCDay();
+    if (dow !== 0 && dow !== 6) left--;
+  }
+  return cur;
+}
+
 export function nextDate(date: string): string {
   return new Date(Date.parse(`${date}T00:00:00Z`) + DAY_MS)
     .toISOString()

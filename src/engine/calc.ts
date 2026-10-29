@@ -1,4 +1,4 @@
-import { PLAN, type RankName } from "./plan";
+import { PLAN, type MonthlyRankName, type RankName } from "./plan";
 
 /**
  * Bonus Pasangan harian (Bab 8.1, Lampiran B.2).
@@ -138,26 +138,100 @@ export function distributePool(
   return { perSale, shares, distributed, remainder: pool - distributed };
 }
 
+/** Urutan peringkat bulanan (spesifikasi 6): Member = 0, Royal Crown = 11. */
+export function rankIndex(rank: MonthlyRankName): number {
+  return PLAN.monthlyRanks.findIndex((r) => r.name === rank);
+}
+
+export interface RankInput {
+  personalTx: number;
+  /** Volume bulan ini per kaki dalam paket setara (omzet bersih / harga bersih Lisensi). */
+  legPaket: { L: number; R: number };
+  directActive: number;
+  /** Peringkat tertinggi pemimpin di kaki kiri dan kanan bulan ini. */
+  leaderBest: { L: MonthlyRankName; R: MonthlyRankName };
+}
+
+/** Peringkat tertinggi yang semua syaratnya terpenuhi bulan ini (spesifikasi 6). */
+export function qualifiedRank(input: RankInput): MonthlyRankName {
+  let best: MonthlyRankName = "Member";
+  for (const r of PLAN.monthlyRanks) {
+    const leaderOk =
+      r.leaderRank === null ||
+      (rankIndex(input.leaderBest.L) >= rankIndex(r.leaderRank) &&
+        rankIndex(input.leaderBest.R) >= rankIndex(r.leaderRank));
+    if (
+      input.personalTx >= r.personalTx &&
+      input.legPaket.L >= r.legPaket &&
+      input.legPaket.R >= r.legPaket &&
+      input.directActive >= r.directActive &&
+      leaderOk
+    )
+      best = r.name;
+  }
+  return best;
+}
+
+/** Pemeliharaan: kedua kaki paling sedikit 70% atau 80% syarat volume peringkat itu. */
+export function maintainsRank(
+  rank: MonthlyRankName,
+  legPaket: { L: number; R: number },
+): boolean {
+  const r = PLAN.monthlyRanks[rankIndex(rank)];
+  const min = (r.legPaket * r.maintainBp) / 10_000;
+  return legPaket.L >= min && legPaket.R >= min;
+}
+
 /**
- * Batas atas biaya bonus per Lisensi (Bab 12.2 butir 1), dihitung ulang dari parameter
+ * Pembagian dana menurut bobot dengan batas per orang (dana leadership, spesifikasi 7).
+ * Kelebihan di atas batas dibagi ulang kepada penerima lain yang belum mencapai batas.
+ */
+export function allocateWeightedWithCap(
+  fund: number,
+  holders: { id: string; weight: number }[],
+  personalCap: number,
+): { allocation: Map<string, number>; unassigned: number; overCap: number } {
+  const allocation = new Map<string, number>();
+  const valid = holders.filter((h) => h.weight > 0);
+  if (valid.length === 0 || fund <= 0)
+    return { allocation, unassigned: Math.max(fund, 0), overCap: 0 };
+  let remaining = fund;
+  const room = (id: string) => personalCap - (allocation.get(id) ?? 0);
+  for (;;) {
+    const eligible = valid.filter((h) => room(h.id) > 0);
+    const totalWeight = eligible.reduce((a, h) => a + h.weight, 0);
+    if (eligible.length === 0 || remaining <= 0) break;
+    let given = 0;
+    for (const h of eligible) {
+      const share = Math.floor((remaining * h.weight) / totalWeight);
+      const give = Math.min(share, room(h.id));
+      if (give > 0) {
+        allocation.set(h.id, (allocation.get(h.id) ?? 0) + give);
+        given += give;
+      }
+    }
+    remaining -= given;
+    if (given === 0) break;
+  }
+  return { allocation, unassigned: 0, overCap: remaining };
+}
+
+/**
+ * Batas atas biaya bonus per Lisensi (spesifikasi 10.2), dihitung ulang dari parameter
  * agar dokumen dan kode tidak diam-diam berbeda.
  */
 export function perLicenseUpperBounds() {
   const net = PLAN.license.netPrice;
   const pairsPerLicense = PLAN.maxLevels / 2; // 10 upline, 1 pasangan memakai 2 Lisensi
   const pembinaanMultiplier =
-    1 + PLAN.pembinaanRatesBp.reduce((a, b) => a + b, 0) / 10_000; // 2,05
-  const funds =
-    ((PLAN.rankFundBp + PLAN.royaltyTiers.reduce((a, t) => a + t.shareBp, 0)) /
-      10_000) *
-    net;
+    1 + PLAN.pembinaanRatesBp.reduce((a, b) => a + b, 0) / 10_000; // 1,90
+  const fundsShare = (PLAN.rankFundBp + PLAN.leadershipFundBp) / 10_000;
   const team = pairsPerLicense * PLAN.pairBonus * pembinaanMultiplier;
-  const toMitra = (PLAN.sponsorBonus + PLAN.levelBonus + team + funds) / net;
-  const toCustomer =
-    (PLAN.sponsorBonus + team + PLAN.berkahBonus + funds) / net;
-  const converted =
-    (PLAN.sponsorBonus + PLAN.levelBonus + team + PLAN.berkahBonus + funds) /
-    net;
+  const balikModalShare = PLAN.balikModalBonus / PLAN.balikModalPersonal;
+  const direct = PLAN.sponsorBonus + PLAN.fastStartBonus + balikModalShare;
+  const toMitra = (direct + PLAN.pendampingBonus + team) / net + fundsShare;
+  const toCustomer = (direct + team + PLAN.berkahBonus) / net + fundsShare;
+  const converted = toCustomer;
   const subscription =
     PLAN.subscriptionCommission / PLAN.subscription.netPrice +
     (PLAN.maxLevels / 2) * (PLAN.roPairBp / 10_000) +
