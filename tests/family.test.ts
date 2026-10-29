@@ -31,7 +31,7 @@ describe("Paket Family Rp25 jt, 12 bulan, 3 kursi (keputusan Coach 29 Oktober 20
   it("ayah posisi utama di bawah penjual; anak di kaki kiri ayah, ibu di kaki kanan ayah", () => {
     const sales = w.engine.purchaseFamily(FAM);
     expect(sales.map((s) => s.buyerId)).toEqual(["AYAH", "ANAK", "IBU"]);
-    expect(sales.every((s) => s.sellerId === "A")).toBe(true);
+    expect(sales.map((s) => s.sellerId)).toEqual(["A", "AYAH", "AYAH"]);
     expect(sales.reduce((a, s) => a + s.net!, 0)).toBe(PLAN.family.netPrice);
     const node = (id: string) => w.engine.nodes.get(w.engine.accounts.get(id)!.nodeId!)!;
     expect(node("AYAH").left).toBe(node("ANAK").id);
@@ -40,19 +40,22 @@ describe("Paket Family Rp25 jt, 12 bulan, 3 kursi (keputusan Coach 29 Oktober 20
     for (const id of ["AYAH", "IBU", "ANAK"]) expect(w.engine.accounts.get(id)!.accessMonths).toBe(12);
   });
 
-  it("bonus penjual per kursi: Sponsor 3 x Rp750.000 dan Fast Start 3 x Rp1.000.000 (Rp5.250.000)", () => {
+  it("Hybrid: penjual mendapat bonus kursi ayah; ayah mendapat bonus kursi ibu dan anak", () => {
     w.engine.purchaseFamily(FAM);
-    const gross = (t: "SPONSOR" | "FAST_START") => w.entries("A", t).reduce((a, e) => a + e.gross, 0);
-    expect(gross("SPONSOR")).toBe(2_250_000);
-    expect(gross("FAST_START")).toBe(3_000_000);
-    expect(w.engine.personalSales("2027-01").get("A")).toBe(3);
+    const gross = (id: string, t: "SPONSOR" | "FAST_START" | "PENDAMPING") =>
+      w.entries(id, t).reduce((a, e) => a + e.gross, 0);
+    expect(gross("A", "SPONSOR")).toBe(750_000);
+    expect(gross("A", "FAST_START")).toBe(1_000_000);
+    expect(gross("A", "PENDAMPING")).toBe(100_000);
+    expect(gross("AYAH", "SPONSOR")).toBe(1_500_000);
+    expect(gross("AYAH", "FAST_START")).toBe(2_000_000);
+    expect(w.engine.personalSales("2027-01").get("A")).toBe(1);
+    expect(w.engine.personalSales("2027-01").get("AYAH")).toBe(2);
   });
 
-  it("ayah tidak menerima Bonus Sponsor/Fast Start dari keluarganya, tetapi volume ibu dan anak dihitung untuk ayah", () => {
+  it("volume ibu dan anak dihitung untuk ayah", () => {
     w.engine.purchaseFamily(FAM);
     w.engine.advance(at("2027-01-08"));
-    expect(w.entries("AYAH", "SPONSOR")).toHaveLength(0);
-    expect(w.entries("AYAH", "FAST_START")).toHaveLength(0);
     const node = w.engine.nodes.get(w.engine.accounts.get("AYAH")!.nodeId!)!;
     expect(node.cumLicenses).toEqual({ L: 1, R: 1 });
     expect(w.entries("AYAH", "PASANGAN").map((e) => e.gross)).toEqual([PLAN.pairBonus]);
