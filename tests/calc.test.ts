@@ -155,10 +155,14 @@ describe("Pool Aktif (Bab 8.4)", () => {
 
 describe("Batas atas biaya bonus per Lisensi v2.0 (spesifikasi 10.2)", () => {
   const b = perLicenseUpperBounds();
-  it("Lisensi kepada Mitra PLS baru = 58,62%", () =>
-    expect(b.toMitra * 100).toBeCloseTo(58.62, 1));
-  it("Lisensi kepada Pelanggan = 57,88%", () =>
-    expect(b.toCustomer * 100).toBeCloseTo(57.88, 1));
+  it("Lisensi kepada Mitra PLS baru = 59,82% (Fast Start Rp750.000, dana peringkat 4,5%)", () =>
+    expect(b.toMitra * 100).toBeCloseTo(59.82, 1));
+  it("Lisensi kepada Pelanggan = 59,08%", () =>
+    expect(b.toCustomer * 100).toBeCloseTo(59.08, 1));
+  it("parameter keputusan Coach 29 Oktober 2026", () => {
+    expect(PLAN.fastStartBonus).toBe(750_000);
+    expect(PLAN.rankFundBp).toBe(450);
+  });
   it("semua di bawah plafon 60%", () => {
     expect(b.toMitra).toBeLessThan(0.6);
     expect(b.toCustomer).toBeLessThan(0.6);

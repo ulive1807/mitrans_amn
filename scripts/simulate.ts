@@ -142,13 +142,13 @@ lines.push("");
 lines.push("| Jenis | Spesifikasi v2.0 | Engine |");
 lines.push("|---|---:|---:|");
 lines.push(
-  `| Lisensi kepada Mitra PLS baru | 58,62% | ${(b.toMitra * 100).toFixed(2).replace(".", ",")}% |`,
+  `| Lisensi kepada Mitra PLS baru | 59,82% | ${(b.toMitra * 100).toFixed(2).replace(".", ",")}% |`,
 );
 lines.push(
-  `| Lisensi kepada Pelanggan | 57,88% | ${(b.toCustomer * 100).toFixed(2).replace(".", ",")}% |`,
+  `| Lisensi kepada Pelanggan | 59,08% | ${(b.toCustomer * 100).toFixed(2).replace(".", ",")}% |`,
 );
 lines.push(
-  `| Lisensi Pelanggan dikonversi | 57,88% | ${(b.converted * 100).toFixed(2).replace(".", ",")}% |`,
+  `| Lisensi Pelanggan dikonversi | 59,08% | ${(b.converted * 100).toFixed(2).replace(".", ",")}% |`,
 );
 lines.push(
   `| Langganan | 37,47% | ${(b.subscription * 100).toFixed(2).replace(".", ",")}% |`,

@@ -42,7 +42,7 @@ export const PLAN = {
   pembinaanRatesBp: [2500, 2500, 2500, 500, 500, 500], // spesifikasi 5.4
 
   // Bab 8.2 Peringkat
-  rankFundBp: 700, // spesifikasi 6: 7% omzet bersih Lisensi bulan itu
+  rankFundBp: 450, // keputusan Coach 29 Oktober 2026: 4,5% (semula 7%) omzet bersih Lisensi bulan itu
   rankClaimMaxWaitMonths: 6, // lewat ini dilunasi dana cadangan Perusahaan
 
 
@@ -76,7 +76,7 @@ export const PLAN = {
   serviceFundPerLicense: 426_000,
 
   // Spesifikasi 5.2–5.3: program 90 hari
-  fastStartBonus: 500_000,
+  fastStartBonus: 750_000, // keputusan Coach 29 Oktober 2026 (semula Rp500.000)
   pendampingBonus: 100_000,
   balikModalBonus: 1_500_000,
   balikModalPersonal: 4,

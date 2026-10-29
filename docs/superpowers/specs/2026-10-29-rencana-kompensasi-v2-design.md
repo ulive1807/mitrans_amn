@@ -62,14 +62,14 @@ Semua persentase di dokumen ini dihitung dari **omzet bersih** (setelah PPN). An
 | Bonus | v1.2 | v2.0 |
 |---|---|---|
 | Sponsor | Rp750.000 | Tetap Rp750.000 |
-| Fast Start | – | **Baru** Rp500.000 |
+| Fast Start | – | **Baru** Rp750.000 |
 | Pendamping | – | **Baru** Rp100.000 |
 | Balik Modal | – | **Baru** Rp1.500.000 sekali |
 | Layanan Berkah | Rp50.000 | Tetap |
 | Level | Rp750.000 per kedalaman, maks Rp7,5 jt | **Dihapus** |
 | Pasangan | Rp150.000, 10 level, 20/hari | Tetap |
 | Pembinaan | Gen 1–3: 25%; gen 4–6: 10% | Gen 1–3: 25%; **gen 4–6: 5%** |
-| Prestasi Peringkat | 6 peringkat, dana 2% | **12 peringkat Excel, dana 7%** |
+| Prestasi Peringkat | 6 peringkat, dana 2% | **12 peringkat Excel, dana 4,5%** |
 | Royalti | 2%, kaki kecil 400 dan 1.000 | **Diganti dana leadership 5%** |
 | Pool Aktif | Dari bonus hangus | Dari bonus hangus **+ pengisian sampai 55%** |
 
@@ -79,7 +79,7 @@ Semua persentase di dokumen ini dihitung dari **omzet bersih** (setelah PPN). An
 
 | Bonus | Nominal | Syarat | Penerima |
 |---|---|---|---|
-| Fast Start | Rp500.000 per Lisensi | Lisensi dijual langsung dalam 90 hari pertama penjual; lunas; lewat masa pengembalian 7 hari kerja | Penjual |
+| Fast Start | Rp750.000 per Lisensi | Lisensi dijual langsung dalam 90 hari pertama penjual; lunas; lewat masa pengembalian 7 hari kerja | Penjual |
 | Pendamping | Rp100.000 sekali per Mitra binaan | Mitra yang disponsori langsung menjual Lisensi pertamanya dalam 90 hari pertamanya | Sponsor Mitra binaan |
 | Balik Modal | Rp1.500.000 sekali per identitas | Dalam 90 hari: ≥4 Lisensi pribadi (minimal 1 Mitra baru yang dijual pribadi di kaki kiri dan 1 di kaki kanan; Lisensi Pelanggan dihitung pribadi tetapi tidak mengisi kaki) dan ≥4 Lisensi dijual tim sponsor | Mitra PLS itu |
 
@@ -122,7 +122,7 @@ Volume kaki dihitung dalam **paket setara per bulan** = omzet bersih Lisensi dan
 Ketentuan:
 
 1. Peringkat dicapai saat syarat penuh terpenuhi pada satu bulan. Bonus peringkat **dibayar setelah 3 bulan berturut-turut terverifikasi**, yaitu memenuhi pemeliharaan.
-2. Bonus dibayar dari dana peringkat 7% omzet bersih Lisensi bulan itu, dengan antrean urutan klaim seperti v1.2.
+2. Bonus dibayar dari dana peringkat 4,5% omzet bersih Lisensi bulan itu, dengan antrean urutan klaim seperti v1.2.
 3. Total bonus peringkat sampai Royal Crown: Rp133.650.000 per identitas, sekali seumur keanggotaan.
 4. Sisa dana peringkat bulan itu masuk Pool Aktif.
 5. Builder adalah target 90 hari pertama dan sejalan dengan headline.
@@ -174,14 +174,14 @@ Bila klaim melebihi plafon, semua klaim bonus tim dibayar dengan faktor yang sam
 | Pos | Rumus | % omzet bersih |
 |---|---|---:|
 | Sponsor | Rp750.000 | 11,10 |
-| Fast Start | Rp500.000 | 7,40 |
+| Fast Start | Rp750.000 | 11,10 |
 | Pendamping | Rp100.000 | 1,48 |
 | Balik Modal | Rp1.500.000 ÷ 4 Lisensi | 5,55 |
 | Pasangan + Pembinaan | 5 × Rp150.000 × 1,90 | 21,09 |
-| Dana peringkat + leadership | 7% + 5% | 12,00 |
-| **Jumlah** | | **58,62** |
+| Dana peringkat + leadership | 4,5% + 5% | 9,50 |
+| **Jumlah** | | **59,82** |
 
-Lisensi kepada Pelanggan: tanpa Pendamping, ditambah Berkah Rp50.000 (0,74%). Jumlahnya 57,88%.
+Lisensi kepada Pelanggan: tanpa Pendamping, ditambah Berkah Rp50.000 (0,74%). Jumlahnya 59,08%.
 
 ### 10.3 Laba perusahaan
 
@@ -261,7 +261,9 @@ Asumsi: setiap orang menjual 1 Lisensi di kaki kiri dan 1 di kaki kanan per bula
 | 7 | "2 pemimpin di kaki berbeda" | Dari garis sponsor: pemimpin adalah Mitra yang disponsori langsung, satu berada di kaki kiri dan satu di kaki kanan. |
 | 8 | Bonus pada akun struktural | Tidak dihitung menuju target pengisian Pool. |
 
-Dampak simulasi (skala 1): Plan A dibayar turun dari 55% menjadi 16,5–19,5% omzet bersih Lisensi pada skenario organik 5 tahun (bulan tertinggi sekitar 30%); Pool Aktif 3–7%; Mitra pertama skenario headline Rp9.375.000 dari 90 hari pertama (Rp7.375.000 tanpa Pool). Ada ruang anggaran besar di bawah plafon 60% yang belum dialokasikan.
+| 9 | Sisa anggaran di bawah plafon | Fast Start dinaikkan Rp500.000 → **Rp750.000**; dana peringkat diturunkan 7% → **4,5%** agar batas atas terburuk tetap 59,82% (< 60%). |
+
+Dampak simulasi keputusan 5–8 (skala 1): Plan A dibayar turun dari 55% menjadi 16,5–19,5% omzet bersih Lisensi pada skenario organik 5 tahun (bulan tertinggi sekitar 30%); Pool Aktif 3–7%; Mitra pertama skenario headline Rp9.375.000 dari 90 hari pertama (Rp7.375.000 tanpa Pool). Ada ruang anggaran besar di bawah plafon 60% yang belum dialokasikan.
 
 ## 15. Tahapan sebelum Go Live
 
@@ -271,3 +273,5 @@ Dampak simulasi (skala 1): Plan A dibayar turun dari 55% menjadi 16,5–19,5% om
 4. Rencana Pemasaran, Kode Etik, dan S&K v2.0 disusun.
 5. Opini konsultan hukum (terutama R1) dan verifikasi asosiasi.
 6. Baru setelah itu keputusan deploy oleh Coach.
+
+Dampak simulasi keputusan 9 (skala 1): Plan A organik 17,1–20,1% omzet bersih Lisensi (bulan tertinggi sekitar 34%); Mitra pertama skenario headline Rp10.375.000 dari 90 hari pertama (Rp8.375.000 tanpa Pool). Tabel bagian 10–11 di atas sudah memakai Fast Start Rp750.000; ilustrasi bagian 11 masih model awal dan tidak memasukkan batas Pool.
